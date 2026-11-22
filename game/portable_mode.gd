@@ -288,6 +288,54 @@ static func can_write(dir: String) -> bool:
 	return true
 
 
+## Whether [param dir] could be written, MAKING NOTHING: a folder that is
+## there is probed itself, one that is not by the nearest folder above it
+## that is. Asking whether the game can be portable must not make the
+## portable folder — an empty one left by a Cancel was entered at the next
+## start, the game's settings, decks and adventures seeming gone.
+static func can_hold(dir: String) -> bool:
+	var at := _clean(dir)
+	while at != "" and not DirAccess.dir_exists_absolute(at):
+		var up := at.get_base_dir()
+		if up == at:
+			return false
+		at = up
+	return at != "" and can_write(at)
+
+
+## The folder a first copy is made in, beside the portable folder [param
+## dir] that is not there yet: the first free `portable-making` name. It
+## becomes the portable folder only once the whole copy is in it, so a copy
+## that stops halfway leaves nothing a start would enter.
+static func making_name(dir: String) -> String:
+	var base := _clean(dir) + "-making"
+	var name := base
+	var n := 1
+	while DirAccess.dir_exists_absolute(name) or FileAccess.file_exists(name):
+		n += 1
+		name = "%s-%d" % [base, n]
+	return name
+
+
+## Remove the folder [param dir] and all in it — only ever a folder this
+## game has just made ([method making_name]); links are removed, never
+## followed.
+static func remove_made(dir: String) -> void:
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	var here := DirAccess.open(dir)
+	if here != null:
+		here.include_hidden = true
+		for sub in here.get_directories():
+			if here.is_link(sub):
+				DirAccess.remove_absolute(dir.path_join(sub))
+			else:
+				remove_made(dir.path_join(sub))
+		for name in here.get_files():
+			DirAccess.remove_absolute(dir.path_join(name))
+	DirAccess.remove_absolute(dir)
+
+
 ## Why a folder that cannot be written cannot be: macOS runs a downloaded
 ## app from a hidden read-only copy until it is moved ("App
 ## Translocation"); otherwise the folder itself refuses.
@@ -458,7 +506,9 @@ static func start_copy(from: String, to: String, threaded := true) -> Copy:
 	var found := measure(job.from)
 	job.files.assign(found["files"])
 	job.bytes = int(found["bytes"])
-	if DirAccess.make_dir_recursive_absolute(job.to) != OK:
+	# Asked first ([method can_hold]): a place that cannot be written is a
+	# plain refusal, not an engine error on the log.
+	if not can_hold(job.to) or DirAccess.make_dir_recursive_absolute(job.to) != OK:
 		job.error = "%s could not be made." % GamePaths.shown(job.to)
 		job.finished = true
 		return job

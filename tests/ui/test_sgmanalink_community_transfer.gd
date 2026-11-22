@@ -552,8 +552,13 @@ func test_tiny_requests_neither_repack_nor_outlast_their_budget() -> void:
 	await _answers(ws, 200)
 	assert_eq(server.packs, 3, "one read a card, whatever the requests")
 	assert_eq(server._peers.size(), 1)
-	assert_eq(int((server._peers.values()[0] as Dictionary).get("served", 0)), 30 * SgCardTransfer.CHUNK,
-		"a one-byte request costs a whole chunk")
+	# Whole-project review 2026-11-21: this pinned "a one-byte request costs
+	# a whole chunk" of the byte allowance, which refused a plan within the
+	# guest's own limits at its 205th request. The requests are counted
+	# beside the bytes now ([constant SgCardTransfer.MAX_REQUESTS]).
+	var asked: Dictionary = server._peers.values()[0]
+	assert_eq(int(asked.get("requests", 0)), 30, "each request is counted, however little it asks for")
+	assert_lte(int(asked.get("served", 0)), 30 * 3, "and the bytes really sent")
 	ws.close()
 
 

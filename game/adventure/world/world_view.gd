@@ -459,7 +459,7 @@ var _recipe_for: Array = []
 ## the first slot on it; the sites' hash they were read at; one more each
 ## time they change ([method _look_at_sites]).
 var _site_marks := {}
-var _sites_hash := 0
+var _sites_read: Array = []
 var _sites_drawn := 0
 var _portal_at := Vector2i(-1, -1)
 ## THE TILES A ZOOM OUT WOULD WANT ([method _warm_recipes]), the anchor they
@@ -836,7 +836,7 @@ func _refresh(look_again: bool) -> void:
 		return
 	if look_again or _shown.is_empty():
 		_look_at_sites()
-		var shown := [world.get_instance_id(), art.ready(), fog, hash(world.page), _sites_drawn,
+		var shown := [world.get_instance_id(), art.ready(), fog, world.page_revision, _sites_drawn,
 			lairs.hash(), dungeons.hash(), portal.hash(), art.terrain_palette, world.appearance_revision,
 			AdventureExpansions.places_visible(world)]
 		if shown != _shown:
@@ -1539,10 +1539,12 @@ func _look_at_sites() -> void:
 		_recipes.erase(gate)
 		_recipes.erase(_portal_at)
 		_portal_at = gate
-	var sites_hash := world.sites.hash()
-	if sites_hash == _sites_hash:
+	# The sites as last written ([member ShandalarWorld.revision]: every
+	# writer of a site's record counts there), not hashed at every look.
+	var sites_read := [world.get_instance_id(), world.revision]
+	if sites_read == _sites_read:
 		return
-	_sites_hash = sites_hash
+	_sites_read = sites_read
 	var marks := {}
 	for i in world.sites.size():
 		var site: Dictionary = world.sites[i]

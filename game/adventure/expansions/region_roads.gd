@@ -89,5 +89,6 @@ static func join(world: ShandalarWorld, from: Vector2i, to: Vector2i, costs: Dic
 				world.page[(tile.y + 64) * 320 + tile.x] |= 1 << (reverse - 1)
 				world.page[previous.y * 320 + previous.x] |= ShandalarWorld.ROAD
 				world.page[tile.y * 320 + tile.x] |= ShandalarWorld.ROAD
+				world.touch_page()
 				break
 		tile = previous

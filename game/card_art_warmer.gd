@@ -85,6 +85,11 @@ class Job extends RefCounted:
 	## Warmed ahead of being shown (h1-2, see the class doc).
 	var ahead := false
 	var lock := Mutex.new()
+	## The card packs' script, for its static decoder — loaded by path and
+	## never named: the autoload's name does not exist in a `--script` tool,
+	## and this class is reachable from one (the duel screen warms a duel's
+	## decks, review 2026-11-21).
+	var packs_script: Script = load("res://game/card_packs.gd")
 
 	func run() -> void:
 		lock.lock()
@@ -97,7 +102,7 @@ class Job extends RefCounted:
 			if stopped:
 				return
 			var image: Image = GameSkin.decode_card_art(paths[i]) \
-				if skin_names[i] != "" else CardPacks.decode_art(paths[i])
+				if skin_names[i] != "" else packs_script.call(&"decode_art", paths[i])
 			lock.lock()
 			images[i] = image
 			done = i + 1

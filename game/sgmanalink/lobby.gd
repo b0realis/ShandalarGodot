@@ -110,6 +110,11 @@ var _network_button_open: Button
 var _invite_window: VBoxContainer
 var _invite_prompt: Label
 var _pending_join := ""
+## The browser row behind [member _pending_join] (`decks`, `deck`, `rules`),
+## {} when only a name is known: table names repeat ("Friendly duel" is
+## every table's until renamed), and the first open one of the name was
+## joined, whichever row was clicked (whole-project review 2026-11-21).
+var _pending_row: Dictionary = {}
 ## The finished room OK on its result asked to leave (2026-10-03).
 var _leave_room := ""
 ## The finished TOURNAMENT game OK on its result asked to return to the
@@ -859,7 +864,7 @@ func _scan_lan() -> void:
 ## Join from the Game Browser. An open host published its invitation: the
 ## client connects with it and, once the state arrives, sits at the named
 ## table. An invitation-only host needs its invitation pasted first.
-func _join_advert(advert: Dictionary, table_name: String) -> void:
+func _join_advert(advert: Dictionary, table_name: String, row: Dictionary = {}) -> void:
 	if client.online or client.busy() or client.connecting() or client.has_session(): return
 	if _transfer.busy():
 		_notice_text = "Wait for the host's community cards first."
@@ -873,13 +878,15 @@ func _join_advert(advert: Dictionary, table_name: String) -> void:
 		if mismatch.begins_with(SgCompatibility.COMMUNITY_WORDS) and SgLanDiscovery.open_host(advert):
 			var target := SgCardTransfer.target_of_invitation(String(advert.invitation))
 			if not target.is_empty():
-				_community_host = {"target": target, "advert": advert.duplicate(true), "table": table_name}
+				_community_host = {"target": target, "advert": advert.duplicate(true), "table": table_name,
+					"row": row.duplicate(true)}
 				_community_words = mismatch
 		_notice_text = mismatch
 		return
 	if not _valid_nickname(): return
 	_selected_host = advert.duplicate(true)
 	_pending_join = table_name
+	_pending_row = row.duplicate(true)
 	if SgLanDiscovery.open_host(advert):
 		if client.connect_invitation(String(advert.invitation), _nickname.text) == OK:
 			_notice_text = "Connecting to %s…" % advert.name
@@ -889,6 +896,14 @@ func _join_advert(advert: Dictionary, table_name: String) -> void:
 	else:
 		_open_invite_window(String(advert.name))
 	_refresh()
+
+
+## Whether the host's room [param listed] is the table of the browser row
+## [param row]: the same deck rule, assigned deck and rules readout.
+static func _same_table(listed: Dictionary, row: Dictionary) -> bool:
+	return not row.is_empty() and String(listed.get("decks", "")) == String(row.get("decks", "")) \
+		and String(listed.get("deck", "")) == String(row.get("deck", "")) \
+		and String(listed.get("rules", "")) == String(row.get("rules", ""))
 
 
 func _connect_local() -> void:
@@ -982,11 +997,19 @@ func _refresh() -> void:
 		var wanted := _pending_join
 		_pending_join = ""
 		var found := false
+		# The clicked row's table first — its deck rule, deck and rules
+		# too — then any open table of the name, as before.
+		var chosen := ""
 		for listed: Dictionary in client.state.rooms:
-			if listed.name == wanted and listed.open:
-				found = true
-				_send({"op": "join", "room": listed.id})
+			if listed.name != wanted or not listed.open: continue
+			if chosen.is_empty(): chosen = String(listed.id)
+			if _same_table(listed, _pending_row):
+				chosen = String(listed.id)
 				break
+		_pending_row = {}
+		if not chosen.is_empty():
+			found = true
+			_send({"op": "join", "room": chosen})
 		if not found and not wanted.is_empty():
 			_notice_text = "The table “%s” is no longer open. Pick another on this host." % wanted
 	# OK on a friendly result leaves its room (2026-10-03) as soon as the
@@ -1304,6 +1327,7 @@ func _install_host_cards(zips: Dictionary) -> void:
 			if not (host.advert as Dictionary).is_empty():
 				_selected_host = (host.advert as Dictionary).duplicate(true)
 				_pending_join = String(host.table)
+				_pending_row = (host.get("row", {}) as Dictionary).duplicate(true)
 			_notice_text = String(result.message) + " Joining the host again…"
 		else:
 			_notice_text = String(result.message) + " Join the host again from the Game Browser."
@@ -1551,7 +1575,7 @@ func _browser() -> void:
 				rows.append({"name": "Tournament · " + String(advert.tournament), "decks": "", "open": true, "table": ""})
 			for entry: Dictionary in advert.get("tables", []):
 				rows.append({"name": String(entry.name), "table": String(entry.name), "open": bool(entry.open),
-					"decks": _table_rules_cell(entry)})
+					"decks": _table_rules_cell(entry), "row": entry})
 			if rows.is_empty():
 				rows.append({"name": "No table yet", "decks": "", "open": true, "table": ""})
 			for entry: Dictionary in rows:
@@ -1566,7 +1590,8 @@ func _browser() -> void:
 				if brief == "Community cards":
 					build.add_theme_color_override("font_color", SgLobbyStyle.COMMUNITY_RED)
 					build.tooltip_text = _advert_mismatch(advert)
-				var join := _button("Join" if entry.open else "In play", _join_advert.bind(advert.duplicate(true), String(entry.table)), Vector2(100,34))
+				var join := _button("Join" if entry.open else "In play", _join_advert.bind(advert.duplicate(true), String(entry.table),
+					(entry.get("row", {}) as Dictionary).duplicate(true)), Vector2(100,34))
 				join.disabled = not entry.open or client.connecting() or client.has_session()
 				table.add_child(join)
 		# A host of another protocol version (2026-10-03): listed, named, never joinable.

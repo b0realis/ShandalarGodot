@@ -65,6 +65,8 @@ done
 # plugins folder (a symbolic link inside a folder is copied as a link, and
 # refused as the game refuses it). The copy goes when the run ends.
 if [ -n "$plugin" ]; then
+  # The copy goes however the run ends, a copy that failed half-way too.
+  trap 'rm -rf -- "$out/plugin"' EXIT
   mkdir -p "$out/plugin"
   cp -R -P -- "$plugin" "$out/plugin/"
   for ((i=0; i<${#args[@]}; i++)); do

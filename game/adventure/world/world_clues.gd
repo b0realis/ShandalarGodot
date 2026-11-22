@@ -57,6 +57,13 @@ const SLOTS := 15
 ## 1997's dice — the hint's pick, the marks' fading — walk the fifteen
 ## alone, so a raised dungeon never moves a draw of theirs.
 const MOST_SLOTS := 48
+## A SLOT A SITES PLUGIN RAISED carries this key: `"<plugin>:<dungeon key>"`
+## ([method DataSites.spawn]; the review of 2026-11-21). The plugin's record
+## of its dungeon ([member AdventurePlayer.sites]) is believed only of a slot
+## that says so ([method DataSites.dungeon_index]): a damaged save pointed
+## it at a castle or a 1997 dungeon, and the place took its price for a
+## dungeon it then never raised.
+const RAISED := "raised"
 ## A slot's key for the cards the hero left behind in it (names, in the
 ## order left; the class's notes).
 const LEFT_CARDS := "left_cards"
@@ -142,6 +149,7 @@ static func reveal(player: AdventurePlayer, index: int) -> int:
 		if int(slot.get("clues", 0)) & (1 << clue) == 0:
 			break
 	slot["clues"] = int(slot.get("clues", 0)) | (1 << clue)
+	world.touch()
 	player.dice = dice.state
 	return 1 << clue
 
@@ -154,6 +162,7 @@ static func mark_cards_taken(world: ShandalarWorld, index: int) -> void:
 		return
 	var slot: Dictionary = world.encounters[index]
 	slot["rules"] = int(slot.get("rules", 0)) | CARDS_TAKEN
+	world.touch()
 
 
 ## THE MARKS FADE (`RandomlyClearDungeonRuleFlag`,
@@ -168,6 +177,7 @@ static func forget_marks(player: AdventurePlayer) -> void:
 			var slot: Dictionary = world.encounters[i]
 			if slot.has("rules"):
 				slot["rules"] = int(slot["rules"]) & ~CARDS_TAKEN
+				world.touch()
 	player.dice = dice.state
 
 
@@ -213,6 +223,13 @@ static func left_cards(slot: Dictionary) -> Array[String]:
 			if card is String and card != "":
 				out.append(card)
 	return out
+
+
+## Whether [param slot], standing at [param index], is one a sites plugin
+## raised: it says so ([constant RAISED]), or it stands past 1997's fifteen
+## (a 0.70.4 save's, from before the mark).
+static func raised(slot: Dictionary, index: int) -> bool:
+	return index >= SLOTS or (slot.get(RAISED) is String and String(slot[RAISED]) != "")
 
 
 ## Whether [param slot] holds any card — its own treasures or one the hero

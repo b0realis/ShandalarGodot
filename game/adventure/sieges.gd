@@ -492,6 +492,7 @@ static func _explore_tile(world: ShandalarWorld, tile: Vector2i) -> void:
 		return
 	var at := tile.y * ShandalarWorld.PAGE_WIDTH + tile.x
 	world.page[at] = world.page[at] | ShandalarWorld.EXPLORED
+	world.touch_page()
 
 
 ## The colour (1 black … 5 white) of a land's colour bits: the lowest set.

@@ -259,8 +259,9 @@ static func _lines_read(player: AdventurePlayer) -> Array:
 	if has_quest(player) and int(player.quest.get("type", 0)) == Quests.CARD:
 		card_held = 1 if Quests.card_for_quest(player) >= 0 else 0
 	return [player.get_instance_id(), world.get_instance_id() if world != null else 0,
-		world.sites.hash() if world != null else 0,
-		world.encounters.slice(0, 5).hash() if world != null else 0,
+		# Its sites and castles, by the count of their writes ([member
+		# ShandalarWorld.revision]) rather than hashed at every tick.
+		world.revision if world != null else 0,
 		player.quest.hash(), days_left(player), card_held,
 		besieger.is_empty(), besieger.get("creature", 0), besieger.get("town", -1),
 		player.portal.hash(), player.ended, player.expansions.hash(), AdventureExpansions.revision,

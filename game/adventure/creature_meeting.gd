@@ -625,6 +625,7 @@ static func reveal_magic(player: AdventurePlayer, index: int) -> Array[String]:
 	if x >= 0 and y >= 0 and x < ShandalarWorld.TILES and y < ShandalarWorld.TILES:
 		world.page[y * ShandalarWorld.PAGE_WIDTH + x] = world.page[y * ShandalarWorld.PAGE_WIDTH + x] \
 			| ShandalarWorld.EXPLORED
+		world.touch_page()
 	return lines_of(MAGIC_FOUND % [magic, WorldNames.site_name(world, town)])
 
 

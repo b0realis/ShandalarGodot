@@ -22,6 +22,7 @@ needed): set SHANDALAR_PLUGIN_EXPORT_GODOT to the Godot editor binary.
 from __future__ import annotations
 
 import ast
+import contextlib
 import hashlib
 import io
 import json
@@ -983,6 +984,244 @@ class PlaceToolsTest(unittest.TestCase):
         refused = run_tool("art", str(self.folder))
         self.assertEqual(refused.returncode, 1)
         self.assertEqual(refused.stdout.splitlines()[0], "sites.json is missing.")
+
+
+class Review20261121Test(unittest.TestCase):
+    """The whole-project review of 2026-11-21: the tool's seven findings."""
+
+    def setUp(self):
+        self.work = Path(tempfile.mkdtemp(prefix="plugin-review-"))
+        self.folder = self.work / "Corpus_Sites"
+        shutil.copytree(FIXTURES / "good_sites", self.folder)
+        self.game = ap.find_game()
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def snapshot(self) -> dict:
+        return {rel: (self.folder / rel).read_bytes() for rel in files_of(self.folder)}
+
+    def everything(self) -> list:
+        """Every file and folder under the plugin folder, the dotted ones too."""
+        return sorted(str(p.relative_to(self.folder)) for p in self.folder.rglob("*"))
+
+    def test_png_alpha_never_unpacks_more_than_the_picture(self):
+        """A 1 x 1 picture whose data unpacks to 64 MiB was unpacked whole."""
+        import tracemalloc
+
+        def chunk(kind: bytes, body: bytes) -> bytes:
+            return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+
+        bomb = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(bytes(64 * 1024 * 1024), 9)) + chunk(b"IEND", b""))
+        self.assertLess(len(bomb), 128 * 1024)
+        tracemalloc.start()
+        try:
+            read = ap.png_alpha(bomb)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(read, (1, 1, [b"\x00"]), "its one pixel is read")
+        self.assertLess(peak, 4 * 1024 * 1024, "and no more than that is unpacked")
+        # A picture cut short is damaged, as before; a whole one reads as before.
+        pixels = [[(1, 2, 3, 200 + x) for x in range(4)] for _ in range(3)]
+        whole = filtered_png(4, 3, pixels)
+        self.assertEqual(ap.png_alpha(whole)[2], [bytes(200 + x for x in range(4))] * 3)
+        short = filtered_png(4, 2, pixels[:2]).replace(struct.pack(">II", 4, 2), struct.pack(">II", 4, 3), 1)
+        self.assertEqual(ap.png_alpha(short), "a damaged PNG")
+
+    def compat(self, was: list, now: list) -> tuple:
+        old = ap.judge(str(self.folder), self.game)["data"]
+        new = json.loads(json.dumps(old))
+        for data, prices in ((old, was), (new, now)):
+            for pane in data["sites"]["sites"]["shrine"]["panes"]:
+                for action in pane["actions"]:
+                    if action["id"] == "bless":
+                        action["prices"] = list(prices)
+        return ap.compatibility(old, new)
+
+    def test_compat_warns_when_a_save_may_find_an_action_used_up(self):
+        """DataSites._count counts a free action's uses too."""
+        self.assertIn('counted[key] = mini(MOST_USES, int(counted.get(key, 0)) + 1)',
+                      gd("game/adventure/plugins/data_sites.gd"), "every use is counted, a free one too")
+        warnings, notes = self.compat([], [100, 200])
+        self.assertEqual(len(warnings), 1, (warnings, notes))
+        self.assertIn("the action bless was free and now has prices (100, 200)", warnings[0])
+        self.assertIn("used it 2 times or more finds it used up", warnings[0])
+        self.assertEqual(notes, [])
+        warnings, notes = self.compat([20, 40, 80], [20])
+        self.assertEqual(len(warnings), 1, (warnings, notes))
+        self.assertIn("prices changed (20, 40, 80 -> 20)", warnings[0])
+        self.assertIn("finds it used up", warnings[0])
+        # What loses nothing stays a note: a longer list, other prices, free again.
+        for was, now, said in (([20, 40], [20, 40, 80], "(20, 40 -> 20, 40, 80)"), ([20, 40], [30, 50], "(20, 40 -> 30, 50)"),
+                               ([20, 40], [], "(20, 40 -> free)")):
+            warnings, notes = self.compat(was, now)
+            self.assertEqual(warnings, [], (was, now))
+            self.assertEqual(len(notes), 1)
+            self.assertIn(said, notes[0])
+            self.assertNotIn("used up", notes[0])
+        self.assertEqual(self.compat([20, 40], [20, 40]), ([], []))
+
+    def test_an_edit_that_is_stopped_puts_every_file_back(self):
+        before, listed = self.snapshot(), self.everything()
+        args = ap.parser().parse_args(["add-place", str(self.folder), "--id", "tower", "--name", "The Tower"])
+        judge, write = ap.judge, ap._write_whole
+        # The judgement of the edited folder fails (the second judgement:
+        # the first is of the folder as it was).
+        calls = []
+
+        def failing_judge(*a, **k):
+            calls.append(1)
+            if len(calls) == 2:
+                self.assertNotEqual(self.snapshot(), before, "the edit was written when it is judged")
+                raise KeyboardInterrupt()
+            return judge(*a, **k)
+
+        ap.judge = failing_judge
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                ap.command_add_place(args, self.game)
+        finally:
+            ap.judge = judge
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.everything(), listed, "no new picture, no art folder of its own, no .part file")
+
+        # A file that cannot be written, after others were.
+        def failing_write(target, data):
+            if target.name == "text.json":
+                raise OSError(28, "No space left on device")
+            write(target, data)
+
+        ap._write_whole = failing_write
+        try:
+            with self.assertRaises(ap.UsageError) as raised:
+                ap.command_add_place(args, self.game)
+        finally:
+            ap._write_whole = write
+        self.assertIn("could not be edited", str(raised.exception))
+        self.assertIn("nothing was changed", str(raised.exception))
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.everything(), listed)
+        # And the edit itself still goes through, whole.
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(ap.command_add_place(args, self.game), 0)
+        self.assertTrue(ap.judge(str(self.folder), self.game)["valid"])
+        self.assertFalse([name for name in self.everything() if name.endswith(".part")])
+
+    @unittest.skipIf(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0), "needs file permissions")
+    def test_an_edit_leaves_a_read_only_file_alone(self):
+        (self.folder / "text.json").chmod(0o444)
+        before, listed = self.snapshot(), self.everything()
+        result = run_tool("add-place", str(self.folder), "--id", "tower", "--name", "The Tower")
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("text.json is read-only", result.stderr)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.everything(), listed)
+        # A written file keeps the permissions it had.
+        (self.folder / "text.json").chmod(0o640)
+        self.assertEqual(run_tool("add-place", str(self.folder), "--id", "tower", "--name", "The Tower").returncode, 0)
+        self.assertEqual((self.folder / "text.json").stat().st_mode & 0o777, 0o640)
+
+    def test_add_place_says_at_once_when_its_picture_key_would_be_too_long(self):
+        """corpus_sites + _ + the place's id is the picture's key, 40 characters at most."""
+        before, listed = self.snapshot(), self.everything()
+        long_id = "a" * 28
+        result = run_tool("add-place", str(self.folder), "--id", long_id, "--name", "Far")
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(len(result.stderr.strip().splitlines()), 1)
+        self.assertIn("--id %s is too long for this plugin" % long_id, result.stderr)
+        self.assertIn("would be 41 characters, and 40 are the most; choose an id of at most 27 characters", result.stderr)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.everything(), listed)
+        fits = run_tool("add-place", str(self.folder), "--id", "a" * 27, "--name", "Near")
+        self.assertEqual(fits.returncode, 0, fits.stdout + fits.stderr)
+
+    def test_add_dungeon_writes_each_dungeons_own_name(self):
+        """{dungeon} is the last dungeon raised on the land: with two, the
+        first one's panes named the second."""
+        for key, name in (("cellar", "The Dry Cellar"), ("attic", "The Dusty Attic")):
+            done = run_tool("add-dungeon", str(self.folder), "--id", key, "--name", name, "--cards", "Swamp",
+                            "--place", "shrine", "--price", "10")
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        data = ap.judge(str(self.folder), self.game)["data"]
+        words = data["text"]
+        for key, name in (("cellar", "The Dry Cellar"), ("attic", "The Dusty Attic")):
+            for part in ("open", "cleared", "told", "clue"):
+                self.assertIn(name, words["%s.%s" % (key, part)])
+                self.assertNotIn("{dungeon}", words["%s.%s" % (key, part)])
+        walk = ap.SiteWalk(data, 1000)
+        walk.dungeons = {"cellar": "open", "attic": "open"}
+        self.assertEqual(walk.values("shrine")["dungeon"], "The Dusty Attic", "what {dungeon} would have said for both")
+        panes = data["sites"]["sites"]["shrine"]["panes"]
+        cellar = next(p for p in panes if p["when"] == [{"dungeon": {"dungeon": "cellar", "state": "open"}}])
+        self.assertTrue(walk.lines("shrine", cellar["lines"], walk.values("shrine"))[0].startswith(
+            "The way to The Dry Cellar is known to you."))
+
+    def test_walk_plays_a_place_on_each_land_it_stands_on(self):
+        """A pane behind on_mainland false was never shown: a place on both
+        lands was walked on the mainland alone."""
+        sites = json.loads((self.folder / "sites.json").read_text(encoding="utf-8"))
+        self.assertEqual(sites["sites"]["shrine"]["where"], ["mainland", "islands"])
+        sites["sites"]["shrine"]["panes"].insert(0, {"when": [{"on_mainland": False}], "lines": ["shrine.far"],
+                                                     "actions": [{"id": "leave", "do": "leave", "label": "shrine.leave"}]})
+        (self.folder / "sites.json").write_text(json.dumps(sites, indent="\t") + "\n", encoding="utf-8")
+        text = json.loads((self.folder / "text.json").read_text(encoding="utf-8"))
+        text["shrine.far"] = "The shrine of the far shore."
+        (self.folder / "text.json").write_text(json.dumps(text, indent="\t") + "\n", encoding="utf-8")
+        result = run_tool("walk", str(self.folder), "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        runs = json.loads(result.stdout)["sites"]
+        self.assertEqual([(run["site"], run["land"]) for run in runs], [("shrine", "mainland"), ("shrine", "island")])
+        home, far = runs
+        self.assertNotIn(0, [s["pane"] for s in home["steps"] if s["kind"] == "pane"])
+        self.assertEqual([s["pane"] for s in far["steps"] if s["kind"] == "pane"], [0])
+        self.assertEqual(far["steps"][0]["lines"], ["The shrine of the far shore."])
+        said = run_tool("walk", str(self.folder)).stdout
+        self.assertLess(said.index("Wayside Shrine (shrine), on the mainland"), said.index("Wayside Shrine (shrine), on an island"))
+        data = ap.judge(str(self.folder), self.game)["data"]
+        self.assertEqual(ap.walk_lands(data, "shrine"), ["mainland", "island"])
+        self.assertEqual(ap.walk_site(data, "shrine", 100)["land"], "mainland", "one walk alone: the first land")
+        # A place on one land is walked once, as before.
+        hut = json.loads(run_tool("walk", str(ROOT / "expanded_adventure" / "Old_Adventurers_Hut"), "--json").stdout)["sites"]
+        self.assertEqual([run["land"] for run in hut], ["mainland"])
+
+    def test_export_keeps_the_zip_already_there_when_the_new_one_is_refused(self):
+        out = self.work / "dist"
+
+        def export() -> int:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                return ap.main(["export", str(self.folder), "--out", str(out)])
+
+        self.assertEqual(export(), 0)
+        target = out / "Corpus_Sites.zip"
+        good = target.read_bytes()
+        (self.folder / "text.json").write_text((self.folder / "text.json").read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        judge = ap.judge
+        judged = []
+
+        def refusing(path, *a, **k):
+            result = judge(path, *a, **k)
+            if str(path).endswith(".zip"):
+                judged.append(Path(path))
+                self.assertEqual(Path(path).name, "Corpus_Sites.zip", "judged under the name it will have")
+                self.assertNotEqual(Path(path), target, "and not in the place of the old one")
+                result = dict(result, valid=False, problems=["refused for the test"])
+            return result
+
+        ap.judge = refusing
+        try:
+            self.assertEqual(export(), 1)
+        finally:
+            ap.judge = judge
+        self.assertEqual(len(judged), 1)
+        self.assertEqual(target.read_bytes(), good, "the zip that was there is still there")
+        self.assertEqual(sorted(p.name for p in out.iterdir()), ["Corpus_Sites.zip"], "nothing else is left in --out")
+        # A zip the game takes replaces it.
+        self.assertEqual(export(), 0)
+        self.assertNotEqual(target.read_bytes(), good)
+        self.assertEqual(sorted(p.name for p in out.iterdir()), ["Corpus_Sites.zip"])
+        self.assertEqual(target.stat().st_mode & 0o777, 0o644)
 
 
 class InfoTest(unittest.TestCase):

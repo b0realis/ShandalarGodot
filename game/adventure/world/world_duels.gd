@@ -224,6 +224,19 @@ func _finish(report: DuelReport) -> void:
 	queue_free()
 
 
+## THE DUEL FINISHED NOW IF IT IS OVER (its End of Duel window up): its
+## report heard by the holder at once, as Exit duel would — for the window
+## closed there ([method WorldScreen._close_out_meeting]; the review of
+## 2026-11-21: the result was thrown away with the process, a loss undone
+## by the reload). True when it was finished here; false for a duel still
+## played (ruling 4: nothing saved) or finished already.
+func finish_over() -> bool:
+	if _over or duel == null or duel.game == null or not duel.game.game_over:
+		return false
+	_finish(duel.report())
+	return true
+
+
 ## RETURN TO MAIN MENU: the duel left unfinished, nothing saved, the title
 ## — unless it is already over (the playtest of part B, H1-2: its End of
 ## Duel window up, this door's Yes went to the title and threw the result
@@ -311,6 +324,9 @@ static func region_music(node: Node) -> bool:
 	if soundscape == null:
 		return false
 	var hero: Variant = soundscape.get(&"player")
+	if hero is AdventurePlayer and _tune_awaited(node, soundscape, hero):
+		return true
+	soundscape.remove_meta(TUNE_AWAITED)
 	var tune: AudioStream = AdventureExpansions.music(hero) if hero is AdventurePlayer else null
 	var voice := soundscape.get_node_or_null(^"RegionTune") as AudioStreamPlayer
 	if tune == null:
@@ -342,6 +358,48 @@ static func region_music(node: Node) -> bool:
 	return true
 
 
+## The meta the soundscape carries while a land's track is being decoded
+## for it ([method _tune_awaited]): the track's key.
+const TUNE_AWAITED := &"region_tune_awaited"
+
+
+## A PLUGIN LAND'S TRACK NOT YET DECODED IS DECODED OFF THE FRAME (the
+## review of 2026-11-21: the first step onto a land read, hashed and
+## decoded its OGG — up to 16 MiB — on the thread that draws). True when it
+## is being made ([method AdventurePlugins.warm]): the title's tune stops
+## as it would for the track, the land is silent for the moment, and once
+## the track is kept the world's music is asked for again — unless a duel
+## or a screen with its own music took over meanwhile ([method
+## region_music_off] forgets the wait; the next [method world_music] asks
+## anew). False — nothing awaited, the caller goes on as ever — for the
+## mainland, a land without a track, a track kept already, and where no
+## worker may decode (headless, the web).
+static func _tune_awaited(node: Node, soundscape: Node, hero: AdventurePlayer) -> bool:
+	if hero.world == null or AdventureRegions.mainland(hero):
+		return false
+	var id := AdventureRegions.id(hero.world)
+	var part: Variant = AdventurePlugins.data(id).get("world", {})
+	var rel := String((part as Dictionary).get("music", "")) if part is Dictionary else ""
+	if rel == "" or AdventurePlugins.stream_kept(id, rel) or AdventureExpansions.provider_for(hero, id) == null:
+		return false
+	var key := id + "/" + rel
+	var then := func() -> void:
+		if not is_instance_valid(soundscape) or String(soundscape.get_meta(TUNE_AWAITED, "")) != key:
+			return
+		soundscape.remove_meta(TUNE_AWAITED)
+		if is_instance_valid(node) and node.is_inside_tree():
+			WorldDuels.world_music(node)
+	if String(soundscape.get_meta(TUNE_AWAITED, "")) == key:
+		return true
+	if not AdventurePlugins.warm(id, false, rel, then):
+		return false
+	soundscape.set_meta(TUNE_AWAITED, key)
+	var shell := node.get_node_or_null(^"/root/ShellMusic")
+	if shell != null:
+		shell.call(&"stop")
+	return true
+
+
 ## The place's tune (the town's, the castle's: [WorldSoundscape]) at rest
 ## under a duel; [method WorldSoundscape.rest] false brings it back.
 static func place_tune_off(node: Node) -> void:
@@ -355,6 +413,9 @@ static func place_tune_off(node: Node) -> void:
 static func region_music_off(node: Node) -> void:
 	var soundscape := _soundscape(node) if node != null and node.is_inside_tree() else null
 	var voice := soundscape.get_node_or_null(^"RegionTune") as AudioStreamPlayer if soundscape != null else null
+	if soundscape != null:
+		# A track still being decoded does not start under what took over.
+		soundscape.remove_meta(TUNE_AWAITED)
 	if voice != null:
 		voice.stop()
 

@@ -175,8 +175,42 @@ func forget() -> void:
 	status = "Not connected"
 
 
+## THE ABANDON REACHES THE HOST BEFORE THE SOCKET DIES (whole-project review
+## 2026-11-21). [method forget] sends "abandon" and keeps the socket for
+## [method poll] to close a second later — but a client leaving the tree
+## (the SGManalink screen closed, the game quit) is never polled again: the
+## socket died right behind the frame, the host read the two in one poll
+## and dropped the connection before its packets, and the opponent waited
+## out the whole reconnect grace over a duel already given up. The parting
+## sockets are polled here until the host has closed them, at most
+## [constant EXIT_DRAIN_MS] — as a host being freed waits for its guests
+## ([constant SgLocalServer.CLOSING_WAIT_MS]). A host in this same process
+## cannot answer while this waits, and is stopping with the screen anyway.
+const EXIT_DRAIN_MS := 200
+
+
 func _exit_tree() -> void:
+	var here := SgLocalServer.hosts_port(_port)
 	forget()
+	if not here:
+		drain()
+
+
+## Poll the connections [method forget] parted from until their host has
+## closed each, or [param limit_ms] pass. [param between] runs between two
+## polls in place of the short sleep (a test's host in this process).
+func drain(limit_ms := EXIT_DRAIN_MS, between := Callable()) -> void:
+	var deadline := Time.get_ticks_msec() + limit_ms
+	while not _closing.is_empty():
+		for closing in _closing.duplicate():
+			closing.socket.poll()
+			if closing.socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+				closing.socket.close(-1)
+				_closing.erase(closing)
+		if _closing.is_empty() or Time.get_ticks_msec() >= deadline:
+			break
+		if between.is_valid(): between.call()
+		else: OS.delay_msec(5)
 
 
 func busy() -> bool:

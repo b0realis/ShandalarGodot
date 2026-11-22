@@ -150,6 +150,10 @@ func _ready() -> void:
 		_status_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	else:
 		_say("Your cards: %d · in this deck %d" % [player.cards.size(), deck.total()])
+		for slot in SLOTS:
+			if beyond_total(slot) > 0:
+				_say(BEYOND % [slot + 1, beyond_total(slot)], true)
+				break
 
 
 ## THE HERO'S DECKS AND CARDS GO IN BEFORE THE FIRST FILL (the fix pass of
@@ -163,14 +167,21 @@ func _ready() -> void:
 func _before_first_fill() -> void:
 	var pool := SealedPool.new()
 	pool.counts = owned_counts(player)
+	_beyond.clear()
 	for i in SLOTS:
 		var model := DeckModel.new()
 		model.deck_name = deck_title(player, i)
 		model.notes = player.deck_notes[i] if i < player.deck_notes.size() else ""
 		var held := in_deck(player, i)
+		var beyond := {}
 		for card_name in held:
 			for copy in int(held[card_name]):
-				model.add(card_name)
+				# A deck past what the builder holds ([constant
+				# DeckModel.MAX_TOTAL], [constant DeckModel.MAX_UNIQUE]):
+				# the copies it cannot show stay in the deck ([member _beyond]).
+				if model.add(card_name) != "" and CardRegistry.has_card(card_name):
+					beyond[card_name] = int(beyond.get(card_name, 0)) + 1
+		_beyond.append(beyond)
 		_slots[i] = model
 		_slot_dirty[i] = false
 	_slot = clampi(player.current_deck, 0, SLOTS - 1)
@@ -236,6 +247,27 @@ static func deck_title(hero: AdventurePlayer, slot: int) -> String:
 	return titled if titled != "" else "Deck %d" % (slot + 1)
 
 
+## THE COPIES THE BUILDER COULD NOT SHOW, a deck each: card → how many. A
+## deck may hold more than the builder does (cards won go into the deck in
+## use); those copies were dropped unsaid on opening and so taken out of the
+## deck on leaving. They stay in their deck ([method write_back]) and the
+## status line says so ([constant BEYOND]).
+var _beyond: Array[Dictionary] = []
+const BEYOND := "Deck %d holds %d more cards than the deck builder can show: they stay in the deck."
+
+
+func beyond_of(slot: int, card_name: String) -> int:
+	return int(_beyond[slot].get(card_name, 0)) if slot < _beyond.size() else 0
+
+
+func beyond_total(slot: int) -> int:
+	var sum := 0
+	if slot < _beyond.size():
+		for card_name in _beyond[slot]:
+			sum += int(_beyond[slot][card_name])
+	return sum
+
+
 ## THE DECKS BACK TO THE HERO: each owned copy marked with the decks that
 ## hold it (the first copies of a card go to the decks first), the deck on
 ## the surface the deck in use, the names kept.
@@ -258,7 +290,7 @@ func write_back() -> void:
 		for k in held.size():
 			var decks: Array[int] = []
 			for slot in SLOTS:
-				if k < (_slots[slot] as DeckModel).count_of(card_name):
+				if k < (_slots[slot] as DeckModel).count_of(card_name) + beyond_of(slot, card_name):
 					decks.append(slot)
 			player.cards[held[k]]["decks"] = decks
 	player.current_deck = _slot
@@ -762,6 +794,9 @@ func _card_menu_entries(card_name: String) -> Array:
 func _copy_deck_to(index: int) -> void:
 	if not _refuse_change():
 		super._copy_deck_to(index)
+		# The copy is the whole deck, the copies not shown with it.
+		if index < _beyond.size() and _slot < _beyond.size():
+			_beyond[index] = _beyond[_slot].duplicate()
 
 
 func _open_deck_info(then := Callable(), reason := "", suggested := "") -> void:
@@ -857,13 +892,26 @@ func _quit_now() -> void:
 ## True when the deck on show has too many copies of a card and the Extra
 ## Cards box was put up ([param then] runs once they are removed); a builder
 ## that only looks has nothing to change and is never asked. The window's
-## own close is not asked ([method _end_process]): the deck goes back as it
-## is — no duel checks copies (1997 neither) — and the next visit asks.
+## own close asks too ([method _on_window_close_request]).
 func _ask_extra_cards(then: Callable) -> bool:
 	if looking or deck.over_duplicate_limit(_with_tome(), _copy_rule()).is_empty():
 		return false
 	_open_extra_cards(then)
 	return true
+
+
+## THE WINDOW'S OWN CLOSE asks as Done does (it went past the Extra Cards
+## box: a deck with too many copies was written, saved, and duelled with
+## after the next load). With a window already up the box cannot open — one
+## dialog at a time — so the status line says what to do.
+func _on_window_close_request() -> void:
+	if looking or deck.over_duplicate_limit(_with_tome(), _copy_rule()).is_empty():
+		_end_process()
+		return
+	if _dialog_busy():
+		_say("This deck has too many copies of a card: close the open window first, then close again.", true)
+		return
+	_open_extra_cards(_end_process)
 
 
 func _end_process() -> void:

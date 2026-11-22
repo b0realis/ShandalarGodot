@@ -884,7 +884,8 @@ code did (deckdll `check_card_count`; `DeckModel.copies_allowed_1997`) —
 three copies under 59 cards, four from 59, Tome of Enlightenment one more
 and no limit from 59, basic lands aside — not the manual's table (two at
 20–39), which the 1997 builder never applied; checked as the builder is
-left (Done, Return to the world, Exit game), with the 1997 Extra Cards box
+left (Done, Return to the world, Exit game, and since 0.70.5 the window's
+own close), with the 1997 Extra Cards box
 (Remove Extra Cards / Edit Deck); nothing before a duel checks copies. The
 first deal checks copies for creatures and the rare only, as 1997's. The
 acquisition cap (`GetRemainingAllowedCardCopies`: 1 under 40, 2 from 40, 3
@@ -956,6 +957,18 @@ opt-in engine. What was found and fixed:
   giver's town, still played both); bringing it back stays the holder's.
 - **Saves.** Closing the window under a news flash saves nothing (it held
   half a tick; the last save stands and its dice bring the news again).
+  Closing it over a duel that is over — its End of Duel window up, or its
+  result's pages after — keeps the result since 0.70.5 (a creature's, a
+  ruled town's, a lair's, a castle's or dungeon's room): the duel is
+  settled, its pane closed out and the world saved before the process
+  ends, so a loss is not undone by the reload. A duel still played saves
+  nothing, as before, and neither does a win whose choice still waits (a
+  creature's spoils to choose, a beaten wizard's picks): never half of it.
+  The world's own autosaves (a meeting begun and ended, a lair entered and
+  left, a place left, a board entered) are written on a worker, in order,
+  and all finished before any save is read, listed or written at once,
+  before the world is left and before the game ends
+  (`AdventurePlayer.save_later`, `finish_saves`).
   The autosave made as a creature is met with no card to stake is kept, as
   1997 kept its slot 3: that adventure has ended, and opening it ends it
   again.

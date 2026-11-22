@@ -50,6 +50,7 @@ static func put(world: ShandalarWorld, slot: int, bit: int, on := true) -> void:
 	if on and not AdventureExpansions.mana_links_allowed(world): bit &= ~LINKED
 	var word := of(world, slot)
 	world.sites[slot]["status"] = (word | bit) if on else (word & ~bit)
+	world.touch()
 
 
 # ------------------------------------------------------------ the bits --
@@ -85,6 +86,7 @@ static func take(world: ShandalarWorld, slot: int, wizard: int) -> void:
 		return
 	var word := of(world, slot) & ~RULER_MASK & ~LINKED
 	world.sites[slot]["status"] = word | ((clampi(wizard, 1, 5) << RULER_SHIFT) & RULER_MASK)
+	world.touch()
 
 
 ## Site [param slot] freed from its wizard (its link stays lost).

@@ -44,6 +44,10 @@ const MAX_LIST := SgProtocol.MAX_CARDS
 ## The most cards and bytes one transfer fetches: the rest wait for the next.
 const MAX_CARDS := 200
 const MAX_TOTAL := 96 * 1024 * 1024
+## The most chunk requests one connection may make (the host's count): what
+## the largest transfer needs — every byte in whole chunks and each card's
+## last, shorter one — and one zip more.
+const MAX_REQUESTS := MAX_CARDS + (MAX_TOTAL + CommunityCards.MAX_ZIP) / CHUNK
 ## The largest size a list may name (a zip past [constant
 ## CommunityCards.MAX_ZIP] is listed, never sent).
 const MAX_LISTED := 1073741824

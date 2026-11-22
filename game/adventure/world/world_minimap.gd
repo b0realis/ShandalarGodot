@@ -75,6 +75,10 @@ var _held := false
 ## How many times it looked whether to draw the land again ([method
 ## _follow]; the tests).
 var looks := 0
+## The land tiles the last picture drew, and the tiles it looked at for
+## them ([method _draw_ground]; the tests).
+var land_tiles := 0
+var tiles_looked := 0
 
 
 func _ready() -> void:
@@ -161,7 +165,7 @@ func _follow() -> void:
 	var tile := Vector2i(floori(hero.x / 32.0), floori(hero.y / 32.0))
 	var shown: Array = [null, tile, size]
 	if world != null:
-		shown = [world.get_instance_id(), tile, size, hash(world.page), world.sites.hash(), dungeons.hash(), world.appearance_revision,
+		shown = [world.get_instance_id(), tile, size, world.revision, dungeons.hash(), world.appearance_revision,
 			AdventureExpansions.places_visible(world)]
 	if shown != _drawn:
 		_drawn = shown
@@ -206,6 +210,36 @@ func ground_box() -> Rect2:
 	return Rect2(Vector2(-TILE * 6.0, -TILE * 2.0), size + Vector2(TILE * 10.0, TILE * 4.0))
 
 
+## Whether [param place] ([method AdventureExpansions.places]) is shown on
+## a map of [param shown_world] that shows only the land seen: a sites
+## plugin's place (`site`) once its tile is explored, any other always.
+static func place_shown(shown_world: ShandalarWorld, place: Dictionary) -> bool:
+	if not bool(place.get("site", false)):
+		return true
+	var point: Array = place["point"]
+	return shown_world.is_explored(int(point[0]), int(point[1]))
+
+
+## The tiles whose diamond or middle [param box] can hold, round tile
+## [param here]: the box's corners brought back to the world ([method
+## _on_ground] undone), a tile more each way — and never more than the
+## [param reach] the land was walked to before, nor off the world. Half
+## open: `position` to `end`.
+func _tiles_in(box: Rect2, here: Vector2i, reach: int) -> Rect2i:
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+	for corner: Vector2 in [box.position, Vector2(box.end.x, box.position.y), box.end, Vector2(box.position.x, box.end.y)]:
+		var p := (corner - size * 0.5) / (TILE / 32.0)
+		var point := _anchor + Vector2(p.x / 4.0 - p.y / 2.0, p.x / 4.0 + p.y / 2.0)
+		low = low.min(point)
+		high = high.max(point)
+	var from := Vector2i(maxi(maxi(floori(low.x / 32.0) - 2, here.x - reach), 0),
+		maxi(maxi(floori(low.y / 32.0) - 2, here.y - reach), 0))
+	var to := Vector2i(mini(mini(ceili(high.x / 32.0) + 2, here.x + reach), ShandalarWorld.TILES - 1),
+		mini(mini(ceili(high.y / 32.0) + 2, here.y + reach), ShandalarWorld.TILES - 1))
+	return Rect2i(from, (to - from + Vector2i.ONE).max(Vector2i.ZERO))
+
+
 ## The land's own picture, drawn once round [member _anchor].
 func _draw_ground() -> void:
 	if world == null:
@@ -215,29 +249,69 @@ func _draw_ground() -> void:
 	# x + y, TILE down per step of y − x.
 	var reach := int(ceil(size.x / (2.0 * TILE) + size.y / TILE)) / 2 + 3
 	var box := ground_box()
-	for y in range(here.y - reach, here.y + reach + 1):
-		for x in range(here.x - reach, here.x + reach + 1):
+	# ONE MESH FOR THE LAND, and only the tiles the box can hold looked at
+	# (the review of 2026-11-21: 51 x 51 tiles walked twice and some 350
+	# polygons cut into triangles one by one, each asking the palette for
+	# its style afresh, at every tile the hero entered — the stutter at a
+	# tile's edge on the slow machines). The same diamonds in the same
+	# colours: two triangles each, their colour asked once a terrain where
+	# no tile has a style of its own ([method WorldTerrainPalette.uniform]).
+	var span := _tiles_in(box, here, reach)
+	var uniform := WorldTerrainPalette.uniform(world)
+	var inks := {}
+	var points := PackedVector2Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	var right := Vector2(TILE * 2.0, -TILE)
+	var far := Vector2(TILE * 4.0, 0)
+	var down := Vector2(TILE * 2.0, TILE)
+	for y in range(span.position.y, span.end.y):
+		for x in range(span.position.x, span.end.x):
 			if not world.is_explored(x, y) or not world.is_land(x, y):
 				continue
 			var left := _on_ground(Vector2(x * 32, y * 32))
 			if not box.has_point(left):
 				continue
-			_ground.draw_colored_polygon(PackedVector2Array([left, left + Vector2(TILE * 2.0, -TILE),
-				left + Vector2(TILE * 4.0, 0), left + Vector2(TILE * 2.0, TILE)]),
-				WorldTerrainPalette.plain(world, world.terrain(x, y), WorldView.PLAIN.get(world.terrain(x, y), WorldView.PLAIN[0]), Vector2i(x, y)))
-	for y in range(here.y - reach, here.y + reach + 1):
-		for x in range(here.x - reach, here.x + reach + 1):
+			var code := world.terrain(x, y)
+			var ink: Color
+			if uniform:
+				if not inks.has(code):
+					inks[code] = WorldTerrainPalette.plain(world, code, WorldView.PLAIN.get(code, WorldView.PLAIN[0]), Vector2i(x, y))
+				ink = inks[code]
+			else:
+				ink = WorldTerrainPalette.plain(world, code, WorldView.PLAIN.get(code, WorldView.PLAIN[0]), Vector2i(x, y))
+			var first := points.size()
+			points.append(left)
+			points.append(left + right)
+			points.append(left + far)
+			points.append(left + down)
+			for _corner in 4:
+				colors.append(ink)
+			indices.append(first)
+			indices.append(first + 1)
+			indices.append(first + 2)
+			indices.append(first)
+			indices.append(first + 2)
+			indices.append(first + 3)
+	land_tiles = points.size() / 4
+	tiles_looked = span.get_area()
+	if not indices.is_empty():
+		RenderingServer.canvas_item_add_triangle_array(_ground.get_canvas_item(), indices, points, colors)
+	var road_ink := ROAD * WorldTerrainPalette.modulate(WorldTerrainPalette.resolve(world, here), "roads") if uniform else ROAD
+	for y in range(span.position.y, span.end.y):
+		for x in range(span.position.x, span.end.x):
 			var roads := world.road_bits(x, y)
 			if roads == 0 or not world.is_explored(x, y):
 				continue
 			var middle := _on_ground(Vector2(x * 32 + 16, y * 32 + 16))
 			if not box.has_point(middle):
 				continue
+			if not uniform:
+				road_ink = ROAD * WorldTerrainPalette.modulate(WorldTerrainPalette.resolve(world, Vector2i(x, y)), "roads")
 			for d in range(1, 9):
 				if roads & (1 << (d - 1)) != 0:
 					var to := _on_ground(Vector2((x + ShandalarWorld.DX[d]) * 32 + 16, (y + ShandalarWorld.DY[d]) * 32 + 16))
-					_ground.draw_line(middle, middle.lerp(to, 0.5), ROAD *
-						WorldTerrainPalette.modulate(WorldTerrainPalette.resolve(world, Vector2i(x, y)), "roads"), 1.0)
+					_ground.draw_line(middle, middle.lerp(to, 0.5), road_ink, 1.0)
 	for site in world.sites:
 		var x := int(site["x"])
 		var y := int(site["y"])
@@ -252,6 +326,11 @@ func _draw_ground() -> void:
 		_ground.draw_circle(middle, radius, TOWN if kind < ShandalarWorld.CASTLE else GOLD)
 	for place in AdventureExpansions.places(world):
 		var point: Array = place["point"]
+		# A sites plugin's place shows once its land is seen, as a town does
+		# (the review of 2026-11-21: it stood out of the dark); a ship's
+		# harbor and an island's castle as ever.
+		if not place_shown(world, place):
+			continue
 		var at := _on_ground(Vector2(int(point[0]) * 32 + 16, int(point[1]) * 32 + 16))
 		if box.has_point(at):
 			_ground.draw_circle(at, 3.4, GOLD)

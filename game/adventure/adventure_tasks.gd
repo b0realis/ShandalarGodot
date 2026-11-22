@@ -23,10 +23,17 @@ static func rows(player: AdventurePlayer) -> Array[Dictionary]:
 		var saved: Dictionary = player.regions[region]
 		var data: Dictionary = saved.get("world", {})
 		key.append([region, saved.get("record", {}).get("quest", {}), saved.get("clocks", {}).get("quest_timer", 0), data.get("sites", []), data.get("encounters", []), data.get("expansion", {})])
+	looks += 1
 	if key != _key:
 		_key = key.duplicate(true)
 		_rows = _history(player, _build(player))
 	return _rows
+
+## How often [method rows] compared the adventure with what its rows were
+## made from — the whole of every land's sites and encounters, each time
+## (the tests; the review of 2026-11-21: three times a tick of the world's
+## clock, now once: [method guide]).
+static var looks := 0
 
 static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -135,6 +142,11 @@ static func tracked(player: AdventurePlayer) -> Array[String]:
 	var out: Array[String] = []
 	if player == null: return out
 	rows(player) # the history up to date: a finished task is chosen no more
+	return _tracked(player)
+
+## [method tracked], the history being up to date ([method rows] just read).
+static func _tracked(player: AdventurePlayer) -> Array[String]:
+	var out: Array[String] = []
 	for id in player.task_history:
 		var entry: Dictionary = player.task_history[id]
 		var guided: Variant = entry.get(GUIDED, false)
@@ -189,10 +201,14 @@ static func portal(target: Dictionary) -> bool:
 ## campaign, h1-4), and nothing is unchosen (h2-7).
 static func guide(player: AdventurePlayer, ordinary: Array[Dictionary]) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var chosen := tracked(player)
+	if player == null: return out
+	# One look at the adventure for the history and the rows both: nothing
+	# between them changes what the rows are made from.
+	var tasks := rows(player)
+	var chosen := _tracked(player)
 	var following := false
 	if not chosen.is_empty():
-		for task in rows(player):
+		for task in tasks:
 			if not chosen.has(task["id"]) or task.get("status", "active") != "active": continue
 			var target := _toward(player, task)
 			if target.is_empty(): continue

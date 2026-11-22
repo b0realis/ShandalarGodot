@@ -291,6 +291,22 @@ func done() -> bool:
 	return _done
 
 
+## THE DUEL CLOSED OUT AT ONCE, settled ([member outcome]) and its pages
+## still up — for the window closed there ([method
+## WorldScreen._close_out_meeting]; the review of 2026-11-21: the process
+## ended with nothing saved, and the cards lost to the town's creature were
+## the hero's again on the reload). Everything a ruled town's duel brings
+## is given as it is settled ([method RuledTowns.settle]: the town freed
+## and its card, or the stake lost) — no choice waits — so the pages are
+## left unread and the pane ends as their last "go on" ends it, whatever
+## the result. Not before the duel is settled. True when it ended here.
+func close_out() -> bool:
+	if _done or outcome.is_empty() or result == GAME_OVER:
+		return false
+	_end()
+	return true
+
+
 # ------------------------------------------------------- words, choices --
 
 func say(lines: Array) -> void:

@@ -320,7 +320,10 @@ always use encrypted `wss://`; they never fall back to plain WebSocket.
   the separate recovery code can reclaim an entry after closing the application.
 - Closing the client lobby forgets its seat; it cannot be recovered by
   reopening. Departure requests release it immediately; if the request cannot
-  reach the host, the disconnect grace applies. Concede before intentionally
+  reach the host, the disconnect grace applies (since 0.70.5 a closing
+  client waits up to 200 ms for the host to take the request before its
+  socket goes). A seat can concede while the other seat is away, outside a
+  tournament hold. Concede before intentionally
   leaving a running match. Host shutdown loses all room/session state;
   there is no durable live-duel journal. Tournament pairings and completed game
   scores have private checkpoints; interrupted games restart, not resume.

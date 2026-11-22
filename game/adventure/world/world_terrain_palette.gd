@@ -140,6 +140,16 @@ static func resolve(world: ShandalarWorld, tile: Vector2i) -> Dictionary:
 		elif defaults.has(layer): style[layer] = defaults[layer].duplicate(true)
 	return style
 
+## Whether every tile of [param world] has the world's own style and
+## nothing more — no saved appearance, no tints in its preset — so that
+## [method resolve] gives `{"preset": for_world(world)}` for each of them
+## and [method plain] depends on the terrain alone: what draws many tiles
+## asks once a terrain ([method WorldMinimap._draw_ground]).
+static func uniform(world: ShandalarWorld) -> bool:
+	if world == null: return true
+	var appearance: Dictionary = world.expansion.get("appearance", {})
+	return appearance.is_empty() and not profile_of(for_world(world)).has("tints")
+
 static func tile_key(tile: Vector2i) -> String:
 	return "%d,%d" % [tile.x, tile.y]
 

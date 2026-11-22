@@ -150,6 +150,14 @@ var _list_reply: Dictionary = {}
 const SENDING_BYTES := 64 * 1024 * 1024
 var _sending: Array = []
 var _sending_size := 0
+## The ports hosted in THIS process ([method hosts_port]): a client leaving
+## the tree does not wait for a host that cannot poll meanwhile.
+static var _listening: Dictionary = {}
+
+
+## Whether a host in this process listens on [param local_port].
+static func hosts_port(local_port: int) -> bool:
+	return local_port != 0 and _listening.has(local_port)
 
 
 ## Local organiser entry point, deliberately not a remote command. A visitor
@@ -234,6 +242,7 @@ func start_lan(address: String, requested_port := 17897, visible := true, nickna
 	_lan_pem = pem
 	_tls_options = TLSOptions.server(key, certificate)
 	port = _listener.get_local_port()
+	_listening[port] = true
 	CardPacks.lock_catalogue(self)
 	access_code = crypto.generate_random_bytes(32).hex_encode()
 	if not SgProtocol.token(access_code):
@@ -269,6 +278,7 @@ func start_local(requested_port := 17897) -> Error:
 	if result != OK:
 		return result
 	port = _listener.get_local_port()
+	_listening[port] = true
 	access_code = secret.hex_encode()
 	CardPacks.lock_catalogue(self)
 	return OK
@@ -304,6 +314,7 @@ func stop() -> void:
 	_sending_size = 0
 	_flush_queued = false
 	access_code = ""
+	_listening.erase(port)
 	port = 0
 	lan_address = ""
 	own_addresses = PackedStringArray()
@@ -802,10 +813,10 @@ func _receive(id: int, message: Dictionary) -> void:
 ## the list and each card's zip in chunks ([SgCardTransfer]) — never a
 ## session, a table or a path. Only a request answered with what it asked
 ## for gives the connection another [constant HELLO_MS]; a refused one does
-## not. Each chunk request counts as at least a whole chunk's work, however
-## little it asks for. A connection reads at most
-## [constant SgCardTransfer.MAX_LISTS] lists and one transfer's bytes and
-## one zip more; past that it is told so and let go.
+## not. A connection reads at most [constant SgCardTransfer.MAX_LISTS]
+## lists, one transfer's bytes and one zip more, in at most
+## [constant SgCardTransfer.MAX_REQUESTS] chunk requests, however little
+## each asks for; past that it is told so and let go.
 func _transfer(id: int, message: Dictionary) -> void:
 	if message.access != access_code:
 		_reject(id, INVALID_INVITATION)
@@ -819,13 +830,20 @@ func _transfer(id: int, message: Dictionary) -> void:
 			return
 		reply = _card_list()
 	else:
+		# THE ALLOWANCE COVERS A WHOLE PLAN (whole-project review 2026-11-21):
+		# the bytes really sent, and the requests counted beside them. Each
+		# request used to cost a whole chunk of the byte allowance, so the
+		# 205th was refused — and a plan within the guest's own limits (110
+		# cards of 600 KB: two requests a card) never completed, try after try.
 		var served := int(peer.get("served", 0))
-		if served >= SgCardTransfer.MAX_TOTAL + CommunityCards.MAX_ZIP:
+		peer.requests = int(peer.get("requests", 0)) + 1
+		if served >= SgCardTransfer.MAX_TOTAL + CommunityCards.MAX_ZIP \
+				or int(peer.requests) > SgCardTransfer.MAX_REQUESTS:
 			_reject(id, SgCardTransfer.TOO_MANY)
 			return
 		var row := SgCardTransfer.shelf_row(_card_shelf(), String(message.name))
 		reply = SgCardTransfer.chunk_reply(row, String(message.name), int(message.offset), _sending_bytes(row))
-		peer.served = served + maxi(SgCardTransfer.CHUNK, String(reply.data).length() / 4 * 3)
+		peer.served = served + String(reply.data).length() / 4 * 3
 	if String(reply.error) == "":
 		peer.waited = 0
 	_send(id, reply)

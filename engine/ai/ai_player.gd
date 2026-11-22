@@ -3033,7 +3033,7 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 		return false
 	if _refused.has("%d:%d" % [inst.id, index]):
 		return false   # refused this step already — do not pay for it twice
-	if runaway_guard and int(inst.ability_uses.get(index, 0)) >= GUARD_ABILITY_CAP:
+	if runaway_guard and inst.ability_uses_at(index) >= GUARD_ABILITY_CAP:
 		return false   # THE RUNAWAY GUARD's count (2026-10-19)
 	if ability.cost.has_x and (not priced_sacrifice or (inst.data.card_name not in ["Ice Cauldron", "Chromatic Armor", "Runed Arch"] and not HOMELANDS_TACTICS.sizes_x(self, ability) and not ALLIANCES_TACTICS.sizes_x(self, ability))):
 		return false   # Only explicitly sized X policies may spend mana.
@@ -3156,7 +3156,7 @@ func _ability_available(game: MtgGame, inst: CardInstance, index: int,
 	if game.ability_timing_refusal(pid, inst, ability) != "":
 		return false
 	if ability.max_per_turn > 0 \
-			and int(inst.ability_uses.get(index, 0)) >= ability.max_per_turn:
+			and inst.ability_uses_at(index) >= ability.max_per_turn:
 		return false
 	return true
 
@@ -6866,6 +6866,15 @@ func _lethal_life_mana(game: MtgGame) -> String:
 	if game.cast_refusal(pid, inst, targets, x, 0) != "":
 		_refused[str(inst.id)] = true
 		return ""
+	# THE PLAN BEFORE THE LIFE (review 2026-11-21): the taps are planned
+	# with the life's mana counted as floating, and only a plan that covers
+	# the spell lets a point be paid. Paid first, a plan that then failed
+	# left the life gone and its mana floating to burn.
+	if not _plan_covers_with_floating(game, game.spell_cost_for(pid, inst.data, x),
+			_generic_x(inst.data, x) + game.spell_surcharge(pid, inst.data),
+			game.mana_usage_keys(inst.data, inst), life):
+		_refused[str(inst.id)] = true
+		return ""
 	if game.pay_life_for_mana(pid, life) != "":
 		return ""
 	if not _plan_and_pay(game, game.spell_cost_for(pid, inst.data, x),
@@ -8343,6 +8352,15 @@ func _buy_prevention(game: MtgGame, victim: TargetRef, points: int) -> String:
 		var inst := game.find_instance(victim.instance_id)
 		if inst != null and inst.damage_unpreventable_this_turn:
 			return ""
+	# Everything [method MtgGame.pay_for_prevention] refuses for, asked
+	# before the mana is tapped (review 2026-11-21).
+	if game.priority_player != pid or game.awaiting_regeneration \
+			or game._act_precheck(pid) != "":
+		return ""
+	if not victim.is_player:
+		var body := game.find_instance(victim.instance_id)
+		if body == null or body.zone != Mtg.Zone.BATTLEFIELD:
+			return ""
 	if not _plan_and_pay(game, ManaCost.parse("{%d}" % points)):
 		return ""
 	for _i in points:
@@ -8853,7 +8871,7 @@ func _pump_reach(game: MtgGame, inst: CardInstance) -> Vector2i:
 	var times := payable / _pump_claimants(game, inst)
 	if ability.max_per_turn > 0:
 		times = mini(times,
-			maxi(ability.max_per_turn - int(source.ability_uses.get(index, 0)), 0))
+			maxi(ability.max_per_turn - source.ability_uses_at(index), 0))
 	times = mini(times, _pump_cap(game, inst, bonus))
 	return bonus * maxi(times, 0)
 
@@ -11344,7 +11362,7 @@ func _activations_left(game: MtgGame, inst: CardInstance, index: int,
 	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 	var left := -1
 	if ability.max_per_turn > 0:
-		left = maxi(ability.max_per_turn - int(inst.ability_uses.get(index, 0)), 0)
+		left = maxi(ability.max_per_turn - inst.ability_uses_at(index), 0)
 	if may_light_fuse:
 		return left
 	var breath := _card_local_breath(inst, index,
@@ -13763,6 +13781,29 @@ func _cost_is_free(cost: ManaCost) -> bool:
 	return ManaPlanner.cost_is_free(cost)
 
 
+## WOULD [method _plan_and_pay] pay [param cost] plus [param extra] if
+## [param floating] more colorless mana were in the pool? The same sources
+## and the same vetoes, nothing tapped and nothing paid — asked before a
+## cost that buys that mana (Channel's life) is spent (review 2026-11-21).
+func _plan_covers_with_floating(game: MtgGame, cost: ManaCost, extra: int,
+		usage_keys: Array, floating: int) -> bool:
+	if _cost_is_free(cost) and extra <= 0:
+		return true
+	var rows := ManaPlanner.sources(game, pid, _excluded_sources(game))
+	for unit in maxi(floating, 0):
+		# One unit of floating mana, in ManaPlanner.sources' own row shape.
+		rows.append([null, unit, Mtg.ManaColor.C, 1, 0, "", 0, 0])
+	var plan := ManaPlanner.plan_from(rows, cost, extra, usage_keys)
+	if plan.is_empty():
+		return false
+	if profile.minds_pain and _pain_kills(game, rows, plan):
+		return false
+	if profile.forecasts_tactics and game.rules.mana_burn \
+			and _burn_kills(game, rows, plan, cost.mana_value() + extra):
+		return false
+	return true
+
+
 ## A COST THE ENGINE CHARGES NOTHING FOR (Pack 9 bug pass, 2026-10-06,
 ## [member AiProfile.forecasts_tactics]): [param cost] free and [param extra]
 ## generic on top of it at most nothing. A reduction never takes a cost
@@ -14876,6 +14917,11 @@ func _spend_on_packet(game: MtgGame, packet: DamagePacket, worth: float) -> Stri
 	var targets := _window_targets(game, best["effects"], packet, source)
 	if int(best["index"]) >= 0:
 		var ability: ActivatedAbility = source.cur_activated_abilities[best["index"]]
+		# Asked before it pays, like the window's cast below (review
+		# 2026-11-21): an activation the engine would refuse — its timing,
+		# a ban, a spent once-a-turn — used to leave the mana floating.
+		if game.ability_announce_refusal(pid, source, int(best["index"])) != "":
+			return ""
 		if not _plan_and_pay(game, ability.cost, _ability_extra(game, pid, source, ability),
 				[], _spared_for(game, source, ability, targets)):
 			return ""
@@ -15015,8 +15061,9 @@ func _pending_player_risk(game: MtgGame) -> int:
 				total += pending.remaining()
 		else:
 			var victim := game.find_instance(pending.target.instance_id)
-			if victim != null and victim.damage_redirect_to == pid and victim.damage_redirects > 0 \
-					and victim.damage_redirect_sources.has(pending.source_id()):
+			if victim != null and victim.damage_redirects > 0 \
+					and victim.damage_redirect_sources.has(pending.source_id()) \
+					and victim.damage_redirect_to_for(pending.source_id()) == pid:
 				total += pending.remaining()
 	return total
 
@@ -17352,7 +17399,7 @@ func _paid_first_strike(game: MtgGame, inst: CardInstance) -> bool:
 		if ability.only_owner_may_activate and inst.owner_id != who:
 			continue
 		if ability.max_per_turn > 0 \
-				and int(inst.ability_uses.get(index, 0)) >= ability.max_per_turn:
+				and inst.ability_uses_at(index) >= ability.max_per_turn:
 			continue
 		var intent := EffectIntent.read(ability.effects, inst.data.card_name)
 		if intent.unknown or not intent.pump_self \

@@ -776,6 +776,30 @@ func _end() -> void:
 	queue_free()
 
 
+## THE MEETING CLOSED OUT AT ONCE, its duel settled ([member spoils]) and
+## its result's pages still up — for the window closed there ([method
+## WorldScreen._close_out_meeting]): the pages left unread, the meeting
+## ended as their last "go on" ends it. Not before the duel is settled,
+## and not while a win's choice waits ([method choice_waits]): that win is
+## not saved at all, as before — never half of it. True when it ended here.
+func close_out() -> bool:
+	if _done or spoils.is_empty() or result == GAME_OVER:
+		return false
+	if result == WON and choice_waits():
+		return false
+	_end()
+	return true
+
+
+## Whether a won duel's spoils still wait for the player's choice: the
+## cards or the clue ([method DuelSpoils.choose]), a card to pick.
+func choice_waits() -> bool:
+	if bool(spoils.get("asks", false)) and String(spoils.get("took", "")) == "":
+		return true
+	return (bool(spoils.get("pick_any", false)) or bool(spoils.get("pick_duplicate", false))) \
+		and String(spoils.get("picked", "")) == ""
+
+
 ## Whether the meeting is over.
 func done() -> bool:
 	return _done

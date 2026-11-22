@@ -628,7 +628,11 @@ static func map_op(mark: String) -> Array:
 	var texture := _texture(id, info, String(sprite[0]))
 	if texture == null: return []
 	var trim := id + ":" + String(sprite[0])
-	if not _trims.has(trim): _trims[trim] = Rect2(texture.get_image().get_used_rect())
+	if not _trims.has(trim):
+		# A plugin's is measured as it is decoded ([method AdventurePlugins.texture]);
+		# only a development fixture's res:// picture is read here.
+		_trims[trim] = texture.get_meta(AdventurePlugins.USED_RECT) if texture.has_meta(AdventurePlugins.USED_RECT) \
+			else Rect2(texture.get_image().get_used_rect())
 	var source: Rect2 = _trims[trim]
 	var width := float(sprite[1])
 	var height := width * source.size.y / maxf(1.0, source.size.x)

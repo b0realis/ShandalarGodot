@@ -146,8 +146,39 @@ func dungeon_index(player: AdventurePlayer, key: String) -> int:
 	var raised: Variant = progress(player).get("dungeons", {})
 	if not raised is Dictionary:
 		return -1
-	var index := int((raised as Dictionary).get(land(player) + ":" + key, -1))
-	return index if index >= 0 and index < player.world.encounters.size() else -1
+	var saved: Variant = (raised as Dictionary).get(land(player) + ":" + key, -1)
+	var index := int(saved) if AdventurePlayer._is_number(saved) else -1
+	# Slots 0–4 are the castles' on every land: never a raised dungeon.
+	if index < DungeonDoors.CASTLES or index >= mini(player.world.encounters.size(), WorldClues.MOST_SLOTS):
+		return -1
+	# THE SLOT MUST SAY IT IS THIS DUNGEON ([constant WorldClues.RAISED]; the
+	# review of 2026-11-21): a damaged save's record pointed at a 1997
+	# dungeon read "open" for good, and the place took its price for a
+	# dungeon [method spawn] then never raised.
+	var slot: Dictionary = player.world.encounters[index]
+	var mark: Variant = slot.get(WorldClues.RAISED)
+	if mark is String and String(mark) != "":
+		return index if String(mark) == id + ":" + key else -1
+	# A 0.70.4 save, from before the mark: its vault is found where only a
+	# raised dungeon stands — past 1997's fifteen on the mainland; on another
+	# land past the castles' slots and under the name this dungeon was given
+	# (the land's own cave has the land's) — and marked from now on.
+	var mainland := AdventureRegions.mainland(player)
+	if mainland and index < WorldClues.SLOTS:
+		return -1
+	if not mainland and (dungeon(key).is_empty() or WorldNames.dungeon_name(index, player.world) != String(dungeon(key).get("name", key)) \
+			or not _named(player.world, index)):
+		return -1
+	slot[WorldClues.RAISED] = id + ":" + key
+	player.world.touch()
+	return index
+
+
+## Whether [param world] keeps a name of its own for slot [param index]
+## (`expansion.dungeon_names`, as [method spawn] writes one).
+static func _named(world: ShandalarWorld, index: int) -> bool:
+	var names: Variant = world.expansion.get("dungeon_names", {})
+	return names is Dictionary and (names as Dictionary).get(str(index)) is String
 
 
 ## "none", "open" (it still holds a card) or "cleared".
@@ -410,13 +441,15 @@ func _dungeon_tile(player: AdventurePlayer, key: String, site_key := "") -> Vect
 	var least := float(distance.get("min", 6))
 	var most := float(distance.get("max", 24))
 	var portal := FinalBattle.portal_tile_of(player)
-	var places := AdventureSites.points(world)
+	# The tiles the land's places and anchorages keep, read once for every
+	# tile asked (the review of 2026-11-21) — the places' own among them.
+	var kept := DungeonDoors.kept_points(world)
+	for point: Variant in AdventureSites.points(world):
+		kept[Vector2i(int(point[0]), int(point[1]))] = true
 	var inside: Array[Vector2i] = []
 	var beyond: Array[Vector2i] = []
 	for tile in RegionGeography.component(world, here):
-		if not DungeonDoors.takes_dungeon(world, tile, player.tile(), portal):
-			continue
-		if places.any(func(point: Variant) -> bool: return Vector2i(int(point[0]), int(point[1])) == tile):
+		if kept.has(tile) or not DungeonDoors.takes_dungeon(world, tile, player.tile(), portal, kept):
 			continue
 		var far := tile.distance_to(here)
 		if far < least:
@@ -475,8 +508,10 @@ func spawn(player: AdventurePlayer, key: String, site_key := "") -> int:
 	world.encounters.append({"x": tile.x, "y": tile.y, "town": _nearest_town(world, tile), "color": color,
 		"monster_flags": DungeonBoard.LARGE if String(info.get("size", "small")) == "large" else 0,
 		"rules": rules, "card_in_effect": -1, "cards": [], WorldClues.LEFT_CARDS: cards,
-		"clues": WorldClues.LOCATION | WorldClues.CREATURES | WorldClues.RULES})
+		"clues": WorldClues.LOCATION | WorldClues.CREATURES | WorldClues.RULES,
+		WorldClues.RAISED: id + ":" + key})
 	world.page[tile.y * ShandalarWorld.PAGE_WIDTH + tile.x] |= ShandalarWorld.DUNGEON
+	world.touch_page()
 	var names: Dictionary = world.expansion.get("dungeon_names", {}) if world.expansion.get("dungeon_names") is Dictionary else {}
 	names[str(index)] = String(info.get("name", key))
 	world.expansion["dungeon_names"] = names

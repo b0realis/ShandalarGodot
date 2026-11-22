@@ -1210,6 +1210,9 @@ func _take(player: AdventurePlayer, entry: Dictionary) -> void:
 		var kept := WorldClues.left_cards(slot)
 		kept.erase(card_name)
 		slot[WorldClues.LEFT_CARDS] = kept
+	# The dungeon's record written in place ([method ShandalarWorld.touch]).
+	if player.world != null:
+		player.world.touch()
 	player.log_event("treasure", "", {"slot": index, "card": card_name})
 	player.add_card(card_name)
 
@@ -1223,6 +1226,8 @@ func _leave_behind(player: AdventurePlayer, card_name: String) -> void:
 	var kept := WorldClues.left_cards(slot)
 	kept.append(card_name)
 	slot[WorldClues.LEFT_CARDS] = kept
+	if player.world != null:
+		player.world.touch()
 	left_here.append(card_name)
 
 

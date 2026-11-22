@@ -118,6 +118,7 @@ static func place_here(player: AdventurePlayer) -> void:
 	var mainland := AdventureRegions.mainland(player)
 	var placed := _placed(world)
 	var added := false
+	var blocked := blocked_tiles(player)
 	for id in on_ids(player):
 		var info := definition(id)
 		var salt := int(info.get("salt", 0))
@@ -129,7 +130,7 @@ static func place_here(player: AdventurePlayer) -> void:
 			var key := id + ":" + site
 			if placed.has(key) or placed.size() >= MOST_PLACES:
 				continue
-			var tile := spot(world, key, salt, int(sites[site].get("gap", 3)), placed.values())
+			var tile := spot(world, key, salt, int(sites[site].get("gap", 3)), placed.values(), blocked)
 			if tile.x < 0:
 				continue
 			placed[key] = [tile.x, tile.y]
@@ -154,6 +155,29 @@ static func _placed(world: ShandalarWorld) -> Dictionary:
 	return out
 
 
+## THE TILES OF [param player]'s LAND NO NEW PLACE TAKES though they carry
+## no flag (the review of 2026-11-21): the hero's own, Arzakon's portal's
+## ([method FinalBattle.portal_tile_of]) and every lair's. A place put on a
+## land later than its first day — a plugin's new version with one more
+## place, a card pack turned on again — stood under the hero, under the
+## portal (whose pane is asked first, so the place was never visited) or
+## on a lair. A new campaign has none of them on a tile [method spot]
+## would draw from (the hero stands on the start), so its draws are the same.
+static func blocked_tiles(player: AdventurePlayer) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if player == null:
+		return out
+	out.append(player.tile())
+	var portal := FinalBattle.portal_tile_of(player)
+	if portal.x >= 0:
+		out.append(portal)
+	for creature: Variant in player.monsters:
+		if creature is Dictionary and String(creature.get("kind", "")) == "lair" \
+				and AdventurePlayer._is_number(creature.get("x")) and AdventurePlayer._is_number(creature.get("y")):
+			out.append(Vector2i(int(creature["x"]) / 32, int(creature["y"]) / 32))
+	return out
+
+
 ## Every tile a place of [param world] keeps, shown or not (a moved
 ## dungeon never stands on one, [method DungeonDoors.expansion_place]).
 static func points(world: ShandalarWorld) -> Array:
@@ -163,10 +187,12 @@ static func points(world: ShandalarWorld) -> Array:
 ## THE TILE A PLACE STANDS ON ([param key] `<plugin>:<site>`): a land tile
 ## of the start's land — no site, road or dungeon on it, no other place —
 ## [param gap] tiles or more from every town, castle, dungeon and place
-## ([param taken] those placed already), next to a road when one such is
+## ([param taken] those placed already), never one of [param blocked]
+## ([method blocked_tiles]), next to a road when one such is
 ## (the hero walks by it), drawn on [method dice_for]'s dice. (−1, −1) when
 ## no tile fits.
-static func spot(world: ShandalarWorld, key: String, salt: int, gap: int, taken: Array) -> Vector2i:
+static func spot(world: ShandalarWorld, key: String, salt: int, gap: int, taken: Array,
+		blocked: Array[Vector2i] = []) -> Vector2i:
 	var start := world.start_tile()
 	var near_road: Array[Vector2i] = []
 	var anywhere: Array[Vector2i] = []
@@ -182,6 +208,8 @@ static func spot(world: ShandalarWorld, key: String, salt: int, gap: int, taken:
 			others.append(Vector2i(int(point[0]), int(point[1])))
 	for tile in RegionGeography.component(world, start):
 		if tile == start or world.tile_flags(tile.x, tile.y) & (ShandalarWorld.SITE | ShandalarWorld.ROAD | ShandalarWorld.DUNGEON) != 0:
+			continue
+		if tile in blocked:
 			continue
 		var clear := true
 		for other in others:
@@ -320,7 +348,10 @@ static func map_op(mark: String) -> Array:
 		return []
 	var trim := id + ":" + String(sprite[0]) + ":" + str(AdventurePlugins.revision)
 	if not _trims.has(trim):
-		_trims[trim] = Rect2(texture.get_image().get_used_rect())
+		# Measured as it was decoded ([method AdventurePlugins.texture]): no
+		# read-back off the graphics card here.
+		_trims[trim] = texture.get_meta(AdventurePlugins.USED_RECT) if texture.has_meta(AdventurePlugins.USED_RECT) \
+			else Rect2(texture.get_image().get_used_rect())
 	var source: Rect2 = _trims[trim]
 	var width := float(sprite[1])
 	var height := width * source.size.y / maxf(1.0, source.size.x)

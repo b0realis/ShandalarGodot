@@ -345,7 +345,16 @@ static func affordable_attackers(g: MtgGame, pilot, ids: Array) -> Array:
 	for id in ranked:
 		var tax := 0
 		for cost in g.find_instance(id).cur_attack_costs: tax += int(cost.get("generic_mana", 0))
-		if tax == 0 or g.can_afford_cost(pilot.pid, ManaCost.parse("{%d}" % (total + tax))):
+		# An attacker that taps to attack cannot tap for the tax as well
+		# (CR 508.1f-i, MtgGame.attack_tax_barred_payers; review 2026-11-21):
+		# the budget is judged without the group's own mana creatures.
+		var group: Array = []
+		for member in kept + [id]: group.append(g.find_instance(member))
+		var barred: Dictionary = g.attack_tax_barred_payers(pilot.pid, group)
+		if (tax == 0 and (total == 0 or g.can_afford_cost(pilot.pid,
+					ManaCost.parse("{%d}" % total), [], -1, barred))) \
+				or (tax > 0 and g.can_afford_cost(pilot.pid,
+					ManaCost.parse("{%d}" % (total + tax)), [], -1, barred)):
 			kept.append(id)
 			total += tax
 	# Budget trimming can invalidate "at least N attackers". Such optional

@@ -504,7 +504,33 @@ static func _rules_leading(f: Font, size: int) -> int:
 ## it on screen.
 static func _wrapped_height(f: Font, text: String, width: float, size: int,
 		spacing: int) -> float:
-	return ManaText.measure(text, f, size, width, spacing)
+	var key := [f.get_instance_id(), text, width, size, spacing]
+	if _measure_cache.has(key):
+		return _measure_cache[key]
+	var height := ManaText.measure(text, f, size, width, spacing)
+	_keep_measure(key, height)
+	return height
+
+
+## THE FITS, KEPT (review 2026-11-21): a card's name, type line and rules
+## text are measured at up to five sizes each time it is shown, and the
+## answer depends on nothing but the font object, the words, the room and
+## the sizes — all of them in the key, so a kept answer is the fresh one. A
+## skin's new font is a new object and so a new key. Bounded: cleared whole
+## past [constant MEASURE_CACHE_CAP] entries.
+static var _measure_cache: Dictionary = {}
+const MEASURE_CACHE_CAP := 4096
+
+
+static func _keep_measure(key: Array, value: Variant) -> void:
+	if _measure_cache.size() >= MEASURE_CACHE_CAP:
+		_measure_cache.clear()
+	_measure_cache[key] = value
+
+
+## Lets the kept fits go (a skin put on or taken off; the tests).
+static func forget_measures() -> void:
+	_measure_cache.clear()
 
 
 ## The largest size from [param sizes] whose ONE line of [param text] fits
@@ -513,6 +539,16 @@ static func _wrapped_height(f: Font, text: String, width: float, size: int,
 ## first that fits (`config.c:554-575`, `drawfullcard.c:984-994` and
 ## `:1033-1043`). Godot cannot condense a face, so ours steps the size.
 static func _fit_one_line(f: Font, text: String, width: float, sizes: Array) -> int:
+	var key := [f.get_instance_id(), text, width, sizes]
+	if _measure_cache.has(key):
+		return _measure_cache[key]
+	var fitted := _fit_one_line_fresh(f, text, width, sizes)
+	_keep_measure(key, fitted)
+	return fitted
+
+
+## [method _fit_one_line], measured (what the kept answer must equal).
+static func _fit_one_line_fresh(f: Font, text: String, width: float, sizes: Array) -> int:
 	for candidate in sizes:
 		if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 				int(candidate)).x <= width:
@@ -914,7 +950,16 @@ static func _plate_texture(frame_key: String) -> Texture2D:
 ## a Magic card back sits there, face down, waiting. Uses the imported
 ## Cardback.pic (228x323, the same aspect the frame gives this Control),
 ## falling back to a plain dark card shape when no skin is imported.
+## What the face on show was laid out from ([method show_card]); empty
+## when the back is up or nothing was shown yet.
+var _face_key: Array = []
+## How often [method show_card] found its face already up — a plain
+## counter for the tests.
+var same_face_hits := 0
+
+
 func show_back() -> void:
+	_face_key = []
 	var art := GameSkin.texture("card_back")
 	if art != null:
 		var box := StyleBoxTexture.new()
@@ -980,10 +1025,28 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 	_portal_land_scan.visible = _portal_land_scan.texture != null
 	var frame_key := MiniCard.frame_skin_key(d)
 	var skinned := GameSkin.texture(frame_key) != null
-	_name_label.text = d.card_name
 	# [QoL, issue #9] What a text change wrote — never on `Original type`,
 	# which is the card before any spell changed it.
 	var changed := {} if printed else changed_text(inst)
+	# THE SAME FACE AGAIN (review 2026-11-21): a redraw of the table under
+	# the pointer, or the pointer back on the card it left, asks for the
+	# card already shown. Everything laid out below follows from these
+	# values, so when none moved the face stands as it is.
+	# The picture is part of what is shown — one fetched since (a pack
+	# switched on, a skin's art arrived) is a new face.
+	var packs := (Engine.get_main_loop() as SceneTree).root.get_node_or_null("CardPacks")
+	var art: Texture2D = CardPrintings.texture(d.card_name, choice_id) if not printing.is_empty() \
+		else (packs.art_texture(d.card_name, shown_set) if packs != null else null)
+	if art == null:
+		art = GameSkin.card_art(d.card_name)
+	var face_key: Array = [inst, d, printing_set,
+		printed, choice_id, changed, _text_expanded, CardRegistry.revision,
+		GameSkin.texture(frame_key), art, docked]
+	if visible and docked and _face_key == face_key:
+		same_face_hits += 1
+		return
+	_face_key = face_key
+	_name_label.text = d.card_name
 	_type_label.text = String(changed["type"]) if changed.get("type_changed", false) else _type_line(d)
 	# THE ONE-LINE LADDERS. The original condenses its title and type-line
 	# faces to fit; we step the size down instead, and only for the names
@@ -1097,12 +1160,6 @@ func show_card(inst: CardInstance, printing_set := "", printed := false) -> void
 	# Art, or the quiet identity-colored placeholder.
 	# Standalone SceneTree tools can compile this class before autoload
 	# identifiers are registered. Resolve the service at render time.
-	var tree := Engine.get_main_loop() as SceneTree
-	var packs := tree.root.get_node_or_null("CardPacks")
-	var art: Texture2D = CardPrintings.texture(d.card_name, choice_id) if not printing.is_empty() \
-		else (packs.art_texture(d.card_name, shown_set) if packs != null else null)
-	if art == null:
-		art = GameSkin.card_art(d.card_name)
 	_art.texture = art
 	_art.visible = art != null
 	_art_placeholder.color = MiniCard.frame_color(d).darkened(0.55)

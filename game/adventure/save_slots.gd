@@ -150,7 +150,12 @@ static func migrate(folder: String) -> void:
 		if AdventurePlayer.save_at(old).get("unreadable", false):
 			continue
 		var player := AdventurePlayer.load_from(old)
+		# The slot is the adventure's the save holds, whatever the file was
+		# renamed to (the review of 2026-11-21: by the file's name a renamed
+		# copy became a slot no adventure's row counted its own).
 		var id := file_name.trim_suffix("." + LEGACY + ".json")
+		if player != null and player.adventure_id != "":
+			id = player.adventure_id
 		var slot := first_free(id, folder)
 		if player == null or slot == 0:
 			continue

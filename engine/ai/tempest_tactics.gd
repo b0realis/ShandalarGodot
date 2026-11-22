@@ -1952,7 +1952,7 @@ static func ability_ready(g: MtgGame, pilot, s: CardInstance, index: int,
 		return false
 	if g.ability_timing_refusal(pilot.pid, s, a) != "":
 		return false
-	if a.max_per_turn > 0 and int(s.ability_uses.get(index, 0)) >= a.max_per_turn:
+	if a.max_per_turn > 0 and s.ability_uses_at(index) >= a.max_per_turn:
 		return false
 	var pay := g.ability_payment(pilot.pid, s, index, 0)
 	if pilot._cost_is_free(pay.cost) and int(pay.extra) == 0:

@@ -134,6 +134,7 @@ static func beat(player: AdventurePlayer, index: int) -> Dictionary:
 	var site := castle_site(player.world, index)
 	if site >= 0:
 		player.world.sites[site]["type"] = BEATEN_CASTLE
+		player.world.touch()
 	var names: Array[String] = []
 	var restored: Array[String] = []
 	for town in freed:

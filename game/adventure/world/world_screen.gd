@@ -712,6 +712,8 @@ func rebuild_hud() -> void:
 
 ## Show [param adventure]: its world, the hero where they stand.
 func show_player(adventure: AdventurePlayer) -> void:
+	# Another adventure shown (a load): the one before is written first.
+	AdventurePlayer.finish_saves()
 	player = adventure
 	AdventureExpansions.initialize(player)
 	world = player.world
@@ -735,7 +737,25 @@ func show_player(adventure: AdventurePlayer) -> void:
 	view.queue_redraw()
 	# The land's own world track, or the title's tune again on the mainland.
 	WorldDuels.region_music(self)
+	_warm_the_plugins()
 	_say_mainland_note()
+
+
+## THE PLUGINS' PICTURES WARMED (the review of 2026-11-21): the land the
+## hero walks, when it is a plugin's, and every sites plugin switched on in
+## this campaign — their panes' pictures and their markers decoded on a
+## worker thread ([method AdventurePlugins.warm]) rather than as the first
+## pane opens or the first marker is drawn. A land the hero has not sailed
+## to is not warmed: its harbor's one small sprite is read as it is drawn.
+func _warm_the_plugins() -> void:
+	if player == null or world == null:
+		return
+	var ids: Array[String] = AdventureSites.on_ids(player)
+	var land := AdventureRegions.id(world)
+	if land != AdventureRegions.MAINLAND and not land in ids:
+		ids.append(land)
+	for id in ids:
+		AdventurePlugins.warm(id)
 
 
 ## [QoL] Whether this launch has said [method AdventureExpansions.mainland_note]
@@ -773,6 +793,12 @@ func show_world(shown: ShandalarWorld) -> void:
 ## all that changed (the panel need not walk the bag again: [method
 ## WorldHud.refresh]).
 func _show_hero(ticked := false) -> void:
+	_hover_ticks = _hover_ticks + 1 if ticked else HOVER_TICKS
+	if _hover_ticks >= HOVER_TICKS or player.tile() != _hover_hero:
+		# The place under the pointer is asked for anew ([method _place_hovered]).
+		_hover_ticks = 0
+		_hover_hero = player.tile()
+		_hover_stamp += 1
 	view.hero = Vector2(player.position)
 	view.lairs = WorldLairs.seen(player)
 	var known := WorldClues.on_world(world)
@@ -788,17 +814,21 @@ func _show_hero(ticked := false) -> void:
 	_map.hero_tile = player.tile()
 	_map.player = player
 	var calling := WorldStatus.targets(player)
-	AdventureTasks.rows(player) # discover and archive goals even with the Tasks tab closed
 	# One look for the small map, not one for each thing it shows (the
 	# smoothness pass, 0.50.66).
 	hud.minimap.show_hero(world, Vector2(player.position), calling, known)
 	var guided: Array[Dictionary] = []
+	# The goals are discovered and archived even with the Tasks tab closed
+	# and the guides off; with them on, the guides' own look does it ([method
+	# AdventureTasks.guide]) — one look a tick, not three.
 	if WorldHud.guides_wanted():
 		guided = AdventureTasks.guide(player, calling)
+	else:
+		AdventureTasks.rows(player)
 	guides.targets = guided
 	guides.bar_at_bottom = hud.bar_at_bottom
 	var covered: Array[Rect2] = []
-	for pane in [hud.minimap, hud.find_child("QuestPane", false, false)]:
+	for pane in [hud.minimap, hud.quest_pane()]:
 		if pane != null and (pane as Control).visible:
 			covered.append((pane as Control).get_global_rect())
 	guides.avoid = covered
@@ -896,6 +926,8 @@ func save_now() -> SaveSlotsPane:
 
 ## Quickslot and the ten named slots opened over what is on the screen.
 func _open_slots() -> SaveSlotsPane:
+	# The slots are read as they stand: every save handed over is written.
+	AdventurePlayer.finish_saves()
 	var slots := SaveSlotsPane.new()
 	slots.player = player
 	slots.k = WorldHud.BIG if hud.big else 1.0
@@ -944,6 +976,7 @@ func quick_load() -> bool:
 	if player == null or player.adventure_id == "" or _lost or _leaving \
 			or (modal() and not town_on_top()):
 		return false
+	AdventurePlayer.finish_saves()
 	var slot := SaveSlots.quickslot_of(player.adventure_id)
 	if bool(slot["empty"]) or bool(slot["damaged"]):
 		_show_quicksave_notice(false, NO_QUICKSLOT if bool(slot["empty"]) else QUICKSLOT_UNREAD)
@@ -1020,6 +1053,28 @@ func autosave() -> String:
 	return path
 
 
+## THE AUTOSAVE OF THE WORLD'S OWN MOMENTS, OFF THE FRAME — a meeting
+## begun and ended, a lair entered and left, a place left, a board entered
+## (the review of 2026-11-21: each froze the frame its pane opened or
+## closed in). The adventure as it stands now is what is written ([method
+## AdventurePlayer.save_later]), the same file and `.bak` as [method
+## autosave]'s; a save that could not be written is said beside the panel
+## when the worker has found it so. The saves keep their order, and all of
+## them are written before any save is read, listed or written at once,
+## before the world is left and before the game ends ([method
+## AdventurePlayer.finish_saves]). Where no worker writes (headless, a
+## browser) this is [method autosave].
+func autosave_later() -> void:
+	if player == null or player.adventure_id == "" or _lost:
+		return
+	if not AdventurePlayer.saves_off_frame():
+		autosave()
+		return
+	player.autosave_later(func(path: String) -> void:
+		if path == "" and hud != null and is_inside_tree():
+			hud.say(UNSAVED))
+
+
 ## The autosave written ([method AdventurePlayer.autosave]); a seam, so a
 ## test can make it fail.
 func _write_autosave() -> String:
@@ -1034,6 +1089,8 @@ func open_load() -> LoadAdventureScreen:
 		return _load_screen
 	if modal():
 		return null
+	# The saves are listed as they stand: every one handed over is written.
+	AdventurePlayer.finish_saves()
 	_wear(-1)
 	_dragging = false
 	_load_screen = load("res://game/adventure/load_adventure_screen.tscn").instantiate()
@@ -1087,6 +1144,7 @@ func return_to_menu() -> void:
 
 ## Ends the process; a seam so a test can count the exit instead.
 func _end_process() -> void:
+	AdventurePlayer.finish_saves()
 	get_tree().quit()
 
 
@@ -1133,6 +1191,7 @@ func stay_after_panes() -> void:
 ## the leaving instead.
 func _go_to_title() -> void:
 	_leaving = true
+	AdventurePlayer.finish_saves()
 	if is_inside_tree() and get_tree().current_scene == self:
 		get_tree().change_scene_to_file("res://game/main.tscn")
 
@@ -1176,10 +1235,22 @@ func _notification(what: int) -> void:
 	# the tick; the last save stands, and its dice bring the news again.
 	# On a castle's or a dungeon's board neither: 1997 saved nothing there;
 	# the last save stands, from before the hero went in.
+	# A creature's duel that is over is no longer "mid-meeting": its result
+	# stands, and is saved with the meeting's end ([method _close_out_meeting]).
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null \
+			and (_close_out_meeting() or _close_out_lair() or _close_out_board()):
+		# Saved as the meeting, the lair or the visit ended — and once more
+		# as the window's close saves a world at rest, when it now is.
+		if not _leaving and not building() and not meeting() and not _duel_held and not _lost \
+				and not rewarding() and not news_shown() and not on_board():
+			autosave()
+		AdventurePlayer.finish_saves()
+		return
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building() \
 			and not meeting() and not _duel_held and not _lost and not rewarding() and not news_shown() \
 			and not on_board():
 		autosave()
+		AdventurePlayer.finish_saves()
 
 
 # ------------------------------------------------------- a place visited --
@@ -1338,6 +1409,9 @@ func _left_place(then: String) -> void:
 	if _alive(_visit):
 		_visit.queue_free()
 	_visit = null
+	# Nothing stands aside for a pane that is gone.
+	_town_aside = ""
+	_aside_at = -1
 	_show_hero()
 	if AdventureExpansions.act(self, then, place):
 		return
@@ -1369,6 +1443,9 @@ func _left_place(then: String) -> void:
 ## screen; M, F2 and F5 open over it and Ctrl+S quicksaves ([method _town_key]).
 func town_on_top() -> bool:
 	if not _alive(_visit) or not _visit.visible or _town_aside != "" or _map.visible or _leaving:
+		return false
+	if _visit.get(&"leaving") == true:
+		# Its choice is made: it is freed after the frame ([method _left_place]).
 		return false
 	if not String(_visit.place.get("kind", "")) in VisitPane.KINDS:
 		return false
@@ -1543,7 +1620,7 @@ func _enter_board(place: Dictionary) -> void:
 		return
 	if walk != null:
 		walk.stop()
-	autosave()
+	autosave_later()
 	soundscape.rest(true)
 	var setup := DungeonDoors.enter(player, index)
 	var board := _open_board(setup)
@@ -1552,7 +1629,8 @@ func _enter_board(place: Dictionary) -> void:
 		_board_done({}, place, index)
 		return
 	_board = board
-	board.connect(&"finished", _board_done.bind(place, index), CLOSING)
+	_board_left = _board_done.bind(place, index)
+	board.connect(&"finished", _board_left, CLOSING)
 	_hold()
 
 
@@ -1689,7 +1767,7 @@ func _leave_site(place: Dictionary) -> void:
 
 func _after_leaving() -> void:
 	player.monster_timer |= 0x1F
-	autosave()
+	autosave_later()
 	_show_hero()
 
 
@@ -1953,7 +2031,7 @@ func enter_lair(slot: int) -> LairPane:
 	walk.stop()
 	var event := LairEvent.begin(player, held)
 	WorldLairs.explored(player, slot)
-	autosave()
+	autosave_later()
 	soundscape.rest(true)
 	var pane := LairPane.new()
 	pane.player = player
@@ -1966,7 +2044,8 @@ func enter_lair(slot: int) -> LairPane:
 	pane.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	pane.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	pane.grow_vertical = Control.GROW_DIRECTION_BOTH
-	pane.left.connect(_left_lair.bind(slot), CLOSING)
+	_lair_done = _left_lair.bind(slot)
+	pane.left.connect(_lair_done, CLOSING)
 	pane.trading.connect(func(way: String) -> void: open_trade(way))
 	pane.card_read.connect(read_card)
 	pane.deck_wanted.connect(show_creature_deck)
@@ -1982,7 +2061,7 @@ func _left_lair(_then: String, _slot: int) -> void:
 		_visit.queue_free()
 	_visit = null
 	soundscape.rest(false)
-	autosave()
+	autosave_later()
 	_show_hero()
 	view.queue_redraw()
 	_sync_rest()
@@ -2004,13 +2083,15 @@ func meet_creature(slot: int) -> Control:
 	walk.stop()
 	_chase = -1
 	soundscape.rest(true)
-	autosave()
+	autosave_later()
 	var pane := _open_meeting(slot)
 	if pane == null:
 		_after_meeting(WorldCreatures.NO_DUEL, slot)
 		return null
 	_meeting = pane
-	pane.connect(&"finished", _after_meeting.bind(slot), CLOSING)
+	_meeting_done = _after_meeting.bind(slot)
+	_meeting_slot = slot
+	pane.connect(&"finished", _meeting_done, CLOSING)
 	_hold()
 	return pane
 
@@ -2019,6 +2100,100 @@ func meet_creature(slot: int) -> Control:
 ## a seam, so a test can stand its own pane in.
 func _open_meeting(slot: int) -> Control:
 	return WorldEncounters.open(self, slot)
+
+
+## What hears the meeting's `finished`, and its creature's slot ([method
+## meet_creature]) — for [method _close_out_meeting].
+var _meeting_done := Callable()
+var _meeting_slot := -1
+
+
+## THE WINDOW CLOSED OVER A CREATURE'S DUEL THAT IS OVER — its End of Duel
+## window up, or its result's pages after (the review of 2026-11-21: the
+## process ended with nothing saved, so a lost duel — its card lost — was
+## undone by the reload). As a duel's "Return to main menu" once it is over
+## ([method WorldDuels._to_menu]): its result stands. The duel is finished
+## and settled now ([method WorldDuels.finish_over]), the meeting closed
+## out ([method EncounterPane.close_out]) and the world saved as the
+## meeting's end saves it ([method _after_meeting]) — all before this
+## returns, the process ending after it. A duel still played saves nothing
+## (ruling 4), nor does a win whose spoils wait for a choice: saved between
+## the win and its end it could be won again. True when it was closed out.
+func _close_out_meeting() -> bool:
+	if not meeting() or not _meeting.has_method(&"close_out") or _lost or _leaving:
+		return false
+	var host: Variant = _meeting.call(&"duel_host") if _meeting.has_method(&"duel_host") else null
+	if host is WorldDuels:
+		(host as WorldDuels).finish_over()
+	if not meeting():
+		return false
+	# Its end is heard here and now, not after the frame — there is none.
+	# A ruled town's pane ([method _open_ruled_duel]) is heard as it ends,
+	# by its own listener: the town left, the world saved.
+	var pane := _meeting
+	var heard := _meeting_done.is_valid() and pane.is_connected(&"finished", _meeting_done)
+	if heard:
+		pane.disconnect(&"finished", _meeting_done)
+	if not bool(pane.call(&"close_out")):
+		if heard:
+			pane.connect(&"finished", _meeting_done, CLOSING)
+		return false
+	if heard:
+		_after_meeting(int(pane.get(&"result")), _meeting_slot)
+	return true
+
+
+## What hears a lair's `left` and a board's `finished` after the frame
+## ([method enter_lair], [method _enter_board]) — heard at once by [method
+## _close_out_lair] and [method _close_out_board].
+var _lair_done := Callable()
+var _board_left := Callable()
+
+
+## THE WINDOW CLOSED OVER A LAIR'S DUEL THAT IS OVER (or its cards' page
+## after): settled, the lair left and the world saved, now ([method
+## LairPane.close_out]). True when it was.
+func _close_out_lair() -> bool:
+	if not _alive(_visit) or not _visit is LairPane or _lost or _leaving:
+		return false
+	var pane := _visit as LairPane
+	var heard := _lair_done.is_valid() and pane.left.is_connected(_lair_done)
+	if heard:
+		pane.left.disconnect(_lair_done)
+	var host := pane.duel_host()
+	if host != null:
+		host.finish_over()
+	# A duel lost leaves the lair as it is settled; a win's page is closed.
+	if not pane.close_out() and not (pane.done() and not pane.duel_spoils.is_empty()):
+		if heard and not pane.done():
+			pane.left.connect(_lair_done, CLOSING)
+		return false
+	# Heard now — also when the lair's `left` was given this very frame and
+	# waits for its end.
+	if _visit == pane and _lair_done.is_valid():
+		_lair_done.call("")
+	return true
+
+
+## THE WINDOW CLOSED OVER A ROOM'S DUEL THAT IS OVER, in a castle or a
+## dungeon: its result stands, the visit ended as by the exit and the world
+## saved on the way out, now ([method DungeonPane.close_out], which says
+## when — and why not for a wizard beaten). True when it was.
+func _close_out_board() -> bool:
+	if not on_board() or not _board.has_method(&"close_out") or _lost or _leaving:
+		return false
+	var pane := _board
+	var heard := _board_left.is_valid() and pane.is_connected(&"finished", _board_left)
+	if heard:
+		pane.disconnect(&"finished", _board_left)
+	if not bool(pane.call(&"close_out")):
+		if heard:
+			pane.connect(&"finished", _board_left, CLOSING)
+		return false
+	if heard:
+		var result: Variant = pane.get(&"result")
+		_board_left.call(result if result is Dictionary else {})
+	return true
 
 
 ## Whether a creature's meeting holds the world.
@@ -2050,7 +2225,7 @@ func _after_meeting(result: int, slot: int) -> void:
 	if String(outcome["siege"]) != "":
 		_after_siege_meeting(outcome)
 	soundscape.rest(false)
-	autosave()
+	autosave_later()
 	_show_hero()
 	view.queue_redraw()
 	_sync_rest()
@@ -2573,6 +2748,40 @@ func place_at(tile: Vector2i) -> Dictionary:
 	return VisitPane.describe(player, tile)
 
 
+## THE PLACE UNDER THE POINTER, KEPT WHILE THE POINTER STAYS ON ITS TILE
+## ([method place_at], for [method _hover_world]; the review of 2026-11-21:
+## every motion of the mouse, and every frame of a walk under a still
+## pointer, described the place whole — a town's pane with its prices and
+## trades, a sites plugin's with its pictures and choices — to read its
+## name). Asked anew for another tile, when the hero is shown anew for
+## anything but the clock's tick ([method _show_hero]: a pane closed, a
+## load, a World Magic), when the hero stands on another tile (the lairs
+## seen are the ones beside them), and every [constant HOVER_TICKS] ticks
+## all the same — so what a tick changed under a resting pointer is named
+## within half a second.
+func _place_hovered(tile: Vector2i) -> Dictionary:
+	if tile != _hover_tile or _hover_stamp != _hover_read or player != _hover_player:
+		_hover_tile = tile
+		_hover_read = _hover_stamp
+		_hover_player = player
+		_hover_place = place_at(tile)
+		hover_reads += 1
+	return _hover_place
+
+
+## How many ticks of the clock a place under a resting pointer is kept.
+const HOVER_TICKS := 8
+var _hover_tile := Vector2i(-2, -2)
+var _hover_place := {}
+var _hover_player: AdventurePlayer
+var _hover_stamp := 0
+var _hover_read := -1
+var _hover_ticks := 0
+var _hover_hero := Vector2i(-2, -2)
+## How often the place under the pointer was described (the tests).
+var hover_reads := 0
+
+
 ## The pointer over [param tile]: the place there ([constant
 ## WorldCursors.FOR_PLACE]), the walking man elsewhere.
 func pointer_for(tile: Vector2i) -> WorldCursors.Kind:
@@ -2594,6 +2803,8 @@ func _wear(kind: int) -> void:
 
 func _exit_tree() -> void:
 	_wear(-1)
+	# No save is left to a worker by a world that is gone.
+	AdventurePlayer.finish_saves()
 
 
 ## THE PLACE UNDER THE POINTER at [param point]: its pointer worn, its kind
@@ -2602,7 +2813,7 @@ func _hover_world(point: Vector2) -> void:
 	var tile := tile_at(point)
 	# The hover preview's tile ([WorldPath]): none while a drag looks round.
 	paths.hover(Vector2i(-1, -1) if _dragged else tile)
-	var place := place_at(tile)
+	var place := _place_hovered(tile)
 	if not _dragged and not view.creature_under(point).is_empty():
 		# A creature the hero sees: the sword, and a click goes for it.
 		_wear(WorldCursors.Kind.CREATURE)

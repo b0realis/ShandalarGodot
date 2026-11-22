@@ -59,6 +59,8 @@ import io
 import json
 import os
 import re
+import shutil
+import stat
 import struct
 import sys
 import tempfile
@@ -2656,20 +2658,21 @@ def command_export(args, game: Game) -> int:
                          "over the folder you are editing (one id, the first copy wins). Name another folder, "
                          "like --out dist." % (out, source.name))
     out.mkdir(parents=True, exist_ok=True)
-    handle, temporary = tempfile.mkstemp(prefix="." + top + ".", suffix=".part", dir=str(out))
+    # Written under its own name in a dotted folder of its own, and judged
+    # there: a zip already in --out is replaced only by one the game takes.
+    staging = Path(tempfile.mkdtemp(prefix="." + top + ".", suffix=".part", dir=str(out)))
     try:
-        with os.fdopen(handle, "wb") as sink:
-            sink.write(data)
-        os.chmod(temporary, 0o644)
-        os.replace(temporary, target)
+        fresh = staging / target.name
+        fresh.write_bytes(data)
+        os.chmod(fresh, 0o644)
+        check = judge(str(fresh), game)
+        if check["valid"]:
+            os.replace(fresh, target)
     finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
-    check = judge(str(target), game)
+        shutil.rmtree(staging, ignore_errors=True)
     if not check["valid"]:
         for problem in check["problems"]:
             print(problem)
-        target.unlink()
         print("%s: the exported zip was refused; nothing was written." % folder, file=sys.stderr)
         return 1
     print("%s  %s (%s, %d files)" % (sha256(data), target, _bytes_text(len(data)), len(check["files"])))
@@ -2818,12 +2821,23 @@ def site_compatibility(old: dict, new: dict, warnings: list, notes: list) -> Non
                                     "price." % (key, action, key, action))
                 continue
             was, now = list(entry["prices"]), list(new_actions[action]["prices"])
-            if was != now and (was or now):
+            if was != now and now and not was and str(entry["do"]) != "leave":
+                # A free action's uses are counted too (DataSites._count),
+                # so a save may hold more uses than the new list has prices.
+                warnings.append("sites.json sites.%s: the action %s was free and now has prices (%s): saves counted "
+                                "its free uses by its id (%s.%s), so a save that used it %d time%s or more finds it "
+                                "used up, and one that used it less starts further down the list."
+                                % (key, action, ", ".join(str(p) for p in now), key, action, len(now),
+                                   "" if len(now) == 1 else "s"))
+            elif was != now and now and len(now) < len(was):
+                warnings.append("sites.json sites.%s: the action %s's prices changed (%s -> %s): a save's uses so far "
+                                "are kept, so a save that used more than the new list holds finds it used up."
+                                % (key, action, ", ".join(str(p) for p in was), ", ".join(str(p) for p in now)))
+            elif was != now and (was or now):
                 notes.append("sites.json sites.%s: the action %s's prices changed (%s -> %s): a save's uses so far "
-                             "are kept, and its next use costs the new list's price at that place%s."
+                             "are kept, and its next use costs the new list's price at that place."
                              % (key, action, ", ".join(str(p) for p in was) or "free", ", ".join(str(p) for p in now)
-                                or "free", "; a save that used more than the new list holds finds it used up"
-                                if len(now) < len(was) and now else ""))
+                                or "free"))
         old_where, new_where = list(site["where"]), list(new_sites[key]["where"])
         for land in old_where:
             if land not in new_where:
@@ -3317,20 +3331,60 @@ def _commit_edit(path: Path, game: Game, writes: dict) -> list:
     folder judged; a refused result puts every file back as it was (a new
     one removed) and returns its problems, [] when the plugin is valid."""
     before = {rel: (path / rel).read_bytes() if (path / rel).is_file() else None for rel in writes}
-    for rel, data in writes.items():
-        (path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (path / rel).write_bytes(data)
-    result = judge(str(path), game)
+    made = [folder for folder in sorted({(path / rel).parent for rel in writes}) if not folder.exists()]
+
+    def put_back() -> None:
+        for rel, data in before.items():
+            try:
+                if data is None:
+                    (path / rel).unlink(missing_ok=True)
+                elif not (path / rel).is_file() or (path / rel).read_bytes() != data:
+                    _write_whole(path / rel, data)
+            except OSError as error:
+                print("%s could not be put back: %s" % (path / rel, error), file=sys.stderr)
+        for folder in reversed(made):
+            try:
+                folder.rmdir()
+            except OSError:
+                pass
+
+    # Anything that stops the edit — a file that cannot be written, a
+    # judgement that fails, Ctrl-C — puts every file back before it is
+    # passed on: the folder is the old plugin or the new one, never between.
+    try:
+        for rel, data in writes.items():
+            (path / rel).parent.mkdir(parents=True, exist_ok=True)
+            _write_whole(path / rel, data)
+        result = judge(str(path), game)
+    except OSError as error:
+        put_back()
+        raise UsageError("%s could not be edited (%s); nothing was changed." % (path, error)) from error
+    except BaseException:
+        put_back()
+        raise
     for note in result["notes"]:
         print("note: " + note, file=sys.stderr)
     if result["valid"]:
         return []
-    for rel, data in before.items():
-        if data is None:
-            (path / rel).unlink()
-        else:
-            (path / rel).write_bytes(data)
+    put_back()
     return result["problems"]
+
+
+def _write_whole(target: Path, data: bytes) -> None:
+    """[data] as [target], whole or not at all: written beside it under a
+    dotted name (which a plugin never reads) and moved over it."""
+    if target.exists() and not os.access(target, os.W_OK):
+        raise PermissionError("%s is read-only" % target.name)
+    handle, temporary = tempfile.mkstemp(prefix="." + target.name + ".", suffix=".part", dir=str(target.parent))
+    try:
+        with os.fdopen(handle, "wb") as sink:
+            sink.write(data)
+        # A file already there keeps its own permissions; a new one is plain.
+        os.chmod(temporary, stat.S_IMODE(os.stat(target).st_mode) if target.exists() else 0o644)
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def _new_texts(text: dict, words: dict) -> None:
@@ -3377,6 +3431,13 @@ def command_add_place(args, game: Game) -> int:
     prices = _int_list(args.prices, "--prices", 0, 1000000) if args.prices else \
         {"effects": [100], "copy": [500], "none": []}[args.service]
     picture = "%s_%s" % (ident, key)
+    if re.search(ID_PATTERN, picture) is None:
+        # Its picture's key is the plugin's id, _ and the place's id, and a
+        # picture key is at most 40 characters (the schema's id).
+        raise UsageError("--id %s is too long for this plugin: with the plugin's id (%s) its picture key would be "
+                         "%d characters, and 40 are the most%s."
+                         % (key, ident, len(picture), "; choose an id of at most %d characters" % (39 - len(ident))
+                            if len(ident) < 39 else "; this plugin's id leaves no room for one"))
     files = {"art/%s.png" % picture: _site_picture(SHRINE_ROWS, SHRINE_COLORS),
              "art/%s_map.png" % picture: _sprite(SHRINE_ROWS, SHRINE_COLORS)}
     if picture in sites.get("pictures", {}):
@@ -3469,8 +3530,11 @@ def command_add_dungeon(args, game: Game) -> int:
         leave = next((dict(action) for pane in panes for action in pane.get("actions", [])
                       if action.get("do") == "leave"), {"id": "leave", "do": "leave"})
         home = next((pane for pane in panes if not pane.get("when")), panes[-1])
-        words = {key + ".open": "The way to {dungeon} is known to you. Write here what the place says while it waits.",
-                 key + ".cleared": "You have cleared {dungeon}. Write here what the place says then."}
+        # The dungeon's own name, written out: {dungeon} is the last dungeon
+        # the plugin raised on the land (DataSites.values), another one's
+        # name as soon as a plugin has two.
+        words = {key + ".open": "The way to %s is known to you. Write here what the place says while it waits." % name,
+                 key + ".cleared": "You have cleared %s. Write here what the place says then." % name}
         if found:
             if any(action.get("do") != "effects" for action in found):
                 raise UsageError("The action %s of %s does %s; only an effects action can raise a dungeon."
@@ -3483,8 +3547,8 @@ def command_add_dungeon(args, game: Game) -> int:
         else:
             price = 1000 if args.price is None else args.price
             words.update({key + ".pay": "Pay {price} gold for the way to the dungeon",
-                          key + ".told": "The way to {dungeon} is marked on your map.",
-                          key + ".clue": "You were told where {dungeon} lies."})
+                          key + ".told": "The way to %s is marked on your map." % name,
+                          key + ".clue": "You were told where %s lies." % name})
             action = {"id": action_id, "do": "effects", "label": key + ".pay", "prices": [price],
                       "effects": [{"spawn_dungeon": key}, {"log_clue": {"text": key + ".clue"}}],
                       "result": [key + ".told"]}
@@ -3723,12 +3787,22 @@ class SiteWalk:
                 "dungeons": dict(self.dungeons)}
 
 
-def walk_site(data: dict, site: str, gold: int) -> dict:
-    """One place walked: {site, name, land, steps}. A step is a pane (as
-    shown), a press (what it did, and the pane after), or a clear (an open
-    dungeon cleared by the hero, away from the place)."""
+def walk_lands(data: dict, site: str) -> list:
+    """The lands place [site] stands on, each walked on its own: "mainland"
+    and "island", the mainland first, as its `where` names them."""
+    where = data["sites"]["sites"][site]["where"]
+    return [land for land, named in (("mainland", "mainland"), ("island", "islands")) if named in where]
+
+
+def walk_site(data: dict, site: str, gold: int, land: str = "") -> dict:
+    """One place walked on one land: {site, name, land, steps}. A step is a
+    pane (as shown), a press (what it did, and the pane after), or a clear
+    (an open dungeon cleared by the hero, away from the place). [land]:
+    "mainland" or "island"; none named, the first of [walk_lands] — a
+    place on both is walked once for each (command_walk), since a pane or
+    a button behind on_mainland shows on one of them only."""
     place = data["sites"]["sites"][site]
-    mainland = "mainland" in place["where"]
+    mainland = (land or walk_lands(data, site)[0]) == "mainland"
     walk = SiteWalk(data, 0, mainland)
     steps = []
     poor = walk.describe(site)
@@ -3824,7 +3898,8 @@ def command_walk(args, game: Game) -> int:
     runs = []
     if result["valid"]:
         for site in ([args.site] if args.site else list(result["data"]["sites"]["sites"])):
-            runs.append(walk_site(result["data"], site, args.gold))
+            for land in walk_lands(result["data"], site):
+                runs.append(walk_site(result["data"], site, args.gold, land))
     if args.json:
         print(json.dumps(dict(report(result), sites=runs), ensure_ascii=False, indent="\t"))
         return 0 if result["valid"] else 1
@@ -3880,11 +3955,14 @@ def png_alpha(data: bytes):
         return width, height, None
     bpp = {3: 1, 4: 2, 6: 4}[color]
     stride = width * bpp
+    # Inflated no further than the header's own size: a small file that
+    # would unpack to gigabytes is never unpacked past its picture.
+    needed = (stride + 1) * height
     try:
-        raw = zlib.decompress(b"".join(packed))
+        raw = zlib.decompressobj().decompress(b"".join(packed), needed)
     except zlib.error:
         return "a damaged PNG"
-    if len(raw) < (stride + 1) * height:
+    if len(raw) < needed:
         return "a damaged PNG"
     lookup = (table + b"\xff" * 256)[:256] if color == 3 else None
     rows, prev = [], bytes(stride)

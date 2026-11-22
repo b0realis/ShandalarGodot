@@ -460,7 +460,9 @@ func delete_adventure(id: String) -> bool:
 	for save in saves_of(id):
 		hero = String(save["name"])
 		paths.append(String(save["path"]))
-	for folder in AdventurePlayer.saves_folders():
+	# Only a plain id names files (the review of 2026-11-21): the listed
+	# files alone for any other.
+	for folder in (AdventurePlayer.saves_folders() if AdventureTransfer.plain_id(id) else [] as Array[String]):
 		paths.append(folder.path_join("%s.%s.json" % [id, AdventurePlayer.AUTOSAVE]))
 		for slot in [SaveSlots.QUICK_SLOT] + range(1, SaveSlots.SLOTS + 1):
 			paths.append(SaveSlots.path_of(id, slot, folder))

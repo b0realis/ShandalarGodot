@@ -145,6 +145,7 @@ static func enter(player: AdventurePlayer, index: int) -> Dictionary:
 	else:
 		player.log_event("dungeon", EXPLORED % WorldNames.dungeon_name(index, world), {"slot": index})
 	slot["entered"] = entered(world, index) + 1
+	world.touch()
 	for room in ROOMS:
 		WorldCreatures.empty(player, room)
 	return {"index": index, "castle": index < CASTLES, "color": int(slot.get("color", 0)),
@@ -188,16 +189,23 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 	var slot: Dictionary = world.encounters[index]
 	var old := Vector2i(int(slot.get("x", 0)), int(slot.get("y", 0)))
 	_put_flag(world, old, false)
-	slot["clues"] = (int(slot.get("clues", 0)) & ~WorldClues.LOCATION) | WorldClues.CREATURES | WorldClues.RULES
+	# A DUNGEON A SITES PLUGIN RAISED KEEPS ITS "WHERE" (the review of
+	# 2026-11-21): the hints that tell it again walk 1997's fifteen slots
+	# ([method WorldClues.pick_for_hint]), so past them it was forgotten for
+	# good — its Tasks row gone after the first visit. 1997's slots as ever.
+	var raised := WorldClues.raised(slot, index)
+	var where := 0 if not raised else int(slot.get("clues", 0)) & WorldClues.LOCATION
+	slot["clues"] = (int(slot.get("clues", 0)) & ~WorldClues.LOCATION) | WorldClues.CREATURES | WorldClues.RULES | where
 	var hero := player.tile()
 	var portal := FinalBattle.portal_tile_of(player)
+	var kept := kept_points(world)
 	var dice := MsvcRandom.new(player.dice)
 	var to := old
 	var misses := 0
 	while true:
 		var x := dice.below(ShandalarWorld.TILES)
 		var y := dice.below(ShandalarWorld.TILES)
-		if takes_dungeon(world, Vector2i(x, y), hero, portal):
+		if takes_dungeon(world, Vector2i(x, y), hero, portal, kept):
 			to = Vector2i(x, y)
 			break
 		# GUARD: no tile left anywhere, and the original draws forever.
@@ -207,7 +215,12 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 	player.dice = dice.state
 	slot["x"] = to.x
 	slot["y"] = to.y
+	if raised:
+		# Its "where" is said from a town: the one nearest its new tile.
+		slot["town"] = DataSites._nearest_town(world, to)
 	_put_flag(world, to, true)
+	# The slot's record written (its clues, its place): [method ShandalarWorld.touch].
+	world.touch()
 	return to
 
 
@@ -216,11 +229,12 @@ static func move(player: AdventurePlayer, index: int) -> Vector2i:
 ## the hero's tile [param hero]; nor [ours, part C] Arzakon's portal's
 ## tile [param portal] ([method FinalBattle.portal_tile_of]; (−1, −1) for
 ## none); nor a place a region keeps on [param world] ([method
-## expansion_place]).
+## expansion_place]). A caller asking of many tiles hands in [param kept]
+## ([method kept_points], read once); the answer is the same.
 static func takes_dungeon(world: ShandalarWorld, tile: Vector2i, hero: Vector2i,
-		portal := Vector2i(-1, -1)) -> bool:
+		portal := Vector2i(-1, -1), kept: Variant = null) -> bool:
 	if tile == hero or tile == portal or not world.is_land(tile.x, tile.y) \
-			or AdventureExpansions.marker(world, tile) != "" or expansion_place(world, tile):
+			or AdventureExpansions.marker(world, tile) != "" or expansion_place(world, tile, kept):
 		return false
 	var taken := ShandalarWorld.SITE | ShandalarWorld.ROAD | ShandalarWorld.DUNGEON
 	return world.tile_flags(tile.x, tile.y) & taken == 0
@@ -233,9 +247,25 @@ static func takes_dungeon(world: ShandalarWorld, tile: Vector2i, hero: Vector2i,
 ## its tile carries no flag (0.60.13 bug campaign, h2-8: a dungeon moved
 ## onto the hidden anchorage, and once it showed again its pane stood
 ## first, the dungeon never to be entered).
-static func expansion_place(world: ShandalarWorld, tile: Vector2i) -> bool:
+##
+## [param kept] is [method kept_points] of this world read by the caller,
+## for one who asks of many tiles in a row (the review of 2026-11-21: each
+## tile asked read the saved places again — a land's 4096 tiles, twice a
+## button's press); none given, it is read here.
+static func expansion_place(world: ShandalarWorld, tile: Vector2i, kept: Variant = null) -> bool:
 	if world == null or world.expansion.is_empty():
 		return false
+	var points: Dictionary = kept if kept is Dictionary else kept_points(world)
+	return points.has(tile)
+
+
+## THE TILES [param world]'s REGIONS KEEP ([method expansion_place]), a set
+## `{tile: true}`: read once by a caller that tests many tiles, and only
+## for as long as nothing is placed or moved in between.
+static func kept_points(world: ShandalarWorld) -> Dictionary:
+	var out := {}
+	if world == null or world.expansion.is_empty():
+		return out
 	var points: Array = []
 	var entries: Variant = world.expansion.get("entries", {})
 	if entries is Dictionary:
@@ -245,16 +275,17 @@ static func expansion_place(world: ShandalarWorld, tile: Vector2i) -> bool:
 	# A sites plugin's places (adventure plugin API 2), shown or not.
 	points.append_array(AdventureSites.points(world))
 	for point: Variant in points:
-		if AdventureRegions.valid_point(point) and Vector2i(int(point[0]), int(point[1])) == tile:
-			return true
-	return false
+		if AdventureRegions.valid_point(point):
+			out[Vector2i(int(point[0]), int(point[1]))] = true
+	return out
 
 
 ## Whether any tile could still take a moved dungeon.
 static func _place_left(world: ShandalarWorld, hero: Vector2i, portal := Vector2i(-1, -1)) -> bool:
+	var kept := kept_points(world)
 	for y in ShandalarWorld.TILES:
 		for x in ShandalarWorld.TILES:
-			if takes_dungeon(world, Vector2i(x, y), hero, portal):
+			if takes_dungeon(world, Vector2i(x, y), hero, portal, kept):
 				return true
 	return false
 
@@ -265,3 +296,4 @@ static func _put_flag(world: ShandalarWorld, tile: Vector2i, on: bool) -> void:
 		return
 	var at := tile.y * ShandalarWorld.PAGE_WIDTH + tile.x
 	world.page[at] = (world.page[at] | ShandalarWorld.DUNGEON) if on else (world.page[at] & ~ShandalarWorld.DUNGEON)
+	world.touch_page()

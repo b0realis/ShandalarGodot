@@ -18973,6 +18973,92 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-22 — Version 0.70.5
+
+Version 0.70.5 (Android version code 70005) gathers the entry below it: the
+whole-project review's fixes and its smoothness work in the duel and on the
+adventure's map. Its notes are `docs/releases/0.70.5.md`. LAN stays
+protocol 32; 0.70.5 plays only 0.70.5.
+
+## 2026-11-22 — Whole-project review: fixes and smoothness (0.70.5)
+
+A review of the whole project as it stood at 0.70.4, not of a diff: what
+is wrong, and what makes a duel or the adventure's map stutter. Each
+finding with its test: `docs/whole-project-review-2026-11-21.md`.
+
+- **The rules engine.** An attacker that taps to attack no longer pays its
+  own attack tax (CR 508.1f–i, `MtgGame.attack_tax_barred_payers`), and a
+  creature is declared as an attacker once; a "when it dies this turn"
+  watch runs after the departure, and its batch, is complete
+  (`_due_death_watches`); two Jade Monoliths on one creature each keep
+  their own destination, and the metered point redirects a row per seat;
+  a once-a-turn count is the ability's, not its position's
+  (`CardInstance.ability_use_key`); the computer plans before it pays life
+  for mana, buys prevention or pays for an activation; the pre-flight
+  skips its whole-game probe for a plain permanent spell on a board where
+  nothing can react (`_resolution_asks_nothing`).
+- **The duel screen.** An unchanged card keeps its widget over a redraw
+  (`DuelScreen._lay_slots`, `CardPile.redress`), so the card under the
+  pointer keeps its hover; the engine's verdicts are asked once a redraw;
+  the computer's thinking comes off its dwell and a slow decision's redraw
+  is the next frame's; every duel's card art is handed to the warmer as it
+  sets up; the large card is not laid out again for the face it shows. The
+  arrows and the digits stay out of a question under another window, a
+  click ends the arrows' walk, the tutor's picker confirms once and its
+  selected row can be let go.
+- **The adventure's world.** The world counts its writes
+  (`ShandalarWorld.revision`, `page_revision`, `touch()`, `touch_page()`)
+  where the view, the small map and the map hashed the page at every tick;
+  the hero looks only near; the small map draws its land as one mesh and
+  the map's land is a layer painted once; the Tasks are looked at once a
+  tick; the place under the pointer is described once a tile; a plugin's
+  pictures and track are decoded on a worker (`AdventurePlugins.warm`);
+  the world's own saves are written on a worker, in order, and finished
+  before any save is read (`AdventurePlayer.save_later`, `finish_saves`).
+  A card list gives its pick once; a town that has given its choice is not
+  set aside; a places plugin's place shows on the maps once its land is
+  seen; the window closed over a duel that is over keeps its result (a
+  loss is no longer undone by the reload).
+- **Saves.** A save's id is safe as a file name (`saved_id`); a land's
+  dice, a region's name, a quest cut short and a list of places cut short
+  are read without a script error; a value that is no switch holds the
+  land rather than refusing the save; an adventure kept under another file
+  name is exported, and an older save renamed becomes a slot of its own
+  adventure.
+- **Places plugins.** A raised dungeon's slot carries a `raised` mark and
+  keeps its location as it moves; a place put on a land later never stands
+  under the hero, Arzakon's portal or a lair
+  (`AdventureSites.blocked_tiles`); a land's kept tiles are read once
+  (`DungeonDoors.kept_points`); a damaged record of a dungeon is believed
+  only of a slot that says so.
+- **LAN.** A guest's abandon reaches the host before its socket closes
+  (`SgLocalClient.drain`); a seat concedes while the other seat is away;
+  the host's card-transfer allowance counts the bytes sent and the
+  requests beside them (`SgCardTransfer.MAX_REQUESTS`); Join seats the
+  player at the row clicked when table names repeat.
+- **The shell and the deck builder.** Asking to make the game portable
+  makes nothing, a first copy is made in a `portable-making` folder and
+  renamed once whole, and Escape is the portable window's Cancel; the
+  window's close asks the adventure builder's Extra Cards box; a deck past
+  what the builder holds keeps every card.
+- **Tools.** `tools/adventure_plugin.py`: `compat` warns and exits 1 when
+  a free action gains prices or a price list is made shorter; an edit that
+  is stopped puts every file back; `add-place` refuses an id whose picture
+  key would be too long; `add-dungeon` writes the dungeon's own name;
+  `walk` plays a place on each land it stands on; `export` keeps the zip
+  already there when the new one is refused; `art` never unpacks a PNG
+  past its picture. `run_tests.sh` stops the shards already started when a
+  deal fails; `tools/expansion_lab.sh` removes its plugin copy however the
+  run ends.
+- Docs: `docs/whole-project-review-2026-11-21.md`, CODE_MAP ("0.70.5"),
+  `docs/adventure-plugins.md`, the authors' guide's `sites.html`,
+  `docs/player-files.md`, `docs/adventure-implementation-notes.md`,
+  `docs/sgmanalink-local-playtest.md`. Tests:
+  `tests/unit/test_review_2026_11_21_{engine,adv,saves,sites}.gd`,
+  `tests/ui/test_review_2026_11_21_{duel,adv,adv_duels,lan,shell}.gd`,
+  `tools/test_review_2026_11_21_tools.py`, `Review20261121Test` in
+  `tools/test_adventure_plugin.py`.
+
 ## 2026-11-21 — Places plugins: an old adventurer's hut and a conjuration wizard guild
 
 The owner asked whether *"a new type of town or interaction place"* could be

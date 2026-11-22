@@ -138,8 +138,16 @@ func choose(card_name: String) -> void:
 
 ## The card chosen is picked.
 func pick() -> void:
-	if picking and chosen != "":
+	if picking and chosen != "" and not _picked:
+		# Once: a double click and Enter in one frame, or two clicks before
+		# the pane is gone, picked twice — two free cards at the tribute,
+		# two copies from the wise man (the review of 2026-11-21).
+		_picked = true
 		picked.emit(chosen)
+
+
+## Whether the pick has been given ([method pick] gives it once).
+var _picked := false
 
 
 ## Card [param card_name] large beside the list ([method PaneStyle.show_card]:

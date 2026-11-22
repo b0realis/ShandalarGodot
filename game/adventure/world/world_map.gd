@@ -102,6 +102,11 @@ var journal_index := -1
 var _blink := 0.0
 ## The hero's blinking square, under the buttons.
 var _hero_mark: ColorRect
+## The land's own layer, behind the map's painting ([method _look_at_land]),
+## what it was last painted from, and how often it was painted (the tests).
+var _land_layer: Node2D
+var _land_shown: Array = []
+var land_paints := 0
 var _art := WorldArt.new()
 var _buttons := {}
 var _font: Font
@@ -116,6 +121,11 @@ func _ready() -> void:
 	_font = GameSkin.font("font_title")
 	if _font == null:
 		_font = ThemeDB.fallback_font
+	_land_layer = Node2D.new()
+	_land_layer.name = "Land"
+	_land_layer.show_behind_parent = true
+	_land_layer.draw.connect(_paint_land)
+	add_child(_land_layer)
 	_hero_mark = ColorRect.new()
 	_hero_mark.name = "HeroMark"
 	_hero_mark.color = Color.WHITE
@@ -285,16 +295,10 @@ static func sprite_places() -> Array[Rect2]:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.02, 0.96))
+	_look_at_land()
 	if world == null:
 		return
 	draw_set_transform_matrix(stage())
-	var ground := GameSkin.texture("map_ground")
-	if ground != null:
-		draw_texture_rect(ground, Rect2(Vector2.ZERO, SCREEN), false)
-	else:
-		draw_rect(Rect2(Vector2.ZERO, SCREEN), Color(0.12, 0.11, 0.1))
-	_draw_land()
 	_draw_places()
 	var ornament := sprite(GameSkin.texture("map_buttons"), ORNAMENT[1])
 	if ornament != null:
@@ -306,7 +310,54 @@ func _draw() -> void:
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
+## THE LAND UNDER EVERYTHING, ON A LAYER OF ITS OWN ([member _land_layer],
+## drawn behind the map's own painting): the dark, the ground, the 4096
+## tiles and their roads — painted again only when what they show changed
+## ([method _land_key]), not at every change of mode, journal line stepped
+## or look at the map (the review of 2026-11-21: each of those walked every
+## tile twice and asked the palette for each one's style).
+func _look_at_land() -> void:
+	if _land_layer == null:
+		return
+	var key := _land_key()
+	if key != _land_shown or key.is_empty():
+		_land_shown = key
+		_land_layer.queue_redraw()
+
+
+## What the land's layer shows: the world and its page (the land seen, the
+## roads), its appearance, the sheets as they are, the map's size. Empty —
+## painted every time — for a world whose tiles have styles of their own
+## (their sheets arrive one by one, [method WorldArt.texture_for]).
+func _land_key() -> Array:
+	if world == null:
+		return [0, size]
+	if not WorldTerrainPalette.uniform(world):
+		return []
+	var tiles := _art.texture("world_map_tiles")
+	var ground := GameSkin.texture("map_ground")
+	return [world.get_instance_id(), world.page_revision, world.appearance_revision, explored_only,
+		_art.terrain_palette, tiles.get_rid() if tiles != null else RID(),
+		ground.get_rid() if ground != null else RID(), size]
+
+
+func _paint_land() -> void:
+	land_paints += 1
+	_land_layer.draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.02, 0.96))
+	if world == null:
+		return
+	_land_layer.draw_set_transform_matrix(stage())
+	var ground := GameSkin.texture("map_ground")
+	if ground != null:
+		_land_layer.draw_texture_rect(ground, Rect2(Vector2.ZERO, SCREEN), false)
+	else:
+		_land_layer.draw_rect(Rect2(Vector2.ZERO, SCREEN), Color(0.12, 0.11, 0.1))
+	_draw_land()
+	_land_layer.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
 func _draw_land() -> void:
+	var canvas := _land_layer
 	var tiles := _art.texture("world_map_tiles")
 	for y in ShandalarWorld.TILES:
 		for x in ShandalarWorld.TILES:
@@ -319,10 +370,10 @@ func _draw_land() -> void:
 			if sheet != null:
 				var frame := tile_look(Vector2i(x, y)) * 16 + code
 				var cell := _art.frame_rect("world_map_tiles", frame)
-				draw_texture_rect_region(sheet, Rect2(at - Vector2(6, 6), Vector2(13, 13)),
+				canvas.draw_texture_rect_region(sheet, Rect2(at - Vector2(6, 6), Vector2(13, 13)),
 					Rect2(cell.position, Vector2(13, 13)), WorldTerrainPalette.modulate(style, "ground"))
 			elif code != ShandalarWorld.OCEAN:
-				draw_colored_polygon(PackedVector2Array([at + Vector2(-6, 0), at + Vector2(0, -6),
+				canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(-6, 0), at + Vector2(0, -6),
 					at + Vector2(6, 0), at + Vector2(0, 6)]),
 					WorldTerrainPalette.plain(world, code, WorldView.PLAIN.get(code, WorldView.PLAIN[0]), Vector2i(x, y)))
 	# The roads: world direction (k mod 8) + 1 drawn as screen direction k.
@@ -335,7 +386,7 @@ func _draw_land() -> void:
 			for k in range(1, 9):
 				var d := (k % 8) + 1
 				if roads & (1 << (d - 1)) != 0:
-					draw_line(at, at + Vector2(ShandalarWorld.DX[k], ShandalarWorld.DY[k]) * 7.0,
+					canvas.draw_line(at, at + Vector2(ShandalarWorld.DX[k], ShandalarWorld.DY[k]) * 7.0,
 						ROAD_INK * WorldTerrainPalette.modulate(WorldTerrainPalette.resolve(world, Vector2i(x, y)), "roads"), 2.0)
 
 
@@ -347,6 +398,10 @@ func _draw_places() -> void:
 			_boxed("Dungeon", at + Vector2(0, -12), Color.WHITE, 9)
 	for place in AdventureExpansions.places(world):
 		var point: Array = place["point"]
+		# A sites plugin's place only on land this map shows, as a town
+		# (the review of 2026-11-21: it stood named on land not yet seen).
+		if bool(place.get("site", false)) and not shows(int(point[0]), int(point[1])):
+			continue
 		var at := tile_point(Vector2i(int(point[0]), int(point[1])))
 		draw_circle(at, 5.0, Color(0.9, 0.72, 0.3))
 		_boxed(place["name"], at + Vector2(0, -12), Color.WHITE, 10)

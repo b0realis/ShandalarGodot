@@ -124,6 +124,10 @@ the authors' guide is `expanded_adventure/GUIDE/index.html`.
 - `tools/test_adventure_guide.py`: the guide held to the code and the
   prototype — links, no outside requests, quotes equal the prototype's files,
   lists equal the schema and the GDScript constants.
+- `tools/test_review_2026_11_21_tools.py`: the review of 2026-11-21's two
+  shell-script fixes, a stub standing in for Godot — `run_tests.sh` stops
+  its started shards when a deal fails, `tools/expansion_lab.sh` removes
+  its plugin copy however the run ends.
 - `tools/plugin_fixtures/`: the corpus of good and bad plugins and its
   `expected.json`, judged alike by the tool and the game.
 - `tests/unit/test_plugin_corpus.gd`: the game's loader judges the corpus as
@@ -362,7 +366,8 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `download`, `cancel`; every card sent packed afresh (`_bound_of`), installs recorded
   with their stamp so an undo sets aside a card saved since; `MAX_CARDS`
   200, `MAX_TOTAL` 96 MiB, `CHUNK`
-  512 KiB, `MIN_CHUNK`, an overall deadline; `_check` reads a zip's own
+  512 KiB, `MIN_CHUNK`, `MAX_REQUESTS` (the host's count of chunk
+  requests a connection, 0.70.5), an overall deadline; `_check` reads a zip's own
   list first (a card's files only); listed sizes of set cards are upper
   bounds; a replaced card is copied aside and saved over (copies a scan
   shadowed are seen through `CommunityCards` rows' `shadowed`); the batch
@@ -399,6 +404,137 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
 - Tests: `tests/cards/test_community_card.gd`,
   `tests/unit/test_community_cards.gd`, `tests/unit/test_card_balance.gd`,
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
+  `tests/ui/test_sgmanalink_community_transfer.gd`.
+
+## 0.70.5 (2026-11-22): the whole-project review's fixes
+
+Version 0.70.5, Android version code 70005; `docs/releases/0.70.5.md`.
+Each finding with its test: `docs/whole-project-review-2026-11-21.md`.
+
+- `engine/mtg_game.gd`: `attack_tax_barred_payers` (the attackers that tap
+  are no payers of their own attack tax), `excluded` on `can_afford_cost`,
+  `try_pay` and `_payment_plan`; `declare_attackers` refuses a repeated id;
+  `_due_death_watches`, `_run_due_death_watches` (a death watch runs once
+  the departure and its batch are complete; journaled, in
+  `RESOLUTION_TABLES`); `_divert_points_to`, `_adopt_loose_point_redirects`
+  (point redirects by destination); `_resolution_asks_nothing`,
+  `_data_is_inert_on_arrival`, `_preflight_probe`, `preflight_skips` (the
+  pre-flight without its probe for a resolution that provably asks nothing).
+- `engine/core/card_instance.gd`: `damage_redirect_tos`,
+  `book_damage_redirect`, `damage_redirect_to_for`, `take_damage_redirect`
+  (one destination a Monolith booking); `damage_point_redirect_rows`;
+  `ability_use_key`, `ability_uses_at` (a per-turn count keyed by the
+  ability).
+- `cards/sets/2ed/jade_monolith.gd`: books through `book_damage_redirect`.
+- `engine/ai/ai_player.gd`: `_plan_covers_with_floating` (the plan before
+  life is paid for mana); `_buy_prevention` and `_spend_on_packet` ask the
+  engine before they pay; every per-turn count read through
+  `ability_uses_at` (also `engine/ai/tempest_tactics.gd`).
+  `engine/ai/homelands_tactics.gd`: `affordable_attackers` judges the tax
+  without the group's own tapping attackers.
+- `game/duel/duel_screen.gd`: the table kept between redraws — `_lay_slots`,
+  `_slot_key`, `_redress_slot`, `_redress_cards_in`, `_redress_card`,
+  `_keeps_table_widgets`, `SLOT_KEY`, `GHOST_META`, `keep_table_widgets`,
+  `slots_built`, `slots_kept`; one verdict a redraw — `_begin_verdicts`,
+  `_end_verdicts`, `_activation_refusal_now`, `_payable_now_fresh`,
+  `verdict_hits`; the computer's dwell — `dwell_after_thinking`,
+  `redraws_next_frame`, `SLOW_DECISION_SECONDS`, `split_slow_decisions`,
+  `_redraw_after_decision`; the duel's art warmed — `_warm_table_art`,
+  `table_art_names`; the selection windows — `_window_above_selection`,
+  `_note_choice_pointer`, `search_list_deselects`, `_on_search_confirmed`
+  once a window.
+- `game/duel/card_pile.gd`: `keeps_rows`, `redress`, `shown_cards`,
+  `_structure_key`, `_rows_stand`, `_redress_rows`, `built_count`,
+  `kept_count`. `game/duel/stack_hand.gd` sets `keeps_rows`;
+  `game/duel/fan_hand.gd` keeps the raised card over a relayout and wires a
+  card once.
+- `game/duel/card_preview.gd`: `_face_key`, `same_face_hits` (the same face
+  is not laid out again); `_measure_cache`, `MEASURE_CACHE_CAP`,
+  `forget_measures`, `_fit_one_line_fresh` (the fits kept).
+- `game/card_art_warmer.gd`: `Job.packs_script` (the card packs' decoder
+  loaded by path, for a `--script` tool).
+- `game/adventure/world/shandalar_world.gd`: `revision`, `page_revision`,
+  `touch()`, `touch_page()` (the world counts its writes; a byte or a record
+  written in place is followed by one of them), `REACH` (`explore_around`
+  looks only near). Their callers: `game/adventure/town_status.gd`,
+  `castle_win.gd`, `creature_meeting.gd`, `dungeon_board.gd`,
+  `dungeon_doors.gd`, `sieges.gd`,
+  `game/adventure/expansions/region_roads.gd`,
+  `game/adventure/world/world_clues.gd`,
+  `game/adventure/plugins/data_sites.gd`,
+  `AdventurePlayer.treasures_by_the_ban_list`. Their readers:
+  `game/adventure/world/world_view.gd` (`_sites_read`),
+  `game/adventure/world/world_minimap.gd`,
+  `game/adventure/world/world_map.gd`,
+  `game/adventure/world/world_status.gd`.
+- `game/adventure/world/world_minimap.gd`: `_tiles_in`, `place_shown`,
+  `land_tiles`, `tiles_looked` (the land as one mesh).
+  `game/adventure/world/world_terrain_palette.gd`: `uniform`.
+- `game/adventure/world/world_map.gd`: `_land_layer`, `_look_at_land`,
+  `_land_key`, `_paint_land`, `land_paints`; a sites plugin's place only on
+  land the map shows.
+- `game/adventure/world/world_screen.gd`: `autosave_later`,
+  `_warm_the_plugins`, `_place_hovered` (`HOVER_TICKS`, `hover_reads`),
+  `_close_out_meeting`, `_close_out_lair`, `_close_out_board`
+  (`_meeting_done`, `_meeting_slot`, `_lair_done`, `_board_left`);
+  `town_on_top` passes over a pane that is leaving.
+  `game/adventure/world/world_hud.gd`: `quest_pane()`.
+- `game/adventure/world/world_duels.gd`: `finish_over`, `_tune_awaited`,
+  `TUNE_AWAITED`. `close_out` on `encounter_pane.gd` (with `choice_waits`),
+  `ruled_town_pane.gd`, `lair_pane.gd` (with `done`) and `dungeon_pane.gd`.
+  `visit_pane.gd`: `leaving`. `card_list_pane.gd`: `pick` once.
+  `dungeon_view.gd`: `SAID_FADE`, `said_paints`, `draw_order` made once.
+- `game/adventure/adventure_player.gd`: `save_later`, `autosave_later`,
+  `finish_saves`, `saves_pending`, `saves_off_frame`, `SaveJob`,
+  `later_forced`, `saves_later` (a save written on a worker, in order,
+  finished before any save is read); `saved_id` (an id safe as a file name);
+  `_quest_record`; the 128 places filled.
+  `game/adventure/adventure_tasks.gd`: `looks`, `_tracked`.
+  `game/adventure/adventure_transfer.gd`: `renamed_of`.
+  `game/adventure/save_slots.gd`: `migrate` by the save's id.
+  `game/adventure/load_adventure_screen.gd`: `delete_adventure` names files
+  only by a plain id.
+- `game/adventure/expansions/adventure_sites.gd`: `blocked_tiles`, `spot`'s
+  `blocked`. `game/adventure/dungeon_doors.gd`: `kept_points`, `kept` on
+  `takes_dungeon` and `expansion_place`; `move` keeps a raised dungeon's
+  location. `game/adventure/world/world_clues.gd`: `RAISED`, `raised`.
+  `game/adventure/plugins/data_sites.gd`: `dungeon_index` believes only a
+  marked slot, `_named`. `game/adventure/expansions/adventure_regions.gd`,
+  `game/adventure/expansions/expansion_contract.gd`: a damaged dice, region
+  name and switch read quietly.
+- `game/adventure/plugins/adventure_plugins.gd`: `texture` and `stream`
+  through `_image_of` and `_tune_of`; `USED_RECT`; `warm`, `WarmJob`,
+  `stream_kept`, `_keep_warm`, `WARM_BUDGET_US`, `MOST_WARM_BYTES`,
+  `warmed`. `game/adventure/expansions/adventure_expansions.gd` and
+  `adventure_sites.gd`'s `map_op` read the measured rect.
+- `game/sgmanalink/local_client.gd`: `drain`, `EXIT_DRAIN_MS`.
+  `local_server.gd`: `hosts_port`; a chunk request counted (`requests`)
+  beside the bytes sent. `card_transfer.gd`: `MAX_REQUESTS`. `duel_view.gd`:
+  `_concede_past_lock`, `_suspended`. `lobby.gd`: `_pending_row`,
+  `_same_table`.
+- `game/portable_mode.gd`: `can_hold`, `making_name`, `remove_made` (the
+  `portable-making` staging folder). `game/options_screen.gd`:
+  `_copy_portable`, `_portable_copying`; Escape is the portable window's
+  Cancel.
+- `game/deck_builder/adventure_builder.gd`: `_on_window_close_request`,
+  `_beyond`, `beyond_of`, `beyond_total`, `BEYOND`.
+- `tools/adventure_plugin.py`: `_write_whole`, `walk_lands`; `compat`'s two
+  new warnings; `export` judged in a staging folder. `run_tests.sh`: a
+  failed deal stops the shards already started. `tools/expansion_lab.sh`: a
+  trap removes the plugin copy.
+- `tools/test_review_2026_11_21_tools.py`: the two shell scripts' fixes,
+  with a stub for Godot; `Review20261121Test` in
+  `tools/test_adventure_plugin.py`: the authors' tool's.
+- Tests: `tests/unit/test_review_2026_11_21_engine.gd`,
+  `tests/unit/test_review_2026_11_21_adv.gd`,
+  `tests/unit/test_review_2026_11_21_saves.gd`,
+  `tests/unit/test_review_2026_11_21_sites.gd`,
+  `tests/ui/test_review_2026_11_21_duel.gd`,
+  `tests/ui/test_review_2026_11_21_adv.gd`,
+  `tests/ui/test_review_2026_11_21_adv_duels.gd`,
+  `tests/ui/test_review_2026_11_21_lan.gd`,
+  `tests/ui/test_review_2026_11_21_shell.gd`; changed:
+  `tests/unit/test_adventure_plugins_updates.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
 ## 0.70.4 (2026-11-21): places plugins, the tutor's large card, the arrows, Embark at once
@@ -560,6 +696,8 @@ data for game working are in the game folder itself."*
   `user://` inside and outside; `plan` decides a start ("stay", "enter",
   "failed": never twice, nor into a folder that cannot be written,
   `can_write` / `write_problem`, macOS App Translocation named);
+  `can_hold` asks the same making nothing, `making_name` / `remove_made`
+  are the `portable-making` folder a first copy is made in (0.70.5);
   `enter_at_start` (the first thing `Lifecycle._init` does) starts a
   launcher-less exported desktop game once more inside the folder and ends
   the first start before anything is read; `retire` renames a folder that
@@ -578,7 +716,9 @@ data for game working are in the game folder itself."*
   `portable_question` and `PortableGo`, or why not; `_run_portable` copies
   (`portable_route`), switches the variables and restarts
   (`_restart_after_portable`: a desk relaunches, a handheld quits for its
-  launcher).
+  launcher); since 0.70.5 asking makes no folder, `_copy_portable` makes
+  a first copy beside the portable folder and renames it once whole, and
+  Escape is the window's Cancel (nothing while the copy runs).
 - `game/paths.gd`: `_home_dir` reads `SHANDALAR_SYSTEM_HOME` first, so `~`
   stays the player's home on a portable Mac.
 - `game/help/help_pages.gd`: the Saved adventures page's portable paragraph.

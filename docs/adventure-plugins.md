@@ -278,8 +278,10 @@ for the words when it is missing). The mainland's anchorages are
   is refused, as any damaged save.
 - **CHANGED**: whole, but not what the installed version describes: a castle
   or town slot it requires is missing, a number is past what it counts
-  (a quest index or done count, a stage, waiting cards), or a complete flag
-  is on before every quest is done. The land is **held**
+  (a quest index or done count, a stage, waiting cards), a complete flag
+  is on before every quest is done, or (since 0.70.5) a value that is no
+  switch stands under a name the installed version declares one — an older
+  version may have kept another value there. The land is **held**
   (`player.held_lands`, never saved, recomputed on each load): carried as
   saved, `enabled_for` false, `provider_for` null, no Tasks or voyage rows;
   a hero on it gets the game's own panes (`stranded_place`).
@@ -306,6 +308,22 @@ load. `tests/unit/test_adventure_plugins_saves.gd` and
 `tools/adventure_plugin.py compat OLD NEW` lists, for authors, every change
 that would hold old saves' land.
 
+**The tool, since 0.70.5.** For a sites plugin `compat` also warns, and
+exits 1, when a save may find an action used up: a free action (other than
+a `leave`) that gains prices — its free uses were counted too
+(`DataSites._count`) — and a price list made shorter. A longer list, other
+prices and an action made free stay notes (exit 0). `add-place`,
+`add-dungeon` and every other edit write each file whole or not at all and
+put every file back when the edit is stopped (a file that cannot be
+written, a failed judgement, Ctrl-C); a read-only file is left alone.
+`add-place` refuses an id whose picture key (`<plugin id>_<place id>`)
+would pass 40 characters; `add-dungeon` writes the dungeon's own name into
+its words, not `{dungeon}` (the last dungeon raised on the land); `walk`
+plays a place that stands on the mainland and the islands once for each;
+`export` writes and judges the new zip in a dotted folder of its own, so a
+zip already in `--out` is replaced only by one the game takes; `art`
+inflates a PNG no further than its header's own size.
+
 ## Music and pictures
 
 `world.music` (an OGG of the plugin) plays while the hero walks the island
@@ -316,6 +334,20 @@ and the place's tune like every adventure duel (`WorldDuels.host`,
 (`AdventureExpansions.picture`: a plugin's `pictures` key, else the skin's)
 and map sprites by `AdventureExpansions.map_op`: the picture's used rect,
 `width` world pixels wide, its foot at (64, 24) of the 128 × 64 tile box.
+
+Since 0.70.5 they are made before they are asked for where a worker may
+decode (`SkinWarmer.runs_here`): `AdventurePlugins.warm(id)` reads, checks
+(the scan's hash) and decodes a plugin's pictures on a worker — the world
+screen asks it for the land the hero walks and every sites plugin switched
+on (`WorldScreen._warm_the_plugins`) — and the main thread keeps what is
+made for at most `WARM_BUDGET_US` a frame, where `texture` and `stream`
+look first. A land's track not yet decoded is decoded the same way
+(`warm(id, false, rel, then)`, from `WorldDuels._tune_awaited`): the land
+is silent until it is kept. A warm-up decodes at most `MOST_WARM_BYTES` of
+pixels; what it did not reach, and everything headless, is made on demand
+as before. A picture's used rect is measured as it is decoded and carried
+by the texture (`AdventurePlugins.USED_RECT`), so `map_op` reads nothing
+back from the graphics card.
 
 ## How to add a condition or an effect
 
@@ -405,9 +437,22 @@ dice). The tile is kept in that land's `world.expansion.sites`,
 `{"<plugin>:<site>": [x, y]}`; a moved dungeon never takes it
 (`DungeonDoors.expansion_place`).
 
+A place never lands under the hero, under Arzakon's portal or on a lair
+(0.70.5): `AdventureSites.blocked_tiles(player)` names those tiles — they
+carry no flag on the page — and `spot` passes over them (its `blocked`).
+It matters for a place put on a land later than its first day (a plugin's
+new version with one more place, a card pack switched on again); a new
+campaign has none of them on a tile `spot` would draw from, so its draws
+are unchanged. A caller that asks `DungeonDoors.takes_dungeon` or
+`expansion_place` of many tiles reads the land's kept tiles once,
+`DungeonDoors.kept_points(world)` (a set `{tile: true}`, good for as long
+as nothing is placed or moved), and hands it in as `kept`; none given, it
+is read at each asking, the answer the same.
+
 **On the map and in the panes.** A place is a marker `<plugin>:<site>` of
 `AdventureExpansions.places` (drawn by `map_op` from its `sprite`, listed
-on the map and the minimap); its pane's kind is `site` (it pushes the
+on the map and the minimap once its tile is explored, as a town is:
+`WorldMinimap.place_shown`); its pane's kind is `site` (it pushes the
 creatures back as a town does). Its buttons are `<plugin>_act:<site>:<action>`,
 `<plugin>_back:<site>` and `<plugin>_leave`; `AdventureExpansions.act`
 hands the longest owner of a button its press.
@@ -425,6 +470,21 @@ walks (the hint's pick, the marks' fading) keep their fifteen. A slot past
 14 wears the look of slot 5 + (index − 5) mod 10. One dungeon of a key is
 open on a land at a time; an action whose dungeon cannot be raised (no
 slot, no tile) pays nothing.
+
+Since 0.70.5 a raised slot says whose it is: `spawn` writes
+`WorldClues.RAISED` (`"raised": "<plugin>:<dungeon key>"`) into the slot,
+and it is saved with it. `DataSites.dungeon_index` believes the plugin's
+record of its dungeon only of a slot that carries that mark — never a
+castle's slot (0–4), a 1997 dungeon's or another dungeon's — so a damaged
+record cannot read "open" and take the price for a dungeon never raised. A
+0.70.4 save's unmarked vault is found where only a raised dungeon stands
+(past 1997's fifteen on the mainland; on an island past the castles' slots
+and under the name the dungeon was given) and marked from then on. A
+raised dungeon also **keeps its location as it moves** (`DungeonDoors.move`,
+`WorldClues.raised`): the hints that tell a location again walk only
+1997's fifteen slots, so past them it would be forgotten for good and its
+Tasks row lost; its `town` becomes the one nearest its new tile. 1997's
+slots forget their location as ever, and the move draws the same dice.
 
 **A copy** (`DataSites.copy_card`): one more of a card the hero holds
 (`DataSites.copyable`: under the Classic MTG rules none they hold every
@@ -462,6 +522,9 @@ gold, then no more. Neither needs a card pack.
   the manifest's kind, the content checks, the places on the mainland and
   an island with the 1997 world and dice unchanged, the hut's vault, the
   guild's four copies, the buttons, save version 9, a missing plugin.
+- The review of 2026-11-21: `tests/unit/test_review_2026_11_21_sites.gd`
+  (a raised dungeon's location and mark, the kept and the blocked tiles),
+  `Review20261121Test` in `tools/test_adventure_plugin.py` (the tool).
 - Both validators on one corpus: `tests/unit/test_plugin_corpus.gd`,
   `tools/test_adventure_plugin.py`.
 - The authors' guide against the code and the prototype:

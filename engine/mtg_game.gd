@@ -483,6 +483,14 @@ var damage_dealt_this_turn: Dictionary = {}
 ## first user.
 var death_watchers: Array[Dictionary] = []
 
+## The death watches whose creature has died and whose callback has yet to
+## run: {"callback": Callable(game, dead), "dead": CardInstance}. Filled by
+## _move_to_graveyard, emptied by [method _run_due_death_watches] once the
+## departure — and any batch of simultaneous ones — is complete (review
+## 2026-11-21). Journaled with [member death_watchers].
+var _due_death_watches: Array[Dictionary] = []
+var _running_death_watches := false
+
 
 ## Floating "whenever this creature deals damage to a creature this turn,
 ## ..." watches (Runesword). Each entry is {"source_id": int,
@@ -769,6 +777,7 @@ func _rec_departure(inst: CardInstance, to_pid := -1, to_zone := -1) -> void:
 	undo_log.record(self, &"_battlefield_order", _battlefield_order)
 	undo_log.record(self, &"creatures_died_this_turn", creatures_died_this_turn)
 	undo_log.record(self, &"death_watchers", death_watchers)
+	undo_log.record(self, &"_due_death_watches", _due_death_watches)
 	undo_log.record_object(combat)
 	continuous.record_all()
 	if inst.is_token or inst.is_copy:
@@ -848,6 +857,7 @@ const RESOLUTION_TABLES: Array[StringName] = [
 	&"_end_of_combat_actions", &"_end_step_actions", &"_cleanup_actions", &"_next_main_actions",
 	&"_untap_actions",   # Pack 8 E8 (Undiscovered Paradise)
 	&"life_on_damage_watchers", &"death_watchers", &"damage_watchers",
+	&"_due_death_watches",
 	&"extra_turns", &"combat_damage_prevented", &"no_attacks_this_turn",
 	&"extra_turn_losses", &"_pending_extra_turn_loss", &"_resume_after_extra", &"next_turn_statics",
 	&"camouflage_this_turn", &"attacks_without_tapping",
@@ -4399,7 +4409,7 @@ func _ability_announce_checks(pid: int, inst: CardInstance, ability: ActivatedAb
 	if timing_why != "":
 		return timing_why
 	if ability.max_per_turn > 0 \
-			and int(inst.ability_uses.get(index, 0)) >= ability.max_per_turn:
+			and inst.ability_uses_at(index) >= ability.max_per_turn:
 		return "activate only %s each turn" % (
 			"once" if ability.max_per_turn == 1 else "%d times" % ability.max_per_turn)
 	# A {T} cost on a tapped or summoning-sick source (CR 602.5g). Asked
@@ -4662,7 +4672,11 @@ func activate_ability(pid: int, inst: CardInstance, index: int, targets: Array =
 	# more times each turn than the number of snow Swamps you control" —
 	# reads the same tally through its activation condition.
 	_rec(inst, &"ability_uses")
-	inst.ability_uses[index] = int(inst.ability_uses.get(index, 0)) + 1
+	# Counted for the ABILITY, not its place in the live list (review
+	# 2026-11-21): a grant ending mid-turn shifts the ones after it, and a
+	# once-a-turn ability then read its neighbor's count.
+	var use_slot: Variant = inst.ability_use_key(index)
+	inst.ability_uses[use_slot] = int(inst.ability_uses.get(use_slot, 0)) + 1
 	if ability.tap_cost:
 		# A masked creature paying {T} with an ability it was given is
 		# turned face up as it taps (Illusionary Mask; bug hunt 2026-10-21).
@@ -4927,6 +4941,11 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 		# is_present: a phased-out creature doesn't exist (CR 702.26b).
 		if not is_present(inst) or inst.controller_id != pid:
 			return "attacker #%s is not a permanent you control" % str(id)
+		# One creature is declared once (review 2026-11-21): a repeated id
+		# was charged its attack cost twice and counted twice against the
+		# attacker limit.
+		if declared.has(inst):
+			return "%s is declared as an attacker twice" % inst.data.card_name
 		var why := CombatState.attack_illegality(self, inst, defender)
 		if why != "":
 			return "%s can't attack: %s" % [inst.data.card_name, why]
@@ -4962,7 +4981,14 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 			if not cost["can_pay"].call(self, pid):
 				return "%s can't attack unless %s" % [
 					inst.data.card_name, String(cost["desc"])]
-	if attack_mana > 0 and not can_afford_cost(pid, ManaCost.parse("{%d}" % attack_mana)):
+	# CR 508.1f-i: the attackers are tapped BEFORE the cost of attacking is
+	# paid, so a creature that taps to attack cannot also tap for the mana
+	# of that cost (review 2026-11-21 — a Llanowar Elves paid its own
+	# Propaganda and still attacked). A vigilant one stays untapped and may.
+	var attack_payers_barred := attack_tax_barred_payers(pid, declared) \
+		if attack_mana > 0 else {}
+	if attack_mana > 0 and not can_afford_cost(pid, ManaCost.parse("{%d}" % attack_mana),
+			[], -1, attack_payers_barred):
 		return "not enough mana to pay the combined attack cost {%d}" % attack_mana
 	var land_count := 0
 	for inst in declared: land_count += inst.cur_attack_land_sacrifices
@@ -4984,7 +5010,8 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 	# for a Propaganda's {2}; and a payment that fails refuses the attack
 	# before anything else is spent. Until then the Islands went first, the
 	# {2} then failed unread, and the Leviathan attacked untaxed.
-	if attack_mana > 0 and not try_pay(pid, ManaCost.parse("{%d}" % attack_mana)):
+	if attack_mana > 0 and not try_pay(pid, ManaCost.parse("{%d}" % attack_mana),
+			[], attack_payers_barred):
 		return "not enough mana to pay the combined attack cost {%d}" % attack_mana
 	for inst in declared:
 		for cost in inst.cur_attack_costs:
@@ -5085,6 +5112,23 @@ func declare_attackers(pid: int, attacker_ids: Array, band_list: Array = []) -> 
 ## `{blocker: Array[int]}`. Duplicates and empty lists are dropped, so a
 ## caller cannot declare the same block twice or name a blocker with
 ## nothing to block.
+## The mana sources that may NOT pay an attack tax for [param attackers]
+## (instance id -> true): every one of them that taps to attack — it is
+## tapped as an attacker before the cost is paid (CR 508.1f-i), so it
+## cannot tap for that mana too. A vigilant attacker, and every attacker
+## while a Johan spares them the tap, stays a legal payer. Pure; the AI's
+## attack planning may ask it (review 2026-11-21).
+func attack_tax_barred_payers(pid: int, attackers: Array) -> Dictionary:
+	var out := {}
+	if _attacks_without_tapping_now(pid):
+		return out
+	for inst in attackers:
+		if inst != null and not inst.tapped \
+				and not inst.has_keyword(Mtg.Keyword.VIGILANCE):
+			out[inst.id] = true
+	return out
+
+
 func _normalise_block_map(block_map: Dictionary) -> Dictionary:
 	var out := {}
 	for blocker_id in block_map:
@@ -6226,9 +6270,17 @@ func _creature_damage_gate_label(inst: CardInstance, source: CardInstance,
 		&"istvan":
 			return "no creature damage to %s" % inst.data.card_name
 		&"monolith":
+			var soak_seat := inst.damage_redirect_to_for(source.id) \
+				if source != null else inst.damage_redirect_to
 			return "all of it to %s" % players[
-				inst.damage_redirect_to].player_name
+				soak_seat if soak_seat >= 0 else inst.damage_redirect_to].player_name
 		&"incarnation":
+			if inst.damage_point_redirect_rows.size() > 1:
+				var shares := PackedStringArray()
+				for share in inst.damage_point_redirect_rows:
+					shares.append("%d to %s" % [int(share["points"]),
+						players[int(share["to"])].player_name])
+				return "%d of it: %s" % [inst.damage_point_redirects, ", ".join(shares)]
 			return "%d of it to %s" % [inst.damage_point_redirects,
 				players[inst.damage_point_redirect_to].player_name]
 		&"creature_redirect":
@@ -6426,14 +6478,13 @@ func _apply_creature_damage_gate(packet: DamagePacket, inst: CardInstance,
 				_rec(inst, &"damage_redirects")
 				_rec(inst, &"damage_redirect_to")
 				_rec(inst, &"damage_redirect_sources")
-			inst.damage_redirects -= 1
-			var named_at := inst.damage_redirect_sources.find(source.id)
-			if named_at >= 0:
-				inst.damage_redirect_sources.remove_at(named_at)
-			var soak := inst.damage_redirect_to
-			if inst.damage_redirects <= 0:
-				inst.damage_redirect_to = -1
-				inst.damage_redirect_sources.clear()
+				_rec(inst, &"damage_redirect_tos")
+			# The seat THIS booking named (review 2026-11-21): two players'
+			# Monoliths on one creature each send their own source's damage
+			# to their own controller.
+			var soak := inst.take_damage_redirect(source.id)
+			if soak < 0:
+				return -1
 			log_line("%s's damage is redirected to %s" % [
 				inst.data.card_name, players[soak].player_name])
 			return _redirect_damage(packet, TargetRef.player(soak))
@@ -7075,10 +7126,36 @@ func add_point_redirect(inst: CardInstance, to: int, n := 1) -> void:
 	if undo_log != null:
 		_rec(inst, &"damage_point_redirect_to")
 		_rec(inst, &"damage_point_redirects")
-	inst.damage_point_redirect_to = to
+		_rec(inst, &"damage_point_redirect_rows")
+	_adopt_loose_point_redirects(inst)
+	# One row per destination, oldest first (review 2026-11-21): a second
+	# seat's booking no longer takes the first seat's points with it.
+	var rows := inst.damage_point_redirect_rows
+	if not rows.is_empty() and int(rows[-1]["to"]) == to:
+		rows[-1]["points"] = int(rows[-1]["points"]) + n
+	else:
+		rows.append({"to": to, "points": n})
 	inst.damage_point_redirects += n
+	inst.damage_point_redirect_to = int(rows[0]["to"])
+	var booked := 0
+	for row in rows:
+		if int(row["to"]) == to:
+			booked += int(row["points"])
 	log_line("the next %d damage to %s will be dealt to %s instead" % [
-		inst.damage_point_redirects, inst.data.card_name, players[to].player_name])
+		booked, inst.data.card_name, players[to].player_name])
+
+
+## Points written straight onto [member CardInstance.damage_point_redirects]
+## without a row (a position, an older caller) become the oldest row, so
+## the rows always add up to the pool.
+func _adopt_loose_point_redirects(inst: CardInstance) -> void:
+	var in_rows := 0
+	for row in inst.damage_point_redirect_rows:
+		in_rows += int(row["points"])
+	var loose := inst.damage_point_redirects - in_rows
+	if loose > 0 and inst.damage_point_redirect_to >= 0:
+		inst.damage_point_redirect_rows.push_front(
+			{"to": inst.damage_point_redirect_to, "points": loose})
 
 
 ## The metered half of redirection: take as many of [param inst]'s
@@ -7092,16 +7169,41 @@ func add_point_redirect(inst: CardInstance, to: int, n := 1) -> void:
 ## "you gain life equal to the damage dealt this way" still counts the
 ## moved point when that step ends — the two parts add up, never double.
 func _divert_damage_points(packet: DamagePacket, inst: CardInstance) -> int:
-	var to := inst.damage_point_redirect_to
-	var moved := packet.divert(inst.damage_point_redirects)
-	if moved <= 0:
-		return 0
 	if undo_log != null:
 		_rec(inst, &"damage_point_redirects")
 		_rec(inst, &"damage_point_redirect_to")
+		_rec(inst, &"damage_point_redirect_rows")
+	_adopt_loose_point_redirects(inst)
+	# Oldest booking first, each to its own seat (review 2026-11-21).
+	var dealt := 0
+	while packet.remaining() > 0 and not inst.damage_point_redirect_rows.is_empty():
+		var row: Dictionary = inst.damage_point_redirect_rows[0]
+		var before := inst.damage_point_redirects
+		dealt += _divert_points_to(packet, inst, int(row["to"]), int(row["points"]))
+		var took := before - inst.damage_point_redirects
+		if took <= 0:
+			break
+		# The landing may have swept the creature away, pool and all.
+		if inst.damage_point_redirect_rows.is_empty() \
+				or not is_same(inst.damage_point_redirect_rows[0], row):
+			break
+		if took >= int(row["points"]):
+			inst.damage_point_redirect_rows.remove_at(0)
+		else:
+			row["points"] = int(row["points"]) - took
+	inst.damage_point_redirect_to = -1 if inst.damage_point_redirect_rows.is_empty() \
+		else int(inst.damage_point_redirect_rows[0]["to"])
+	return dealt
+
+
+## One destination's share of [method _divert_damage_points]: up to
+## [param points] of [param packet] go to seat [param to].
+func _divert_points_to(packet: DamagePacket, inst: CardInstance, to: int,
+		points: int) -> int:
+	var moved := packet.divert(points)
+	if moved <= 0:
+		return 0
 	inst.damage_point_redirects -= moved
-	if inst.damage_point_redirects <= 0:
-		inst.damage_point_redirect_to = -1
 	log_line("%d of %s's damage to %s is dealt to %s instead" % [
 		moved, packet.source.data.card_name, inst.data.card_name,
 		players[to].player_name])
@@ -10672,8 +10774,8 @@ func _spell_target_specs(data: CardData, mode := 0) -> Array[TargetSpec]:
 ## answer then counts no hidden hand card of theirs (see [method
 ## ManaPlanner.sources]) — how the AI reads an opponent's blocking tax.
 func can_afford_cost(pid: int, cost: ManaCost, usage_keys: Array = [],
-		viewer := -1) -> bool:
-	return _payment_plan(pid, cost, usage_keys, viewer) != null
+		viewer := -1, excluded: Dictionary = {}) -> bool:
+	return _payment_plan(pid, cost, usage_keys, viewer, excluded) != null
 
 
 ## Attempt to actually pay [param cost]. Returns true and pays, tapping
@@ -10681,8 +10783,9 @@ func can_afford_cost(pid: int, cost: ManaCost, usage_keys: Array = [],
 ## is touched) — or, should a plan go stale mid-execution, it stops tapping
 ## at the first refusal and reports failure with the mana already produced
 ## still floating (it empties at the end of the step, CR 500.4).
-func try_pay(pid: int, cost: ManaCost, usage_keys: Array = []) -> bool:
-	var plan: Variant = _payment_plan(pid, cost, usage_keys)
+func try_pay(pid: int, cost: ManaCost, usage_keys: Array = [],
+		excluded: Dictionary = {}) -> bool:
+	var plan: Variant = _payment_plan(pid, cost, usage_keys, -1, excluded)
 	if plan == null:
 		return false
 	# THE ENGINE IS PAYING (bug pass 0.60.19, h1-1): a tap below that asks
@@ -10727,7 +10830,7 @@ func try_pay(pid: int, cost: ManaCost, usage_keys: Array = []) -> bool:
 ## Moon / Conversion / Evil Presence a land taps for something else
 ## entirely, and tap_for_mana indexes `cur_mana_abilities`.
 func _payment_plan(pid: int, cost: ManaCost, usage_keys: Array = [],
-		viewer := -1) -> Variant:
+		viewer := -1, excluded: Dictionary = {}) -> Variant:
 	# A free cost plans as [] in the planner's vocabulary and so does "no
 	# plan" ([method ManaPlanner.cost_is_free] is why every executor asks
 	# this first); this method's callers tell the two apart by null, so the
@@ -10735,7 +10838,9 @@ func _payment_plan(pid: int, cost: ManaCost, usage_keys: Array = [],
 	if ManaPlanner.cost_is_free(cost):
 		return []
 	var src: Array = []
-	for s in ManaPlanner.sources(self, pid, {}, true, viewer):
+	# [param excluded] (instance id -> true): sources this payment may not
+	# tap — the attackers an attack tax is paid for (review 2026-11-21).
+	for s in ManaPlanner.sources(self, pid, excluded, true, viewer):
 		if s[0] != null and _mana_ability_asks(s[0], int(s[1])):
 			continue
 		src.append(s)
@@ -11322,6 +11427,101 @@ func _preflight() -> PlayerChoice:
 			break
 	if not asks_anyone:
 		return null
+	# THE PROBE IS A WHOLE-GAME SNAPSHOT AND A SECOND RESOLUTION, so it is
+	# skipped for the one shape that provably asks nothing (review
+	# 2026-11-21, [method _resolution_asks_nothing]). Nothing else changes:
+	# a probe that finds no question returns null exactly as this does.
+	if _resolution_asks_nothing(stack[-1]):
+		preflight_skips += 1
+		return null
+	return _preflight_probe()
+
+
+## How many resolutions [method _preflight] let through without a probe —
+## a tally for the tests, read by nothing in the game.
+var preflight_skips := 0
+
+
+## Can resolving [param item] put NO question to anyone, whatever the
+## seats are? Conservative on purpose: true only for a plain permanent
+## spell arriving on a board where nothing can react to an arrival before
+## the next priority — every other shape is probed as before.
+##
+## What a resolution can ask comes from card script hooks (a card's own
+## "as it enters", an entry payment, a copy choice, a leave hook, a death
+## watch) and from the choices state-based deaths open (a regeneration
+## shield). So this demands, of the SPELL: a permanent that is no Aura and
+## no copy, with no target, no X, no trigger, no static, no characteristic
+## definition, none of the entry hooks, not legendary or world, no
+## sacrifice clause, and for a creature a printed toughness above 0 with
+## no counters it enters with. And of the BOARD: no static ability
+## anywhere (printed, floating or on the stack), no characteristic
+## definition, no control effect, no "until an event" duration, no entry
+## ban or enters-tapped rule, no sacrifice clause, and nobody listening
+## for an arrival or a state check. Then the arrival changes no other
+## permanent's characteristics (CR 613: nothing reads the board), the
+## state-based check finds what it found before the spell resolved —
+## nothing — and no hook runs at all; the triggers the arrival raises
+## never ask inside a resolution ([method _arm_trigger_targets]).
+func _resolution_asks_nothing(item: StackItem) -> bool:
+	if item == null or item.kind != Mtg.StackKind.SPELL or item.card == null:
+		return false
+	var inst := item.card
+	var data := inst.data
+	if inst.is_copy or inst.face_down or inst.zone != Mtg.Zone.STACK \
+			or data != inst.printed_data:
+		return false
+	if not data.is_permanent_type() or data.is_aura() or data.is_modal():
+		return false
+	if not item.targets.is_empty() or not item.target_groups.is_empty() \
+			or not _spell_target_specs(data, item.mode).is_empty():
+		return false
+	if data.cost.has_x or data.flash_rider or not _data_is_inert_on_arrival(data):
+		return false
+	if not data.triggered_abilities.is_empty() or not data.static_abilities.is_empty() \
+			or not data.stack_static_abilities.is_empty():
+		return false
+	if (data.supertypes & (Mtg.Supertype.LEGENDARY | Mtg.Supertype.WORLD)) != 0:
+		return false
+	if data.is_creature() and (data.toughness <= 0 or not data.enters_with_counters.is_empty()):
+		return false
+	# --- the board ---
+	if not battlefield_with_statics().is_empty() \
+			or not continuous._floating_statics.is_empty() \
+			or continuous._event_watch != 0 or not _control_layers.is_empty():
+		return false
+	if _trigger_index.has(Mtg.EventType.ENTERS_BATTLEFIELD) \
+			or _trigger_index.has(Mtg.EventType.STATE_CHECK) \
+			or _delayed_listens(Mtg.EventType.ENTERS_BATTLEFIELD):
+		return false
+	for other in stack:
+		if other.card != null and not other.card.data.stack_static_abilities.is_empty():
+			return false
+	for other in all_battlefield() + phased_out_permanents():
+		if not _data_is_inert_on_arrival(other.data) \
+				or not _data_is_inert_on_arrival(other.printed_data):
+			return false
+	return true
+
+
+## The part of [method _resolution_asks_nothing] asked of the arriving card
+## and of every permanent it joins: no hook that runs, or changes what a
+## permanent is, when something enters.
+static func _data_is_inert_on_arrival(data: CardData) -> bool:
+	if data == null:
+		return true
+	return not data.characteristic_definition.is_valid() \
+		and not data.as_enters.is_valid() and not data.entry_condition.is_valid() \
+		and not data.entry_payment.is_valid() and data.enters_as_copy.is_empty() \
+		and not data.enters_ban_rule.is_valid() and not data.enters_tapped_rule.is_valid() \
+		and not data.sacrifice_condition.is_valid() \
+		and data.sacrifice_if_no_land_type == "" \
+		and data.sacrifice_if_you_control_subtype == ""
+
+
+## The probe itself: resolve the top item once over a snapshot, note what
+## it asked, rewind ([method _preflight] decides whether it is needed).
+func _preflight_probe() -> PlayerChoice:
 	var snapshot := GameSnapshot.take(self)
 	# Pop it exactly as the real resolution will: an effect that reads the
 	# stack must see what it would really see. The rewind puts it back.
@@ -12733,7 +12933,14 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 				continue
 			var watch: Dictionary = death_watchers[i]
 			death_watchers.remove_at(i)
-			watch["callback"].call(self, inst)
+			# DUE, not run here (review 2026-11-21): the rest of this
+			# departure has yet to happen — the copy's identity restored,
+			# the leave hook, the floating effects forgotten — and so has
+			# the rest of a simultaneous batch. Run inline, a Reincarnation
+			# that raised the same Clone had it reset to a bare 0/0 by the
+			# lines below, and a creature dying in the same Wrath was not
+			# yet in the graveyard to be chosen.
+			_due_death_watches.append({"callback": watch["callback"], "dead": inst})
 	if inst.is_token:
 		inst.zone = Mtg.Zone.EXILE   # gone for good; nothing can find it
 		_instances.erase(inst.id)
@@ -12758,6 +12965,24 @@ func _move_to_graveyard(inst: CardInstance, died: bool,
 	# check of its own. Held inside a departure batch: its close checks.
 	if _depart_hold == 0:
 		_drop_noncreatures_from_combat()
+	_run_due_death_watches()
+
+
+## Run the death watches that came due ([member _due_death_watches]) — once
+## the departure that raised them is complete and no batch of simultaneous
+## departures is still open ([method depart_together], a
+## [method begin_simultaneous] bracket, the state-based sweep): each closes
+## through here. A watch may itself bury something; what that raises runs
+## in the same pass.
+func _run_due_death_watches() -> void:
+	if _depart_hold > 0 or _defer_depth > 0 or _running_death_watches:
+		return
+	_running_death_watches = true
+	while not _due_death_watches.is_empty() and not game_over:
+		_rec(self, &"_due_death_watches")
+		var due: Dictionary = _due_death_watches.pop_front()
+		(due["callback"] as Callable).call(self, due["dead"])
+	_running_death_watches = false
 
 
 ## Create [param count] TOKENS from [param data] under [param controller]'s
@@ -13657,6 +13882,7 @@ func end_simultaneous() -> void:
 		_defer_state_based_actions = false
 		_rec(self, &"_departure_batch")
 		_departure_batch = []
+		_run_due_death_watches()   # the bracket is complete (review 2026-11-21)
 		check_state_based_actions()
 
 
@@ -17439,8 +17665,10 @@ func _finish_cleanup() -> void:
 		inst.damage_redirect_to = -1
 		inst.damage_redirects = 0
 		inst.damage_redirect_sources.clear()
+		inst.damage_redirect_tos.clear()
 		inst.damage_point_redirect_to = -1   # Personal Incarnation's points
 		inst.damage_point_redirects = 0
+		inst.damage_point_redirect_rows.clear()
 		inst.creature_damage_redirects.clear()
 		inst.exile_instead_of_dying = false
 		inst.regeneration_shields = 0   # shields last one turn (CR 701.15)
@@ -19329,6 +19557,8 @@ func _release_departures() -> void:
 	if _depart_hold == 0 and _depart_recalc_due:
 		_depart_recalc_due = false
 		recalculate()
+	if _depart_hold == 0:
+		_run_due_death_watches()   # the batch is complete (review 2026-11-21)
 
 
 # --- Pack 10 E10: simultaneous arrivals ---

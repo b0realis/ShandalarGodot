@@ -67,7 +67,48 @@ var slot_start := 0
 var color := 1
 var difficulty := 0
 
-var page := PackedByteArray()
+## THE PAGE — and [member revision], which counts its writes (the review
+## of 2026-11-21: the view, the small map and the map's land each hashed
+## these 40 KB at every tick of the world's clock to learn whether the land,
+## its roads or what is seen had changed). A whole page put here counts
+## itself. A BYTE WRITTEN IN PLACE DOES NOT — `world.page[at] = v` changes
+## the bytes without passing here — so WHOEVER WRITES A BYTE CALLS [method
+## touch_page] AFTER: [method explore_around], [Sieges], [DungeonDoors],
+## [CreatureMeeting], [DataSites], [RegionRoads]; a test reads the sources
+## and holds every writer to it (the generators and the loader write a
+## world nothing has drawn yet).
+var page := PackedByteArray():
+	set(value):
+		page = value
+		page_revision += 1
+		revision += 1
+## How many times the page, a site's record or an encounter's was written:
+## what draws or words them keeps the number it read them at (the view, the
+## small map, the map's land, the quest pane's lines). The records are
+## dictionaries written in place too, and their writers call [method touch]
+## as the page's do — [TownStatus], [CastleWin], [WorldClues],
+## [DungeonDoors], [DungeonBoard], [DataSites], the Classic rules'
+## treasures ([method AdventurePlayer.treasures_by_the_ban_list]). It says
+## nothing of [member expansion], nor of the adventure's own state.
+var revision := 0
+## How many times the page alone was written ([method touch_page]): what
+## draws the land itself — the view's pictures, the map's land — keeps this
+## one, so a town's flag that is not drawn draws nothing again.
+var page_revision := 0
+
+
+## The page, a site's record or an encounter's was written in place
+## ([member revision]): what was read from them is read again.
+func touch() -> void:
+	revision += 1
+
+
+## A byte of the page was written in place ([member page]).
+func touch_page() -> void:
+	page_revision += 1
+	revision += 1
+
+
 ## The 128 sites, by slot: `{x, y, type, trade, status}`.
 var sites: Array[Dictionary] = []
 ## The twelve World Magics: the slot of the town or city offering each,
@@ -150,15 +191,28 @@ func site_at(x: int, y: int) -> Dictionary:
 ## draws, on its 640 × 480 screen's grid (a row is a step of ty − tx, a
 ## column two steps of tx + ty), and so does this, whatever the screen.
 const EXPLORED := 0x80
+## How far from the hero's tile [method explore_around] looks, each way.
+const REACH := 8
 
 
 func explore_around(tile: Vector2i) -> void:
-	for y in TILES:
-		for x in TILES:
+	# Only the tiles that can be within the rows and columns: |row| <= 7 and
+	# |column| <= 3 hold no tile further than 7 from [param tile] either
+	# way (the review of 2026-11-21: all 4096 tiles were looked at for
+	# every tile entered). One tile more is looked at, for good measure.
+	var new_land := false
+	for y in range(maxi(0, tile.y - REACH), mini(TILES, tile.y + REACH + 1)):
+		for x in range(maxi(0, tile.x - REACH), mini(TILES, tile.x + REACH + 1)):
 			var row := (y - x) - (tile.y - tile.x)
 			var column := ((x + y) - (tile.x + tile.y) - (row & 1)) / 2
 			if absi(row) <= 7 and absi(column) <= 3:
-				page[y * PAGE_WIDTH + x] = page[y * PAGE_WIDTH + x] | EXPLORED
+				var at := y * PAGE_WIDTH + x
+				if at < page.size() and page[at] & EXPLORED == 0:
+					page[at] = page[at] | EXPLORED
+					new_land = true
+	# Only when new land was seen: nothing is drawn again for land known.
+	if new_land:
+		touch_page()
 
 
 func is_explored(x: int, y: int) -> bool:

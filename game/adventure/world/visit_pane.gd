@@ -256,7 +256,16 @@ static func _lair(lair: Dictionary) -> Dictionary:
 
 # --------------------------------------------------------------- the pane --
 
+## Whether the pane has given its [signal left]: whoever opened it frees it
+## after the frame, and until then nothing is opened over it ([method
+## WorldScreen.town_on_top]; the review of 2026-11-21: M, F2 or F5 in the
+## frame of a town's choice set aside a pane about to be freed, and the
+## town never came back).
+var leaving := false
+
+
 func _ready() -> void:
+	left.connect(func(_then: String) -> void: leaving = true)
 	name = "VisitPane"
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	add_theme_stylebox_override("panel", PaneStyle.glass())

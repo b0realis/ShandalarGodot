@@ -44,9 +44,10 @@ class MonolithEffect extends EffectBase:
 				% shielded.data.card_name, false, false, true)
 		if named == null or not choices.has(named):
 			named = choices[0]
-		shielded.damage_redirect_to = controller
-		shielded.damage_redirects += 1
-		shielded.damage_redirect_sources.append(named.id)
+		# One booking per activation, each with its OWN destination (review
+		# 2026-11-21): a second player's Monolith on the same creature no
+		# longer takes this one's damage as well.
+		shielded.book_damage_redirect(controller, named.id)
 		game.log_line("Jade Monolith turns %s's damage to %s onto %s" % [
 			named.data.card_name, shielded.data.card_name,
 			game.players[controller].player_name])

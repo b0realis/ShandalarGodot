@@ -284,21 +284,230 @@ static func texture(id: String, rel: String) -> Texture2D:
 	var key := id + "/" + rel
 	if _textures.has(key):
 		return _textures[key]
-	var bytes := _bytes(id, rel)
+	var image := _image_of(rel, _bytes(id, rel))
+	var out: Texture2D = ImageTexture.create_from_image(image) if image != null else null
+	if out != null:
+		# Its painted part, measured on the pixels just decoded: a marker on
+		# the world is cut to it ([method AdventureSites.map_op]), and
+		# asking the texture for its pixels again read them back off the
+		# graphics card, stalling the frame a harbor first came into view
+		# (the review of 2026-11-21).
+		out.set_meta(USED_RECT, Rect2(image.get_used_rect()))
+	_textures[key] = out
+	return out
+
+
+## The meta a plugin's texture carries its painted part under ([method
+## texture]): a Rect2 in its own pixels.
+const USED_RECT := &"used_rect"
+
+
+## The picture [param bytes] hold, read as the kind their first bytes say
+## (never as [param rel]'s name says); null for no picture. Touches nothing
+## shared: [method texture] and a warm-up's worker ([method warm]) both
+## decode here.
+static func _image_of(rel: String, bytes: PackedByteArray) -> Image:
+	if not rel.get_extension().to_lower() in PluginPackage.PICTURES or bytes.is_empty():
+		return null
 	var image := Image.new()
 	var kind := PluginPackage.picture_kind(bytes)
 	var made := ERR_FILE_UNRECOGNIZED
-	if not rel.get_extension().to_lower() in PluginPackage.PICTURES or bytes.is_empty():
-		made = ERR_FILE_NOT_FOUND
-	elif kind == "png":
+	if kind == "png":
 		made = image.load_png_from_buffer(bytes)
 	elif kind == "jpg":
 		made = image.load_jpg_from_buffer(bytes)
 	elif kind == "webp":
 		made = image.load_webp_from_buffer(bytes)
-	var out: Texture2D = ImageTexture.create_from_image(image) if made == OK and not image.is_empty() else null
-	_textures[key] = out
-	return out
+	return image if made == OK and not image.is_empty() else null
+
+
+## The looping OGG [param bytes] hold, null for none ([method stream], and
+## a warm-up's worker).
+static func _tune_of(rel: String, bytes: PackedByteArray) -> AudioStream:
+	if rel.get_extension().to_lower() != "ogg" or not PluginPackage.is_vorbis(bytes):
+		return null
+	var ogg := AudioStreamOggVorbis.load_from_buffer(bytes)
+	if ogg != null:
+		ogg.loop = true
+	return ogg
+
+
+# ------------------------------------------------- warmed off the frame --
+
+## How long a frame may spend keeping what a warm-up made (a texture from
+## its decoded picture), and the most decoded pixels one warm-up makes —
+## the rest are decoded as they are asked for, as before.
+const WARM_BUDGET_US := 2000
+const MOST_WARM_BYTES := 48 * 1024 * 1024
+
+## One warm-up's work ([method warm]), shared with its worker as
+## [SkinWarmer]'s rule has it (`lock`, `stop`, `started`): the worker reads
+## only the private copies in its entries (a path, a name, a hash — no
+## registry) and writes only into the entry in hand and [member done], under
+## the lock; the main thread reads an entry once [member done] has passed it.
+class WarmJob extends RefCounted:
+	var entries: Array[Dictionary] = []
+	var done := 0
+	var stop := false
+	var started := false
+	var lock := Mutex.new()
+	var revision := 0
+	var task := -1
+	var kept := 0
+	var most := 0
+
+	func run() -> void:
+		lock.lock()
+		started = true
+		lock.unlock()
+		var made := 0
+		for entry in entries:
+			lock.lock()
+			var halt := stop
+			lock.unlock()
+			if halt:
+				break
+			var rel := String(entry["rel"])
+			var bytes := PluginPackage.read_one(String(entry["path"]), String(entry["kind"]), String(entry["top"]), rel)
+			if not bytes.is_empty() and PluginPackage.sha256(bytes) == String(entry["hash"]):
+				if bool(entry["tune"]):
+					entry["stream"] = AdventurePlugins._tune_of(rel, bytes)
+				elif made < most:
+					var image := AdventurePlugins._image_of(rel, bytes)
+					if image != null:
+						entry["image"] = image
+						entry["used"] = Rect2(image.get_used_rect())
+						made += image.get_width() * image.get_height() * 4
+			lock.lock()
+			done += 1
+			lock.unlock()
+
+
+## The warm-ups at work, what was asked for already (by key, the registry's
+## revision it was asked in), what is still being made, and who waits for a
+## tune (by key: callables). Main thread only.
+static var _warming: Array[WarmJob] = []
+static var _warm_asked := {}
+static var _warm_pending := {}
+static var _warm_then := {}
+## How many pictures and tunes the warm-ups have kept (the tests).
+static var warmed := 0
+
+
+## PLUGIN [param id]'S PICTURES AND MUSIC MADE BEFORE THEY ARE ASKED FOR
+## (the review of 2026-11-21: the first pane of a plugin's place opened, the
+## first marker drawn and a land's track begun each read the plugin's
+## archive, hashed and decoded on the thread that draws — tens of ms a
+## picture, far more for a track on a handheld). With [param pictures],
+## every picture file of the plugin; with [param tune], that OGG, ahead of
+## the background work — and [param then] called once it is kept or given
+## up. One worker task reads, checks (the scan's hash, as [method _bytes])
+## and decodes; each frame the main thread keeps what is made for at most
+## [constant WARM_BUDGET_US] where [method texture] and [method stream]
+## look first. Nothing is lost when it is cut short or the plugins are
+## scanned again meanwhile: what it did not keep is made on demand, as
+## before. True when [param then] will be called — the tune is being made;
+## false when nothing waits (kept already, not a tune of this plugin, or no
+## worker may decode here: [method SkinWarmer.runs_here]).
+static func warm(id: String, pictures := true, tune := "", then := Callable()) -> bool:
+	if not valid(id) or not SkinWarmer.runs_here():
+		return false
+	var plugin: Dictionary = _plugins[id]
+	var hashes: Dictionary = plugin["hashes"]
+	var rels: Array[String] = []
+	if tune != "" and hashes.has(tune) and tune.get_extension().to_lower() == "ogg":
+		rels.append(tune)
+	if pictures:
+		for rel: String in hashes:
+			if rel.get_extension().to_lower() in PluginPackage.PICTURES:
+				rels.append(rel)
+	var job := WarmJob.new()
+	job.revision = revision
+	job.most = MOST_WARM_BYTES
+	var waits := false
+	for rel in rels:
+		var key := id + "/" + rel
+		var is_tune := rel == tune
+		if (_streams if is_tune else _textures).has(key):
+			continue
+		if int(_warm_asked.get(key, -1)) != revision:
+			_warm_asked[key] = revision
+			_warm_pending[key] = true
+			job.entries.append({"key": key, "rel": rel, "tune": is_tune, "path": String(plugin["path"]),
+				"kind": String(plugin["kind"]), "top": String(plugin["top"]), "hash": String(hashes[rel])})
+		if is_tune and then.is_valid() and _warm_pending.has(key):
+			if not _warm_then.has(key):
+				_warm_then[key] = []
+			(_warm_then[key] as Array).append(then)
+			waits = true
+	if job.entries.is_empty():
+		return waits
+	job.task = SkinWarmer.track(job, WorkerThreadPool.add_task(job.run, tune != "", "Adventure plugin warm-up"))
+	_warming.append(job)
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and not tree.process_frame.is_connected(_keep_warm):
+		tree.process_frame.connect(_keep_warm)
+	return waits
+
+
+## Whether the tune at [param rel] of plugin [param id] is decoded and kept.
+static func stream_kept(id: String, rel: String) -> bool:
+	return _streams.has(id + "/" + rel)
+
+
+## What the warm-ups have made kept, a frame's share of it ([param all]:
+## every warm-up waited for and all of it kept, now — a test).
+static func _keep_warm(all := false) -> void:
+	var began := Time.get_ticks_usec()
+	for job: WarmJob in _warming.duplicate():
+		if all:
+			SkinWarmer.claim(job.task)
+		var ended := WorkerThreadPool.is_task_completed(job.task) if not all else true
+		job.lock.lock()
+		var done := job.done
+		job.lock.unlock()
+		while job.kept < done:
+			_keep_one(job, job.entries[job.kept])
+			job.kept += 1
+			if not all and Time.get_ticks_usec() - began >= WARM_BUDGET_US:
+				return
+		if ended:
+			# What it never reached (told to stop) is given up: made on demand.
+			while job.kept < job.entries.size():
+				_keep_one(job, job.entries[job.kept])
+				job.kept += 1
+			if not all:
+				SkinWarmer.release(job, job.task)
+			_warming.erase(job)
+	if _warming.is_empty():
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree != null and tree.process_frame.is_connected(_keep_warm):
+			tree.process_frame.disconnect(_keep_warm)
+
+
+## One entry of a warm-up kept where [method texture] and [method stream]
+## look — unless the plugins were scanned again since it was asked, or the
+## thing was made on demand meanwhile — and whoever waited for it told.
+static func _keep_one(job: WarmJob, entry: Dictionary) -> void:
+	var key := String(entry["key"])
+	_warm_pending.erase(key)
+	if job.revision == revision:
+		if bool(entry["tune"]):
+			if entry.get("stream") != null and not _streams.has(key):
+				_streams[key] = entry["stream"]
+				warmed += 1
+		elif entry.get("image") != null and not _textures.has(key):
+			var made := ImageTexture.create_from_image(entry["image"])
+			made.set_meta(USED_RECT, entry["used"])
+			_textures[key] = made
+			warmed += 1
+	entry.erase("image")
+	entry.erase("stream")
+	var waiting: Array = _warm_then.get(key, [])
+	_warm_then.erase(key)
+	for then: Callable in waiting:
+		if then.is_valid():
+			then.call()
 
 
 ## The OGG music at [param rel] inside plugin [param id], decoded from its
@@ -307,13 +516,7 @@ static func stream(id: String, rel: String) -> AudioStream:
 	var key := id + "/" + rel
 	if _streams.has(key):
 		return _streams[key]
-	var bytes := _bytes(id, rel)
-	var out: AudioStream = null
-	if rel.get_extension().to_lower() == "ogg" and PluginPackage.is_vorbis(bytes):
-		var ogg := AudioStreamOggVorbis.load_from_buffer(bytes)
-		if ogg != null:
-			ogg.loop = true
-			out = ogg
+	var out := _tune_of(rel, _bytes(id, rel))
 	_streams[key] = out
 	return out
 

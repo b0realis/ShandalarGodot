@@ -865,7 +865,9 @@ func ask_portable(what: String) -> void:
 	if String(route["to"]) == "":
 		_portable_window(what, "This computer's own folder could not be found.", false)
 		return
-	if what == "make" and not PortableMode.can_write(PortableMode.folder()):
+	# Asking makes nothing ([method PortableMode.can_hold]): a Cancel leaves
+	# no portable folder for the next start to enter.
+	if what == "make" and not PortableMode.can_hold(PortableMode.folder()):
 		_portable_window(what, PortableMode.write_problem(PortableMode.folder()), false)
 		return
 	var found := PortableMode.measure(String(route["from"]))
@@ -913,23 +915,10 @@ func _close_portable() -> void:
 ## The copy, shown as it goes; then the switch and the restart. A copy
 ## that fails says why and changes nothing.
 func _run_portable(what: String) -> void:
-	var dialog := _portable_dialog
-	var words := dialog.find_child("PortableWords", true, false) as Label
-	for button in dialog.find_children("*", "Button", true, false):
-		(button as Button).disabled = true
-	var route := portable_route(what)
-	var job := PortableMode.start_copy(String(route["from"]), String(route["to"]))
-	while true:
-		var p := job.progress()
-		words.text = PortableMode.progress_line(p)
-		if bool(p["finished"]):
-			break
-		await get_tree().create_timer(0.1).timeout
-	job.wait()
-	var p := job.progress()
-	if String(p["error"]) != "":
+	var problem: String = await _copy_portable(what)
+	if problem != "":
 		_close_portable()
-		_portable_window(what, "Nothing was changed. " + String(p["error"]), false)
+		_portable_window(what, "Nothing was changed. " + problem, false)
 		return
 	var system := PortableMode.platform()
 	match what:
@@ -945,6 +934,50 @@ func _run_portable(what: String) -> void:
 			if not PortableMode.retire(dir):
 				OS.set_environment(PortableMode.ENV_RETIRE, dir)
 	_restart_after_portable(what)
+
+
+## Whether the copy is running: Escape is swallowed until it is done
+## ([method _unhandled_input]).
+var _portable_copying := false
+
+
+## THE COPY of [method _run_portable], its progress on the window: "" when
+## everything arrived, else why not. A game made portable for the first time
+## is copied beside the portable folder ([method PortableMode.making_name])
+## and that folder renamed once whole: a copy that fails leaves no portable
+## folder the next start would enter with half of everything (or nothing) in
+## it. A portable folder already there is copied into as it is, and never
+## removed.
+func _copy_portable(what: String) -> String:
+	var dialog := _portable_dialog
+	var words := dialog.find_child("PortableWords", true, false) as Label
+	for button in dialog.find_children("*", "Button", true, false):
+		(button as Button).disabled = true
+	var route := portable_route(what)
+	var to := String(route["to"])
+	var folder := PortableMode.folder()
+	var making := ""
+	if what == "make" and not DirAccess.dir_exists_absolute(folder):
+		making = PortableMode.making_name(folder)
+		to = PortableMode.user_dir_in(PortableMode.platform(), making, OS.get_user_data_dir())
+	_portable_copying = true
+	var job := PortableMode.start_copy(String(route["from"]), to)
+	while true:
+		var p := job.progress()
+		if is_instance_valid(words):
+			words.text = PortableMode.progress_line(p)
+		if bool(p["finished"]):
+			break
+		await get_tree().create_timer(0.1).timeout
+	job.wait()
+	_portable_copying = false
+	var problem := String(job.progress()["error"])
+	if making != "":
+		if problem == "" and DirAccess.rename_absolute(making, folder) != OK:
+			problem = "%s could not be made." % GamePaths.shown(folder)
+		if problem != "":
+			PortableMode.remove_made(making)
+	return problem
 
 
 ## Start again where the copy put everything ([method SkinPack.restart_way]):
@@ -1527,6 +1560,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("ui_cancel", false, true):
 		return
 	accept_event()
+	# The portable window is this screen's own, no popup of the group: Escape
+	# is its Cancel/Close, and nothing while the copy runs (leaving then
+	# dropped the restart, the copy going on unseen).
+	if is_instance_valid(_portable_dialog) and not _portable_dialog.is_queued_for_deletion():
+		if not _portable_copying:
+			_close_portable()
+		return
 	var popup := UiChrome.open_popup(self)
 	if popup != null:
 		UiChrome.dismiss_popup(popup)

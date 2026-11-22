@@ -78,6 +78,11 @@ static func row_capacity(width: float) -> int:
 func relayout() -> void:
 	var cards := get_children()
 	var n := cards.size()
+	# A CARD KEPT OVER A REDRAW STAYS RAISED (review 2026-11-21): the duel
+	# keeps an unchanged card's widget, so the one under the pointer hears
+	# no second `mouse_entered` to lift it again. [method _settle] forgets
+	# the card before it asks for this, so a pointer that left still drops.
+	var lifted := _raised
 	_raised = null   # every card is about to be put back on the arc
 	if n == 0:
 		return
@@ -97,6 +102,9 @@ func relayout() -> void:
 	var front_top := 8.0 + (BACK_ROW_RISE if back_count > 0 else 0.0)
 	_lay_row(cards.slice(0, back_count), 8.0, true)
 	_lay_row(cards.slice(back_count), front_top, false)
+	if lifted != null and is_instance_valid(lifted) and lifted.get_parent() == self \
+			and not lifted.is_queued_for_deletion():
+		_raise(lifted)
 
 
 ## Deal one row of the fan at [param top]. [param behind] drops it below
@@ -119,7 +127,10 @@ func _lay_row(cards: Array, top: float, behind: bool) -> void:
 		card.position = Vector2(start_x + i * spacing,
 			top + ARC_DROP * 4.0 * (t - 0.5) * (t - 0.5))
 		card.z_index = i if behind else FRONT_Z + i
-		if card is BaseButton and not card.mouse_entered.is_connected(_raise):
+		# Once a card: a kept card comes through here on every redraw, and
+		# a bound callable is not the bare one `is_connected` would ask for.
+		if card is BaseButton and not card.has_meta(&"fan_wired"):
+			card.set_meta(&"fan_wired", true)
 			card.mouse_entered.connect(_raise.bind(card))
 			card.mouse_exited.connect(_settle.bind(card))
 

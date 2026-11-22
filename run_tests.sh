@@ -605,7 +605,11 @@ while [ "$i" -le "$SHARDS" ]; do
 	mkdir -p "$home"
 	# Dealt here, before any shard runs, so every deal reads the SAME last
 	# run's JUnit files (GUT writes its own only as it ends).
-	list="$(deal "$SHARDS" "$i")" || exit 1
+	# A deal that fails ends the run, and the shards already started with
+	# it: a plain exit left their Godots running for up to SUITE_TIMEOUT.
+	list="$(deal "$SHARDS" "$i")" || {
+		running="$(jobs -pr)"; [ -z "$running" ] || kill -TERM $running 2>/dev/null || true; wait; exit 1
+	}
 	(
 		export XDG_DATA_HOME="$home"
 		# A failed reset says so in THIS run's gut.log; the shard's log

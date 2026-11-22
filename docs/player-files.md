@@ -17,7 +17,10 @@ folder — beside `Shandalar.exe`, `run.sh` or `Shandalar.app` — makes the
 game keep everything above inside it: settings, decks, adventures, the Hall
 of Fame, the game records, the skins and card packs added in Options, the
 adventure plugins and the logs. Options › Portable game makes a game
-portable (everything copied in, then a restart) and stops it (everything
+portable (everything copied in, then a restart; asking makes nothing, and
+the first copy is made in a `portable-making` folder beside it that is
+renamed `portable` once whole, so a Cancel or a failed copy leaves no
+portable folder for the next start to enter) and stops it (everything
 copied back to the computer's folder, the folder renamed `portable-off`;
 nothing is deleted); a portable game started with an empty folder offers
 `Copy this computer's games in...`. The engine builds `user://` from the

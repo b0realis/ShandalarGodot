@@ -5531,10 +5531,9 @@
 					}
 				}
 			},
-			"compatible": true,
-			"notes": [
-				"the action bless's prices changed (20, 40, 80 -> 20, 40)",
-				"finds it used up"
+			"compatible": false,
+			"warnings": [
+				"the action bless's prices changed (20, 40, 80 -> 20, 40)"
 			]
 		},
 		{

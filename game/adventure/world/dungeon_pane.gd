@@ -742,6 +742,7 @@ func _after_duel(report: DuelReport) -> void:
 	_duel = null
 	var out := DungeonDuels.settle(player, board.run, _duel_setup, report, conceded)
 	var outcome := String(out["outcome"])
+	_settled = outcome
 	board.room_done(player, outcome)
 	visible = true
 	_refresh()
@@ -781,6 +782,8 @@ func _after_duel(report: DuelReport) -> void:
 ## ([method WorldScreen.leaving_after_panes]: a room duel's "Return to main
 ## menu" taken after it was over).
 func _leaving() -> bool:
+	if _closing_out:
+		return true
 	return screen != null and screen.has_method("leaving_after_panes") and bool(screen.call("leaving_after_panes"))
 
 
@@ -923,6 +926,51 @@ func _finish() -> void:
 	if result.is_empty() and board != null:
 		result = board.close(player)
 	finished.emit(result)
+
+
+## While [method close_out] ends the visit: a duel's result is shown as for
+## a world that leaves ([method _leaving]) — no walk on, no step back.
+var _closing_out := false
+## The last room duel's outcome ([method _after_duel]), "" before any.
+var _settled := ""
+
+
+## THE VISIT CLOSED OUT AT ONCE over a room's duel that is over — its End
+## of Duel window up, or its lost card's pages or the booted words after —
+## for the window closed there ([method WorldScreen._close_out_board]; the
+## review of 2026-11-21). Nothing is saved inside a castle or a dungeon,
+## and the save made at the door stands for a visit left at any other
+## moment — but not over a duel that is over: the card staked and lost
+## there would be the hero's again on the reload, the loss undone. So the
+## duel's result stands, as when "Return to main menu" is taken once it is
+## over ([constant MENU_OVER]): it is settled ([method
+## DungeonDuels.settle]), the visit ends as by the exit ([method
+## DungeonBoard.close]) and the world saves on the way out — a room won or
+## drawn too (what the visit gave is kept, the dungeon left as by its
+## door; nothing can be had twice). NOT a castle's wizard beaten: his
+## three picks wait ([CastleWinPane]) — that win is not saved at all, as
+## before, never half of it. Nor a duel still played, nor the board at any
+## other moment. True when the visit ended here ([signal finished] given).
+func close_out() -> bool:
+	if _done or board == null:
+		return false
+	var host := duel_host()
+	if host != null:
+		_closing_out = true
+		var over := host.finish_over()
+		_closing_out = false
+		if not over:
+			return false
+	elif not step in ["lost", "booted"]:
+		return false
+	if _settled == DungeonBoard.BEATEN or step == "won":
+		return false
+	if step != "booted":
+		view.hide_page()
+		_end_visit()
+	if not _done:
+		_finish()
+	return _done
 
 
 ## Whether the visit is over.

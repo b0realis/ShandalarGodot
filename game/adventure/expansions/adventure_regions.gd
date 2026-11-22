@@ -38,7 +38,8 @@ static func restore(player: AdventurePlayer, region: Dictionary) -> void:
 	if text is String and text != "":
 		player.world_seed_text = text
 	player.made_fingerprint = str(saved.get("made_fingerprint", ""))
-	player.dice = int(saved.get("dice", player.world.rand_state))
+	# As the save's own world reads it: a dice that is no number is the world's.
+	player.dice = AdventurePlayer._number(saved.get("dice"), player.world.rand_state)
 	player.monsters = AdventurePlayer._cleaned_monsters(saved.get("monsters"), player.world)
 	player.shops = AdventurePlayer._cleaned_shops(saved.get("shops"), player.world)
 	player.step = 0
@@ -76,8 +77,13 @@ static func extra_links(player: AdventurePlayer) -> int:
 	for key in player.regions:
 		if key != MAINLAND and not bool(AdventureExpansions.definition(key).get("mana_links", false)): continue
 		var region: Dictionary = player.regions[key]
-		for site in region.get("world", {}).get("sites", []):
-			if site is Dictionary and int(site.get("type", 0)) in [ShandalarWorld.TOWN, ShandalarWorld.CITY] and int(site.get("status", 0)) & TownStatus.LINKED != 0 and int(site.get("status", 0)) & TownStatus.RULER_MASK == 0:
+		# Each place read as a loaded world reads it ([method
+		# AdventurePlayer._cleaned_site]): a snapshot is a save's data.
+		var world: Variant = region.get("world") if region is Dictionary else null
+		for saved: Variant in AdventurePlayer._list(world.get("sites") if world is Dictionary else null):
+			if not saved is Dictionary: continue
+			var site := AdventurePlayer._cleaned_site(saved)
+			if int(site["type"]) in [ShandalarWorld.TOWN, ShandalarWorld.CITY] and int(site["status"]) & TownStatus.LINKED != 0 and int(site["status"]) & TownStatus.RULER_MASK == 0:
 				count += 1
 	return count
 
@@ -153,7 +159,9 @@ static func saved_state(data: Dictionary) -> Dictionary:
 	var regions: Variant = saved_regions(data)
 	var progress: Variant = saved_progress(data)
 	if not regions is Dictionary or not progress is Dictionary: return out
-	var active := String(data["world"].get("expansion", {}).get("region", MAINLAND)) if data["world"].get("expansion", {}) is Dictionary else ""
+	# A region that is no word is damage, said quietly ("" is refused below).
+	var named: Variant = data["world"].get("expansion", {}).get("region", MAINLAND) if data["world"].get("expansion", {}) is Dictionary else ""
+	var active: String = named if named is String else ""
 	var fit := world_state(data["world"], active)
 	if fit == ExpansionContract.BROKEN: return out
 	if fit == ExpansionContract.CHANGED: changed.append(active)

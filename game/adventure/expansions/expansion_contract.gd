@@ -109,10 +109,10 @@ static func valid_progress(descriptor: Dictionary, state: Dictionary) -> bool:
 ## installed version's; {} for a land nothing describes): [constant FINE],
 ## [constant BROKEN] or [constant CHANGED]. Damage is what no version could
 ## have written — beyond the carried bounds, or the record's shape wrong (a
-## pledge list that is no list of indices, a stage that is no number, a
-## switch that is no switch); a number outside what the installed version
-## counts (its quests, stages, waiting cards, a finale switch on before
-## every quest) is a change.
+## pledge list that is no list of indices, a stage that is no number); a
+## number outside what the installed version counts (its quests, stages,
+## waiting cards, a finale switch on before every quest), or a value that is
+## no switch under a name the installed version declares one, is a change.
 static func progress_state(descriptor: Dictionary, state: Variant) -> int:
 	if not opaque_progress(state):
 		return BROKEN
@@ -146,9 +146,10 @@ static func progress_broken(descriptor: Dictionary, state: Dictionary) -> bool:
 	for index: Variant in choices:
 		if not _index(index) or not unique.has(int(index)) or owed.has(int(index)): return true
 		owed[int(index)] = true
-	var flags: Variant = schema.get("flags", [])
-	for flag: Variant in (flags if flags is Array else []):
-		if state.has(flag) and not state[flag] is bool: return true
+	# A switch that is no switch is the installed version's word, not damage
+	# (the review of 2026-11-21): an older version may have kept another
+	# value under a name a newer one declares a switch — the land is held
+	# ([constant CHANGED]), the save still read.
 	return false
 
 

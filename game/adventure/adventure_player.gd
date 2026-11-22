@@ -656,6 +656,8 @@ func treasures_by_the_ban_list() -> void:
 			held[i] = choices[dice.below(choices.size())] if not choices.is_empty() else -1
 		while -1 in held:
 			held.erase(-1)
+	# The dungeons' records written in place ([method ShandalarWorld.touch]).
+	world.touch()
 
 
 ## `<name>-<hash>` for [param hero_name] at [param unix_ms]: letters and
@@ -1148,8 +1150,22 @@ static func _grid_whole(grid: Variant) -> bool:
 	return true
 
 
+## THE ID OF A SAVE, SAFE AS A FILE NAME (whole-project review of
+## 2026-11-21): the saves' files are named by it ([method save_path]) and
+## the deletes follow it, so a save whose id held a path (`../../x`) wrote
+## and deleted outside the saves' folder. An id the game made ([method
+## make_id]: letters, digits, `-`) is kept as it is — so is `_` and none at
+## all (""); any other is made one of that shape, the same one each time,
+## so the save still loads, lists and saves — in the saves' folder.
+static func saved_id(value: Variant) -> String:
+	var id := _text(value)
+	if id == "" or AdventureTransfer.plain_id(id):
+		return id
+	return make_id(id.left(40), 0)
+
+
 static func _read_game(player: AdventurePlayer, game: Dictionary) -> void:
-	player.adventure_id = _text(game.get("id"))
+	player.adventure_id = saved_id(game.get("id"))
 	player.created = _text(game.get("created"))
 	player.saved = _text(game.get("saved"))
 	player.game_version = _text(game.get("game_version"))
@@ -1240,7 +1256,10 @@ static func _cleaned_sites(value: Variant) -> Dictionary:
 		for key: Variant in raised:
 			if key is String and String(key).length() <= 90 and _is_number(raised[key]) and dungeons.size() < MOST_SITE_KEYS:
 				var slot := _number(raised[key])
-				if slot >= 0 and slot < WorldClues.MOST_SLOTS:
+				# Never a castle's slot (0–4): no dungeon is raised there. Whether
+				# the slot is the plugin's own its mark says ([constant
+				# WorldClues.RAISED], [method DataSites.dungeon_index]).
+				if slot >= DungeonDoors.CASTLES and slot < WorldClues.MOST_SLOTS:
 					dungeons[key] = slot
 		out[id] = {"uses": uses, "flags": flags, "dungeons": dungeons}
 	return out
@@ -1314,8 +1333,11 @@ static func _read_record(player: AdventurePlayer, kept: Dictionary) -> void:
 		if not key in player.defeated_wizards:
 			player.defeated_wizards.append(key)
 	player.lairs_explored = _count(kept.get("lairs_explored"))
-	player.quest = _numbers_record(kept.get("quest"))
-	player.quest_offer = _numbers_record(kept.get("quest_offer"))
+	# A quest or an offer without its kind or its destination is none (the
+	# review of 2026-11-21: [Quests] reads both by name, so a record cut
+	# short was a script error at every town).
+	player.quest = _quest_record(kept.get("quest"))
+	player.quest_offer = _quest_record(kept.get("quest_offer"))
 	var town := _number(kept.get("last_town"), -1)
 	player.last_town = town if _is_site(town, player.world) else -1
 	player.town_quests = {}
@@ -1427,8 +1449,13 @@ static func _world_from(saved_world: Dictionary, fallback_start: Vector2i) -> Sh
 		var row := String(grid[y]).hex_decode()
 		for x in ShandalarWorld.TILES:
 			made.page[y * ShandalarWorld.PAGE_WIDTH + x] = row[x]
-	for site in _list(saved_world.get("sites")):
+	# The 128 places every world is made with ([constant
+	# AdventureRegions.SITE_SLOTS]; the review of 2026-11-21): a list cut
+	# short is filled with empty places, so a slot the game reads is there.
+	for site in _list(saved_world.get("sites")).slice(0, AdventureRegions.SITE_SLOTS):
 		made.sites.append(_cleaned_site(site))
+	while made.sites.size() < AdventureRegions.SITE_SLOTS:
+		made.sites.append(_cleaned_site(null))
 	for slot in _list(saved_world.get("world_magic_sites")):
 		var town := _number(slot)
 		made.world_magic_sites.append(town if _is_site(town, made) else 0)
@@ -1689,6 +1716,11 @@ static func _texts(value: Variant, allowed: Array[String] = []) -> Array[String]
 ## any field is not a number (the bug pass after the campaign, r3-4: a
 ## quest's colour saved as a word or a list made every tick's deadline
 ## check an error).
+static func _quest_record(value: Variant) -> Dictionary:
+	var record := _numbers_record(value)
+	return record if record.has("type") and record.has("destination") else {}
+
+
 static func _numbers_record(value: Variant) -> Dictionary:
 	var record := _object(value)
 	for key in record:
@@ -1898,6 +1930,8 @@ static func move_saves(from: String, to: String) -> Dictionary:
 ## The bytes of the file at [param path] when all of them could be read,
 ## else null — an empty buffer is not mistaken for a file read in full.
 static func whole_bytes(path: String) -> Variant:
+	if not _later.is_empty() and OS.get_thread_caller_id() == OS.get_main_thread_id():
+		finish_saves()
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return null
@@ -1940,6 +1974,9 @@ static func backup_path(path: String) -> String:
 ## cannot be read ([method load_from], [method save_at]). Only a slot's
 ## own file carries the slot's name ([member slot_name]).
 func save(path := "") -> String:
+	# In order: what was handed to the worker before this is written first
+	# ([method save_later]).
+	finish_saves()
 	if path == "":
 		path = save_path()
 	if not _folder_ready(path.get_base_dir()):
@@ -1963,6 +2000,191 @@ func save(path := "") -> String:
 ## THE AUTOSAVE, written when the adventure begins.
 func autosave() -> String:
 	return save(save_path(AUTOSAVE))
+
+
+# ------------------------------------------- written off the frame --
+
+## Tests: 1 writes [method save_later]'s saves on a worker headless too, 0
+## never, -1 by the rule ([method saves_off_frame]).
+static var later_forced := -1
+## The saves handed over and not yet finished, the oldest first; the first
+## is the one at work (its `task` set). Main thread only.
+static var _later: Array[SaveJob] = []
+## How many saves were written on a worker (the tests).
+static var saves_later := 0
+
+
+## One save being written on a worker ([method save_later]). The worker
+## reads only what is its own: [member data] (a deep copy made for it), the
+## paths, [member known]; it writes [member bytes] and [member ok], which
+## the main thread reads once the task has been waited for.
+class SaveJob extends RefCounted:
+	var path := ""
+	var backup := ""
+	var data := {}
+	## `[size, hash]` of the file now at [member path] when it is known to
+	## be a save this game reads (what [method _entry_of] remembers), else [].
+	var known: Array = []
+	var bytes := PackedByteArray()
+	var ok := false
+	var task := -1
+	var stamp := ""
+	var before := ""
+	var player: WeakRef
+	var then := Callable()
+
+	## [method AdventurePlayer.save]'s writing, byte for byte: the text, the
+	## save there before kept as the `.bak` when it is one this game reads,
+	## the file written whole or not at all, and read back.
+	func run() -> void:
+		bytes = JSON.stringify(data, "\t").to_utf8_buffer()
+		var old := AdventurePlayer._file_bytes(path)
+		if not old.is_empty():
+			var same := known.size() == 2 and int(known[0]) == old.size() and int(known[1]) == hash(old)
+			if same or not AdventurePlayer._data_of(old).is_empty():
+				Settings.write_atomically(backup, old)
+		ok = Settings.write_atomically(path, bytes) == OK and AdventurePlayer._file_bytes(path) == bytes
+
+
+## Whether [method save_later] writes on a worker here: where threads run
+## and frames are drawn — not headless (the tests write at once, as
+## [method save] does) and not in a browser.
+static func saves_off_frame() -> bool:
+	if later_forced >= 0:
+		return later_forced == 1
+	return OS.has_feature("threads") and not OS.has_feature("web") and DisplayServer.get_name() != "headless"
+
+
+## THE ADVENTURE WRITTEN TO [param path] (the autosave by default) OFF THE
+## FRAME (the review of 2026-11-21: every meeting begun, lair entered and
+## place left wrote the save on the thread that draws — the text made, the
+## old file read and copied to its `.bak`, the new one written and read
+## back: a freeze of a tenth of a second and more on a handheld's card).
+## What is written is this moment's adventure — taken here, a copy of its
+## own — and the same bytes [method save] would write, the `.bak` kept the
+## same way. The saves are written ONE AT A TIME, IN THE ORDER ASKED;
+## [method save] and [method finish_saves] wait for all of them first, so a
+## later save never lands under an earlier one, and whoever reads a save,
+## leaves the screen or ends the game calls [method finish_saves] before.
+## [param then] hears the path written, or "" when it could not be (said as
+## [method save] says it) — after the frame it was asked in, or inside
+## [method finish_saves]. Where no worker writes ([method saves_off_frame])
+## the save is written here and now, and [param then] called at once.
+func save_later(path := "", then := Callable()) -> void:
+	if path == "":
+		path = save_path()
+	if not saves_off_frame():
+		var written := save(path)
+		if then.is_valid():
+			then.call(written)
+		return
+	if not _folder_ready(path.get_base_dir()):
+		push_warning("AdventurePlayer: cannot make the folder of %s" % path)
+		if then.is_valid():
+			then.call("")
+		return
+	var job := SaveJob.new()
+	job.path = path
+	job.backup = backup_path(path)
+	job.before = saved
+	saved = Time.get_datetime_string_from_system(true) + "Z"
+	job.stamp = saved
+	var data := to_dict()
+	if SaveSlots.slot_of(kind_of(path)) <= 0:
+		(data["adventure"] as Dictionary)["slot_name"] = ""
+	job.data = data.duplicate(true)
+	var remembered: Dictionary = _read.get(path, {})
+	if not (remembered.get("entry", {}) as Dictionary).is_empty():
+		job.known = (remembered.get("stamp", []) as Array).duplicate()
+	job.player = weakref(self)
+	job.then = then
+	_later.append(job)
+	saves_later += 1
+	_pump_saves()
+
+
+## The autosave written off the frame ([method save_later]).
+func autosave_later(then := Callable()) -> void:
+	save_later(save_path(AUTOSAVE), then)
+
+
+## Whether a save handed to [method save_later] is not yet finished.
+static func saves_pending() -> bool:
+	return not _later.is_empty()
+
+
+## EVERY SAVE HANDED OVER WRITTEN AND FINISHED, NOW, in order: before a
+## save is read, listed, deleted or written at once, before the screen is
+## left and before the game ends. Nothing to do — and nothing waited for —
+## when none is pending.
+static func finish_saves() -> void:
+	while not _later.is_empty():
+		var job := _later[0]
+		if job.task != -1:
+			WorkerThreadPool.wait_for_task_completion(job.task)
+		else:
+			# Not begun yet: written here rather than queued and waited for.
+			job.run()
+		_later.pop_front()
+		_save_finished(job)
+	_unhook_saves()
+
+
+## Once a frame while a save is pending: the one at work finished when its
+## task has ended, the next begun.
+static func _pump_saves() -> void:
+	while not _later.is_empty():
+		var job := _later[0]
+		if job.task == -1:
+			job.task = WorkerThreadPool.add_task(job.run, true, "Adventure save")
+			var tree := Engine.get_main_loop() as SceneTree
+			if tree != null:
+				if not tree.process_frame.is_connected(_pump_saves):
+					tree.process_frame.connect(_pump_saves)
+				if tree.root != null and not tree.root.tree_exiting.is_connected(finish_saves):
+					tree.root.tree_exiting.connect(finish_saves)
+			return
+		if not WorkerThreadPool.is_task_completed(job.task):
+			return
+		WorkerThreadPool.wait_for_task_completion(job.task)
+		_later.pop_front()
+		_save_finished(job)
+	_unhook_saves()
+
+
+static func _unhook_saves() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.process_frame.is_connected(_pump_saves):
+		tree.process_frame.disconnect(_pump_saves)
+
+
+## A worker's save finished, on the main thread: remembered as [method
+## save] remembers it, or said as [method save] says a failure — the
+## adventure's `saved` put back when no later save has moved it on.
+static func _save_finished(job: SaveJob) -> void:
+	if job.ok:
+		_remember(job.path, job.bytes, job.data)
+	else:
+		var hero: Variant = job.player.get_ref() if job.player != null else null
+		if hero is AdventurePlayer and (hero as AdventurePlayer).saved == job.stamp:
+			(hero as AdventurePlayer).saved = job.before
+		push_warning("AdventurePlayer: cannot write %s" % job.path)
+	if job.then.is_valid():
+		job.then.call(job.path if job.ok else "")
+
+
+## The bytes of the file at [param path], empty for none: [method
+## _bytes_at]'s reading, for the save's worker — which must never wait for
+## the saves, itself among them.
+static func _file_bytes(path: String) -> PackedByteArray:
+	if not FileAccess.file_exists(path):
+		return PackedByteArray()
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return PackedByteArray()
+	var bytes := file.get_buffer(file.get_length())
+	file.close()
+	return bytes
 
 
 ## Whether [param folder] is there, or is made now. A file standing where
@@ -2149,7 +2371,7 @@ static func _summary(data: Dictionary) -> Dictionary:
 	return {"slot_name": _text(game.get("slot_name")),
 		"days": _journey_days(data),
 		"gold": _count((data["carried"] as Dictionary).get("gold")),
-		"id": _text(game.get("id")), "name": _text(hero.get("name")),
+		"id": saved_id(game.get("id")), "name": _text(hero.get("name")),
 		"color": _text(hero.get("color")), "difficulty": clampi(_number(hero.get("difficulty")), 0, 3),
 		"saved": _text(game.get("saved")),
 		# An old island save's from its mainland (0.60.13 bug campaign, h1-3).
@@ -2175,6 +2397,10 @@ static func _journey_days(data: Dictionary) -> int:
 
 ## The bytes of the file at [param path], empty when there is none.
 static func _bytes_at(path: String) -> PackedByteArray:
+	# A save handed to a worker is written before any save is read ([method
+	# save_later]; the worker itself reads with [method _file_bytes]).
+	if not _later.is_empty() and OS.get_thread_caller_id() == OS.get_main_thread_id():
+		finish_saves()
 	if not FileAccess.file_exists(path):
 		return PackedByteArray()
 	var file := FileAccess.open(path, FileAccess.READ)

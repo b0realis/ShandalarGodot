@@ -153,8 +153,32 @@ func _dispatch(action: Dictionary) -> void:
 
 
 func _send(action: Dictionary) -> void:
+	# A CONCESSION GOES PAST A SUSPENDED TABLE (whole-project review
+	# 2026-11-21). The table locks while the other seat is away, and the
+	# lock refused "Concede game" too ("Waiting for the host.") — though the
+	# referee takes a concession then ([SgLocalServer]), and a tournament
+	# seat never expires: the series stood until the organiser ruled.
+	if SgProtocol.literal(action.get("op"), "concede") and projection.locked and _concede_past_lock():
+		_dispatch(action)
+		return
 	var error := projection.send(action)
 	if not error.is_empty(): _report(error)
+
+
+## The table is locked only because a seat is away: the connection is up,
+## nothing of this seat's is in flight, the duel is on and no tournament
+## hold stands (the referee refuses everything under one).
+func _concede_past_lock() -> bool:
+	return _built and _online and not _busy and not _awaiting_ack and not game.game_over \
+		and not _room.is_empty() and not (_room.connected[0] and _room.connected[1]) \
+		and String(_room.get("tournament", {}).get("hold", "")) == ""
+
+
+## A seat away or a tournament hold: the table stays locked whatever the
+## referee answered ([method show_notice]).
+func _suspended() -> bool:
+	return not _room.is_empty() and (not (_room.connected[0] and _room.connected[1]) \
+		or String(_room.get("tournament", {}).get("hold", "")) != "")
 
 
 func _is_human(pid: int) -> bool:
@@ -549,7 +573,9 @@ func show_notice(message: String) -> void:
 	# so the table stays locked until the next view ([method present]) says
 	# it may act. Unlocked here, an automatic pass was sent again in the
 	# same frame, refused again, without end — the game crashed.
-	projection.locked = message == SgLocalClient.NOT_CONNECTED
+	# Nor under a suspension: a refused concession must not open the table
+	# the other seat's absence keeps shut.
+	projection.locked = message == SgLocalClient.NOT_CONNECTED or _suspended()
 	if _sent_op == "submit" and MtgGame.is_unpaid_refusal(message) and _pending_card != null:
 		mode = Mode.PAYING
 		_paying_pool = _payment_pool_state()

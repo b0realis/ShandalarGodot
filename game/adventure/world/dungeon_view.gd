@@ -165,6 +165,8 @@ const WALK: Dictionary = {1: Vector2(-4, -2), 3: Vector2(4, -2), 5: Vector2(4, 2
 ## The page's foot [ours]: the status line's height, the said line's.
 const STATUS_Y := 458.0
 const SAID_Y := 432.0
+## The last seconds of a line said, over which it fades.
+const SAID_FADE := 0.6
 const SAID_SECONDS := 2.6
 ## What a step newly saw fades in over this long [QoL].
 const FRESH_SECONDS := 0.2
@@ -222,6 +224,9 @@ var _walk_time := 0.0
 var _pose := {}
 var _said := ""
 var _said_left := 0.0
+## How often a line said asked for the board again ([method _process]) —
+## for the tests.
+var said_paints := 0
 ## The cells a step newly showed, fading in ([constant FRESH_SECONDS]).
 var _fresh := {}
 var _fresh_left := 0.0
@@ -294,11 +299,18 @@ func redraw() -> void:
 ## THE CELLS IN 1997'S ORDER: x from 14 down to 0, for each y from 0 up to
 ## 12 — back to front.
 static func draw_order() -> Array[Vector2i]:
+	if not _order.is_empty():
+		return _order.duplicate()
 	var out: Array[Vector2i] = []
 	for x in range(DungeonBoard.WIDTH - 1, -1, -1):
 		for y in DungeonBoard.HEIGHT:
 			out.append(Vector2i(x, y))
-	return out
+	_order = out
+	return out.duplicate()
+
+
+## [method draw_order], made once.
+static var _order: Array[Vector2i] = []
 
 
 ## A seen cell's BACK sprite (dE:1240–1262): 1 for a wall up-right (x + 1),
@@ -596,10 +608,17 @@ func _process(delta: float) -> void:
 				_walk_over()
 		_hero_layer.queue_redraw()
 	if _said_left > 0.0:
+		# The line stands unchanged until its last [constant SAID_FADE]
+		# seconds: the board is painted again only while it fades and as it
+		# goes (the review of 2026-11-21: all 195 cells every frame for the
+		# 2.6 seconds of every line).
+		var fading := _said_left <= SAID_FADE
 		_said_left -= delta
 		if _said_left <= 0.0:
 			_said = ""
-		_board_layer.queue_redraw()
+		if fading or _said_left <= SAID_FADE:
+			said_paints += 1
+			_board_layer.queue_redraw()
 
 
 ## The cells drawn now that the held cells did not draw: they fade in.
@@ -778,7 +797,7 @@ func _paint_board() -> void:
 		_words(canvas, status_right, Vector2(PAGE.x - 14, STATUS_Y), LINE_POINTS, PaneStyle.INK, true,
 			HORIZONTAL_ALIGNMENT_RIGHT)
 	if _said != "":
-		var fade := clampf(_said_left / 0.6, 0.0, 1.0)
+		var fade := clampf(_said_left / SAID_FADE, 0.0, 1.0)
 		_words(canvas, _said, Vector2(PAGE.x / 2.0, SAID_Y), LINE_POINTS + 1, Color(PaneStyle.LIT, fade), true)
 
 

@@ -402,6 +402,59 @@ var damage_redirects: int = 0
 ## = any source (Personal Incarnation's "the next 1 damage"). Cleared
 ## with the two above.
 var damage_redirect_sources: Array[int] = []
+## WHERE each of those redirections sends its damage — one seat per entry
+## of [member damage_redirect_sources], index for index (review
+## 2026-11-21: two players' Monoliths on one creature used to share the
+## one [member damage_redirect_to], and the later activation took both).
+## [member damage_redirect_to] stays the newest one, for the readers that
+## show a single destination.
+var damage_redirect_tos: Array[int] = []
+
+
+## Book one Jade Monolith redirection: the next damage [param source_id]
+## would deal to this creature goes to seat [param to] instead.
+func book_damage_redirect(to: int, source_id: int) -> void:
+	damage_redirect_to = to
+	damage_redirects += 1
+	damage_redirect_sources.append(source_id)
+	damage_redirect_tos.append(to)
+
+
+## The seat a redirection booked against [param source_id] sends its damage
+## to — the oldest such booking's — or [member damage_redirect_to] when the
+## redirections name no source. -1 when none applies.
+func damage_redirect_to_for(source_id: int) -> int:
+	if damage_redirects <= 0:
+		return -1
+	var at := damage_redirect_sources.find(source_id)
+	if at >= 0 and at < damage_redirect_tos.size():
+		return damage_redirect_tos[at]
+	if at >= 0 or damage_redirect_sources.is_empty():
+		return damage_redirect_to
+	return -1
+
+
+## Spend the redirection [method damage_redirect_to_for] answers with and
+## return its seat (-1: none).
+func take_damage_redirect(source_id: int) -> int:
+	var to := damage_redirect_to_for(source_id)
+	if to < 0:
+		return -1
+	damage_redirects -= 1
+	var at := damage_redirect_sources.find(source_id)
+	if at >= 0:
+		damage_redirect_sources.remove_at(at)
+		if at < damage_redirect_tos.size():
+			damage_redirect_tos.remove_at(at)
+	if damage_redirects <= 0:
+		damage_redirect_to = -1
+		damage_redirect_sources.clear()
+		damage_redirect_tos.clear()
+	elif not damage_redirect_tos.is_empty():
+		damage_redirect_to = damage_redirect_tos[-1]
+	return to
+
+
 ## "The next 1 damage that would be dealt to this creature this turn is
 ## dealt to its owner instead" (Personal Incarnation) — a METERED redirect,
 ## one point per activation, the rest of the event still landing here.
@@ -409,6 +462,11 @@ var damage_redirect_sources: Array[int] = []
 ## Cleared at cleanup and when the card leaves the battlefield.
 var damage_point_redirect_to: int = -1
 var damage_point_redirects: int = 0
+## The pool by destination, oldest first: {"to": seat, "points": n} per
+## booking (review 2026-11-21 — one seat used to take every booked point).
+## [member damage_point_redirects] stays their total and
+## [member damage_point_redirect_to] the seat the next point goes to.
+var damage_point_redirect_rows: Array[Dictionary] = []
 ## Individually metered redirects to another battlefield incarnation.
 ## Each row is {destination, stamp, remaining}; expires at cleanup.
 var creature_damage_redirects: Array[Dictionary] = []
@@ -547,6 +605,27 @@ var memory: Dictionary = {}
 ## (ability index -> uses this turn) — Fire Drake's "only once each
 ## turn". Cleared every cleanup step.
 var ability_uses: Dictionary = {}
+
+
+## The key [member ability_uses] counts the live ability at [param index]
+## under — the ABILITY's, not its place in [member cur_activated_abilities]
+## (review 2026-11-21): a printed ability keeps its printed position (what
+## the index always was while the list is whole), a granted one is keyed by
+## its grantor and text, so a grant that ends mid-turn cannot hand its
+## count to the ability that slides into its place.
+func ability_use_key(index: int) -> Variant:
+	if index < 0 or index >= cur_activated_abilities.size():
+		return index
+	var ability: ActivatedAbility = cur_activated_abilities[index]
+	var printed := data.activated_abilities.find(ability)
+	if printed >= 0:
+		return printed
+	return "granted:%d:%s" % [ability.grantor_id, ability.text]
+
+
+## How often the live ability at [param index] was activated this turn.
+func ability_uses_at(index: int) -> int:
+	return int(ability_uses.get(ability_use_key(index), 0))
 
 ## One-shot "doesn't untap during its controller's NEXT untap step"
 ## (Barl's Cage) — consumed and cleared by that untap step.
@@ -1321,8 +1400,10 @@ func clear_battlefield_state() -> void:
 	damage_redirect_to = -1
 	damage_redirects = 0
 	damage_redirect_sources.clear()
+	damage_redirect_tos.clear()
 	damage_point_redirect_to = -1
 	damage_point_redirects = 0
+	damage_point_redirect_rows.clear()
 	creature_damage_redirects.clear()
 	removed_keywords.clear()
 	added_keywords.clear()

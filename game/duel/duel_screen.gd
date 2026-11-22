@@ -762,6 +762,49 @@ func _ready() -> void:
 
 # ================================================================ game glue --
 
+## THE DUEL'S CARD ART DECODED BEFORE IT IS DEALT (review 2026-11-21). A
+## card's picture was decoded on the drawing thread the first time the
+## card showed — the opening hand's seven in one frame, then each new card
+## as it was drawn or cast — except in the adventure, whose world warms
+## its deck ([CardArtWarmer]). Now every duel hands both decks to the same
+## warmer as it sets up, and the worker decodes them under the toss and
+## the opening hand. Nothing waits for it: a picture it has not reached is
+## decoded when asked, as before. Not headless, nor without threads
+## ([method SkinWarmer.runs_here]).
+func _warm_table_art() -> void:
+	if game == null or not SkinWarmer.runs_here():
+		return
+	CardArtWarmer.warm(self, table_art_names(game, _human_seat()))
+
+
+## The card names [method _warm_table_art] warms, each once and at most
+## [constant CardArtWarmer.MOST]: [param first_seat]'s hand, the other
+## hand, then both libraries a card each in turn — what shows first comes
+## first, and a deck of many names does not crowd the other out.
+static func table_art_names(for_game: MtgGame, first_seat: int) -> Array[String]:
+	var out: Array[String] = []
+	var seen := {}
+	var seats: Array[int] = [0, 1]
+	if first_seat == 1:
+		seats = [1, 0]
+	var piles: Array = []
+	for pid in seats:
+		piles.append(for_game.players[pid].hand)
+	for pid in seats:
+		piles.append(for_game.players[pid].library)
+	var add := func(inst: CardInstance) -> void:
+		var card_name := MiniCard.art_name(inst)
+		if card_name != "" and not seen.has(card_name) and out.size() < CardArtWarmer.MOST:
+			seen[card_name] = true
+			out.append(card_name)
+	for inst in piles[0]: add.call(inst)
+	for inst in piles[1]: add.call(inst)
+	for i in maxi(piles[2].size(), piles[3].size()):
+		if i < piles[2].size(): add.call(piles[2][i])
+		if i < piles[3].size(): add.call(piles[3][i])
+	return out
+
+
 func _new_game() -> void:
 	GameAudio.apply_settings()
 	# THE DECK IS SHUFFLED, AND THE ORIGINAL SAYS SO. `shuffle_for_exe`
@@ -830,6 +873,7 @@ func _new_game() -> void:
 	if config.is_test() and config.open_hands:
 		hidden_hands.clear()   # `Show both hands` (DuelConfig.open_hands)
 	_reset_pacing()
+	_warm_table_art()
 	if config.is_test():
 		_begin_test()
 		return
@@ -4346,13 +4390,40 @@ func _on_search_activated() -> void:
 ## The pointer over the picker's list: the name under it, big; between
 ## names (the list's foot), what [method _show_search_pick] shows.
 func _on_search_list_input(event: InputEvent) -> void:
-	if not event is InputEventMouseMotion or _search_list == null:
+	if _search_list == null:
+		return
+	if search_list_deselects(_search_list, event):
+		_search_list.deselect_all()
+		_search_list.accept_event()
+		_show_search_pick()
+		return
+	if not event is InputEventMouseMotion:
 		return
 	var row := _search_list.get_item_at_position((event as InputEventMouseMotion).position, true)
 	if row < 0:
 		_show_search_pick()
 	else:
 		_preview_choice_line(_search_face, _search_list.get_item_metadata(row))
+
+
+## NOTHING CHOSEN STAYS POSSIBLE (review 2026-11-21). OK with no row
+## selected is the search's "fail to find" ([method _on_search_confirmed]),
+## and the first arrow selects a row ([method OriginalDialog.start_walk]) a
+## single-select list never lets go of — a keyboard or pad player could no
+## longer decline. So the selected row is let go by a second press on it:
+## the select key (Space, the pad's own) with the keys in the list, or one
+## plain click on the row. A double click still is the OK. True when
+## [param event] is that press.
+static func search_list_deselects(list: ItemList, event: InputEvent) -> bool:
+	if list == null or list.get_selected_items().is_empty():
+		return false
+	if event.is_action_pressed(&"ui_select", false, true):
+		return true
+	var click := event as InputEventMouseButton
+	if click == null or not click.pressed or click.double_click \
+			or click.button_index != MOUSE_BUTTON_LEFT:
+		return false
+	return list.get_item_at_position(click.position, true) == list.get_selected_items()[0]
 
 
 ## The picker's large card at rest: the selected name's card, or the
@@ -4379,6 +4450,13 @@ func _on_search_canceled() -> void:
 
 
 func _on_search_confirmed() -> void:
+	# ONE CONFIRM A WINDOW (review 2026-11-21): the list lives to the end
+	# of the frame its window closed in, so a second OK in that frame (a
+	# double click's activation and the button, Enter held) read it again
+	# and parked a second answer on the cast that had gone on.
+	if _search_dialog == null or _search_list == null \
+			or not is_instance_valid(_search_list):
+		return
 	var picked := _search_list.get_selected_items()
 	var chosen := "" if picked.is_empty() \
 		else _search_list.get_item_text(picked[0])
@@ -5410,6 +5488,13 @@ func _maybe_schedule_ai() -> void:
 	var mine := _humans.has(game.active_player)
 	var wait: float = config.pace \
 		* dwell_multiplier(mine, _board_stirred())
+	# THE THINKING IS PART OF THE DWELL (review 2026-11-21): see
+	# [method dwell_after_thinking]. Only the dwell armed by the decision's
+	# own redraw — this frame's or the next — counts it; one armed later
+	# (the player acted in between) is a fresh wait.
+	if Engine.get_process_frames() - _ai_thought_frame <= 1:
+		wait = dwell_after_thinking(wait, _ai_thought_seconds)
+	_ai_thought_seconds = 0.0
 	wait = maxf(wait, _opponent_action_wait())
 	get_tree().create_timer(wait).timeout.connect(
 		_ai_step, CONNECT_ONE_SHOT)
@@ -5455,9 +5540,62 @@ func _ai_step() -> void:
 		# The opt-in timing log ([PerfLog]): the decision runs on the
 		# thread that draws the screen, so its length is a frozen screen.
 		var perf_start := PerfLog.now()
+		var thought_from := Time.get_ticks_usec()
 		_ais[pid].act(game)
 		PerfLog.span("computer decision", perf_start)
+		_ai_thought_seconds = float(Time.get_ticks_usec() - thought_from) / 1000000.0
+		_ai_thought_frame = Engine.get_process_frames()
+		# A LONG DECISION AND ITS REDRAW ARE TWO FRAMES, NOT ONE (review
+		# 2026-11-21, [method redraws_next_frame]).
+		if split_slow_decisions and is_inside_tree() \
+				and redraws_next_frame(_ai_thought_seconds):
+			_state_dirty = true
+			_redraw_next_frame = true
+			if not get_tree().process_frame.is_connected(_redraw_after_decision):
+				get_tree().process_frame.connect(_redraw_after_decision, CONNECT_ONE_SHOT)
+			return
 	_refresh()   # draws what act() did (once — r1-1) and reschedules
+
+
+## How long the computer's last decision took, and the frame it ended in
+## ([method _ai_step]; spent by [method _maybe_schedule_ai]).
+var _ai_thought_seconds := 0.0
+var _ai_thought_frame := -1000
+## The redraw of a slow decision is asked for at the next frame's start.
+var _redraw_next_frame := false
+## Is a slow decision's redraw put off to the next frame? Not headless
+## (the tests and the tools, which read the table right after the step
+## they drove); a test of the rule itself switches it on.
+var split_slow_decisions := DisplayServer.get_name() != "headless"
+## A decision this long has used up its frame — the timing log's own
+## measure of a slow one, twice a 60 Hz screen's period ([PerfLog]).
+const SLOW_DECISION_SECONDS := 1.0 / 30.0
+
+
+## [param wait] seconds of dwell after a decision that took [param thought]
+## seconds: the player has already waited that long with the old table on
+## screen, so the dwell is what is left of it and never less than nothing.
+## A flat dwell on top of the thinking made the computer's turn uneven —
+## quick passes at one beat, a searched attack at that beat plus the
+## search.
+static func dwell_after_thinking(wait: float, thought: float) -> float:
+	return maxf(0.0, wait - maxf(0.0, thought))
+
+
+## Does a decision of [param thought] seconds leave its redraw to the next
+## frame? The decision runs on the thread that draws, and the redraw that
+## followed it in the same frame made the frozen frame longer by its own
+## length; a decision that has already used up a frame hands the redraw to
+## the next one. A quick one is drawn at once, as before.
+static func redraws_next_frame(thought: float) -> bool:
+	return thought >= SLOW_DECISION_SECONDS
+
+
+func _redraw_after_decision() -> void:
+	if not _redraw_next_frame:
+		return   # something drew it meanwhile ([method _refresh])
+	_redraw_next_frame = false
+	_refresh()
 
 
 func _on_pass() -> void:
@@ -5884,6 +6022,7 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 		var line := OriginalDialog.choice_line(text)
 		line.pressed.connect(_on_choice_option.bind(i))
 		line.focus_entered.connect(_note_choice_focus.bind(i))
+		line.gui_input.connect(_note_choice_pointer)
 		var shown := choice_line_card(choice, i)
 		if face != null and shown != null:
 			line.set_meta(CHOICE_CARD_META, shown)
@@ -5903,6 +6042,7 @@ func _build_choice_overlay(choice: PlayerChoice) -> void:
 		# Ashnod's Altar used to mean a sacrifice or a concede.
 		var back := OriginalDialog.button("Cancel")
 		back.pressed.connect(_withdraw_choice)
+		back.gui_input.connect(_note_choice_pointer)
 		lines.add_child(back)
 		walk.append(back)
 	dialog.add_child(lines)
@@ -5953,6 +6093,16 @@ func _note_choice_focus(index: int) -> void:
 	_choice_focus = index
 
 
+## THE PLAYER WENT BACK TO THE MOUSE (review 2026-11-21): a press on a
+## line ends the arrows' walk, so the redraw that follows does not hand
+## the keys to the clicked line and a later Space does not answer it. The
+## next arrow starts a walk again ([method _walk_selection]).
+func _note_choice_pointer(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		_choice_walking = false
+		_choice_focus = -1
+
+
 ## The question window's large card when the pointer leaves a line: the
 ## card of the line the arrows hold, or else [param asking]'s.
 func _preview_choice_rest(face: CardPreview, asking: CardInstance) -> void:
@@ -5991,12 +6141,31 @@ func _walk_selection(event: InputEvent) -> bool:
 	var down := event.is_action_pressed(&"ui_down", false, true)
 	if not down and not event.is_action_pressed(&"ui_up", false, true):
 		return false
+	# NOT UNDER A WINDOW ABOVE IT (review 2026-11-21): the arrows are that
+	# window's, and Down then Enter answered the question lying under it.
+	if _window_above_selection():
+		return false
 	var window := _selection_window()
 	if window == null or not OriginalDialog.start_walk(window, down):
 		return false
 	if _choice_overlay != null and _choice_overlay.is_ancestor_of(window):
 		_choice_walking = true
 	return true
+
+
+## Is a window standing ABOVE the selection windows (review 2026-11-21) —
+## the rungs [method _on_escape] tests before the held question's: the
+## concede and leave questions, Duel Options, the screen's own options, a
+## reveal window? Then the arrows and the number keys are that window's,
+## never the question's under it.
+func _window_above_selection() -> bool:
+	if _question_holds_duel() or reveal_window_open():
+		return true
+	for dialog in [_options_dialog, _screen_options_dialog]:
+		if dialog != null and is_instance_valid(dialog) \
+				and not dialog.is_queued_for_deletion():
+			return true
+	return false
 
 
 ## A SELECTION WINDOW TAKES THE KEYS FROM THE TABLE. A card or a bar
@@ -6397,10 +6566,67 @@ func _fast_spells(pid: int) -> Array:
 ## row would otherwise hold every window of the duel for a player who has
 ## not prepared anything.
 func _payable_now(pid: int, inst: CardInstance) -> bool:
+	var key := [&"pay", pid, inst]
+	if _verdicts_live and _verdicts.has(key):
+		verdict_hits += 1
+		return _verdicts[key]
+	var payable := _payable_now_fresh(pid, inst)
+	if _verdicts_live:
+		_verdicts[key] = payable
+	return payable
+
+
+## [method _payable_now], asked of the engine (what a kept verdict equals).
+func _payable_now_fresh(pid: int, inst: CardInstance) -> bool:
 	return (game.could_afford(pid, inst.data, _no_auto_tap, inst)
 			and _printed_object_costs_payable(pid, inst)
 			and _printed_row_announceable(pid, inst)) \
 		or _alternative_row_payable(pid, inst)
+
+
+# --- review 2026-11-21: one verdict per card and ability a redraw ---
+#
+# A redraw asks the engine, for every card in hand, whether its mana could
+# be planned ([method _payable_now] → [method MtgGame.could_afford] →
+# [ManaPlanner], which lists every mana source afresh each time), and for
+# every ability on the table whether it could be activated ([method
+# MtgGame.activation_refusal], the same planning) — and then the automatic
+# pass at the redraw's end ([method _could_respond]) asked all of it again.
+# The answers are kept for the length of ONE redraw: from the point
+# [method _refresh] starts drawing the table to the end of the standing
+# orders it drives. Dropped whenever the engine announces a change
+# ([method _on_engine_state_changed]) and at the redraw's end, so nothing
+# outside a redraw — a click, a test's direct question — ever reads a kept
+# answer.
+var _verdicts: Dictionary = {}
+var _verdicts_live := false
+## Kept verdicts served so far — a plain counter for the tests.
+var verdict_hits := 0
+
+
+func _begin_verdicts() -> void:
+	_verdicts.clear()
+	_verdicts_live = true
+
+
+func _end_verdicts() -> void:
+	_verdicts.clear()
+	_verdicts_live = false
+
+
+## "" when [param pid] could activate [param inst]'s ability [param index]
+## now — [method MtgGame.activation_refusal] with its defaults, kept for
+## the redraw.
+func _activation_refusal_now(pid: int, inst: CardInstance, index: int) -> String:
+	var key := [&"act", pid, inst, index]
+	if _verdicts_live and _verdicts.has(key):
+		verdict_hits += 1
+		return _verdicts[key]
+	var refusal := game.activation_refusal(pid, inst, index)
+	if _verdicts_live:
+		_verdicts[key] = refusal
+	return refusal
+# --- end review 2026-11-21 ---
 
 
 ## Would the engine ANNOUNCE [param inst] for [param pid] through one of its
@@ -6866,14 +7092,14 @@ func _could_respond(pid: int) -> bool:
 	# activate it: an "any player may" ability on the opponent's permanent
 	# is a response of this seat's, an opponents-only one on its own is not.
 	for pair in _abilities_open_to(pid):
-		if game.activation_refusal(pid, pair[0], pair[1]) == "":
+		if _activation_refusal_now(pid, pair[0], pair[1]) == "":
 			return true
 	# Pack 10 E2 — AN ABILITY THAT WORKS FROM THE HAND (cycling, CR 702.29a)
 	# is a response like any other, priced the same way: the opponent's end
 	# step is cycling's own moment, and the automatic pass walked a player
 	# holding only a cycling card straight past it.
 	for pair in _hand_abilities_of(pid):
-		if game.activation_refusal(pid, pair[0], pair[1]) == "":
+		if _activation_refusal_now(pid, pair[0], pair[1]) == "":
 			return true
 	# A PAYMENT ON THE SEAT IS A RESPONSE TOO (H1-F1, 2026-10-04): Sabertooth
 	# Cobra's ransom, due before the seat's next upkeep — the opponent's end
@@ -8064,6 +8290,7 @@ var _refresh_pending := false
 
 
 func _on_engine_state_changed() -> void:
+	_verdicts.clear()   # the engine moved: every kept verdict is stale
 	# Some effects emit state halfway through resolving (draws, payments,
 	# recalculation). A shortcut must not pass priority from that signal.
 	if _hotseat_passing:
@@ -8077,7 +8304,8 @@ func _on_engine_state_changed() -> void:
 
 func _refresh_after_engine() -> void:
 	_refresh_pending = false
-	if _state_dirty:
+	# A slow decision's redraw waits for the next frame ([method _ai_step]).
+	if _state_dirty and not _redraw_next_frame:
 		_refresh()
 
 
@@ -8129,6 +8357,7 @@ func _refresh() -> void:
 	# stands now, so an end-of-frame redraw already asked for is not needed
 	# unless something announces itself after this line.
 	_state_dirty = false
+	_redraw_next_frame = false
 	refresh_count += 1
 	var perf_start := PerfLog.now()
 	_settle_hotseat_priority()
@@ -8217,6 +8446,7 @@ func _refresh() -> void:
 	_retry_payment()
 	_release_held_cast()
 	_maybe_schedule_ai()
+	_begin_verdicts()   # one verdict per card and ability from here on
 
 	for pid in 2:
 		# THE TWO FACES OF ONE PANEL (§6.5). Face up, the register shows
@@ -8366,6 +8596,7 @@ func _refresh() -> void:
 	# Here rather than in a blocking loop of its own, so that a run waiting
 	# on an AI seat resumes the moment its pacing timer moves the game.
 	_drive_advance()
+	_end_verdicts()
 
 
 ## Where a spell that left the chain WITHOUT becoming a permanent went:
@@ -11410,11 +11641,15 @@ func _rebuild_field(pid: int) -> void:
 	_half_rows[pid].offset_top = BOARD_INSET_V + headroom
 	for row in by_row:
 		var container: Container = _field_rows[pid][row]
-		_clear_children(container)
+		# THE ROW'S SLOTS, kept where they stand unchanged (review
+		# 2026-11-21, [method _lay_slots]): each is a card of its own or a
+		# pile, named here and built only when the row has none like it.
+		var slots: Array = []
 		if row == Row.CREATURES:
 			# Creatures stay individual mini-cards — combat must read.
 			for inst in _display_order(pid, by_row[row], row):
-				container.add_child(_make_widget(inst))
+				slots.append([inst])
+			_lay_slots(container, slots)
 			continue
 		# Lands and other permanents group into the original's piles. The
 		# arrange runs BEFORE the slicing, or the piles would re-shuffle
@@ -11440,16 +11675,184 @@ func _rebuild_field(pid: int) -> void:
 			# right, which a covered card does not show either.
 			if _fan_steps(inst) > 0 or _carries_counters(inst) or inst.phased_out \
 					or _shows_no_auto_tap(inst):
-				_flush_pile(container, waiting)
+				if not waiting.is_empty():
+					slots.append(waiting)
 				waiting = []
-				container.add_child(_make_widget(inst))
+				slots.append([inst])
 				continue
 			waiting.append(inst)
 			if waiting.size() == PILE_SIZE:
-				_flush_pile(container, waiting)
+				slots.append(waiting)
 				waiting = []
-		_flush_pile(container, waiting)
+		if not waiting.is_empty():
+			slots.append(waiting)
+		_lay_slots(container, slots)
 	_rebuild_placed(pid)
+
+
+# --- review 2026-11-21: the table kept between redraws ---
+#
+# Every redraw freed every widget on the table and built each again — a
+# [MiniCard] is some twenty nodes — whatever had moved: about nine hundred
+# nodes for thirty permanents and two hands, on every click, every action
+# of the computer and every step of a standing order, and the card under
+# the pointer lost its hover and its tooltip each time.
+#
+# A ROW IS NOW A LIST OF SLOTS, each one card (with whatever it wears) or
+# one pile, and each slot is NAMED by what decides its shape
+# ([method _slot_key]): the card objects themselves, whether the card is
+# turned, the Auras and reminders fanned behind it. A redraw keeps the
+# slot whose name still stands and has every card in it read itself
+# afresh — [method MiniCard.refresh], the one door a face is drawn
+# through, and [method _redress_card], what [method _make_card] sets on a
+# new one — so a kept card shows what a rebuilt one would. A slot whose
+# name moved (a land tapped, an Aura attached, a card arrived or left) is
+# built anew, as every slot was before.
+#
+# ONLY THIS SCREEN'S OWN TABLE ([method _keeps_table_widgets]): a screen
+# built on this one that dresses its cards its own way (the replay table)
+# rebuilds as before, and a LAN view's cards are new objects with every
+# table it receives, so nothing of its would be kept anyway.
+
+## Where a slot keeps its name ([method _slot_key]).
+const SLOT_KEY := &"table_slot"
+## Off: every redraw rebuilds the whole table (the tests' control arm).
+var keep_table_widgets := true
+## Slots built and slots kept so far — plain counters for the tests.
+var slots_built := 0
+var slots_kept := 0
+
+
+func _keeps_table_widgets() -> bool:
+	return keep_table_widgets \
+		and (get_script() as Script).resource_path == "res://game/duel/duel_screen.gd"
+
+
+## The name of the slot [param cards] make: one card and what it wears
+## ([method _make_widget]), or a pile ([method _flush_pile] — its own rows'
+## shapes are the pile's to compare, [method CardPile.redress]).
+func _slot_key(cards: Array) -> Array:
+	if cards.size() != 1:
+		return [&"pile", cards.duplicate()]
+	var inst: CardInstance = cards[0]
+	var on_table := inst.zone == Mtg.Zone.BATTLEFIELD
+	var attached: Array = []
+	for id in inst.attachments:
+		var aura := game.find_instance(id)
+		if aura != null:
+			attached.append(aura)
+	# Phased out or in is a card built anew: its ghost's mark is made only
+	# for a card that phased (tests/ui/test_pack_8_phasing_board.gd).
+	return [&"card", inst, inst.zone, _turned_on_table(inst), inst.phased_out,
+		_shield_ghost_data(inst) if on_table else null,
+		_chosen_ghost_data(inst) if on_table else null,
+		_text_change_ghost_data(inst), attached]
+
+
+## Lay [param slots] — each the cards of one slot — into [param container]
+## in order: a slot it already holds under the same name is kept and read
+## afresh, any other is built ([method _flush_pile]), and what is left over
+## is freed. [param places] gives each slot's position in a layer that does
+## not lay its children out itself (the free layer). Returns the slots'
+## widgets in order.
+func _lay_slots(container: Control, slots: Array, places: Array = []) -> Array[Control]:
+	# The keys leave a widget the redraw may free, as they always did (a
+	# kept card that held them would answer the next Space as a press).
+	if is_inside_tree():
+		var held := get_viewport().gui_get_focus_owner()
+		if held != null and container.is_ancestor_of(held):
+			held.release_focus()
+	var standing := {}
+	for child in container.get_children():
+		if _keeps_table_widgets() and child.has_meta(SLOT_KEY) \
+				and not child.is_queued_for_deletion():
+			var named: Array = child.get_meta(SLOT_KEY)
+			if not standing.has(named):
+				standing[named] = []
+			(standing[named] as Array).append(child)
+		else:
+			container.remove_child(child)
+			child.queue_free()
+	var laid: Array[Control] = []
+	for cards in slots:
+		var key := _slot_key(cards)
+		var node: Control = null
+		var kept: Array = standing.get(key, [])
+		while node == null and not kept.is_empty():
+			var candidate: Control = kept.pop_front()
+			if _redress_slot(candidate):
+				node = candidate
+				slots_kept += 1
+			else:
+				container.remove_child(candidate)
+				candidate.queue_free()
+		if node == null:
+			var before := container.get_child_count()
+			if container is Container:
+				_flush_pile(container, cards)
+			else:
+				# A layer that is no container holds lone cards only.
+				container.add_child(_make_widget(cards[0]))
+			if container.get_child_count() == before:
+				continue
+			node = container.get_child(container.get_child_count() - 1)
+			node.set_meta(SLOT_KEY, key)
+			slots_built += 1
+		laid.append(node)
+	for named in standing:
+		for child in standing[named]:
+			container.remove_child(child)
+			child.queue_free()
+	for at in laid.size():
+		if laid[at].get_index() != at:
+			container.move_child(laid[at], at)
+		if at < places.size():
+			laid[at].position = places[at]
+	if container is Container:
+		(container as Container).queue_sort()
+	return laid
+
+
+## Every card in the kept slot [param node] reads itself afresh. False
+## when the slot no longer stands for its cards (a pile whose rows changed
+## shape) and has to be built anew.
+func _redress_slot(node: Control) -> bool:
+	if node is CardPile:
+		return (node as CardPile).redress()
+	_redress_cards_in(node)
+	return true
+
+
+func _redress_cards_in(node: Node) -> void:
+	if node is MiniCard:
+		var w := node as MiniCard
+		# A reminder card (the shield, a chosen type, a text change) is a
+		# card of nothing on the table: it stands as built.
+		if not w.has_meta(GHOST_META) and w.instance != null:
+			_redress_card(w, w.instance)
+		return
+	for child in node.get_children():
+		_redress_cards_in(child)
+
+
+## Marks a reminder card ([method _ghost_card]).
+const GHOST_META := &"ghost_card"
+
+
+## What [method _make_card] sets on a new table card, set again on a kept
+## one — KEEP THE TWO IN STEP — and the face read afresh.
+func _redress_card(w: MiniCard, inst: CardInstance) -> void:
+	w.face_down = inst.face_down
+	w.no_auto_tap = _shows_no_auto_tap(inst)
+	w.pending_damage = _pending_damage_for(inst.id)
+	w.set_target_state(_target_state_for(inst))
+	w.refresh()
+	if _flight != null and _flight.is_flying(inst.id):
+		w.modulate.a = 0.0
+	var highlight := _highlight_for(inst)
+	w.castable = highlight == MiniCard.Highlight.CASTABLE
+	w.set_highlight(highlight)
+# --- end review 2026-11-21 ---
 
 
 ## EVERY CARD LYING ON [param pid]'s SIDE OF THE TABLE: the permanents
@@ -11541,7 +11944,8 @@ func _rebuild_placed(pid: int) -> void:
 	var layer: Control = _free_layers[pid]
 	if layer == null:
 		return
-	_clear_children(layer)
+	var slots: Array = []
+	var places: Array = []
 	var live: Dictionary = {}
 	for inst in _table_cards(pid):
 		live[inst.id] = inst
@@ -11561,10 +11965,12 @@ func _rebuild_placed(pid: int) -> void:
 		# clamp is not written back: it used to be, and that made every
 		# turn a move — parked flush with the bottom, a card was lifted
 		# 30px when it tapped and stayed there when it untapped.
-		var w := _make_widget(inst)
-		w.position = _clamp_in_half(pid, _placements[id], inst)
-		w.set_meta(PLACED_ID, id)
-		layer.add_child(w)
+		slots.append([inst])
+		places.append(_clamp_in_half(pid, _placements[id], inst))
+	# Kept where it stands unchanged, as the rows' are ([method _lay_slots]).
+	var laid := _lay_slots(layer, slots, places)
+	for at in laid.size():
+		laid[at].set_meta(PLACED_ID, (slots[at][0] as CardInstance).id)
 
 
 ## The opponent's hand window title. `@WINDOWTITLES` (`UIStrings.txt:155`)
@@ -11595,9 +12001,11 @@ func _rebuild_hand(pid: int, container: Control) -> void:
 	# The fan: the player's own hand, never hidden — a hidden hand is
 	# always a StackHand above (the opponent's bar-only window, or a
 	# hotseat seat looking away).
-	_clear_children(container)
+	# Kept where it stands unchanged, as the table's are ([method _lay_slots]).
+	var slots: Array = []
 	for inst in _hand_order(pid):
-		container.add_child(_make_widget(inst))
+		slots.append([inst])
+	_lay_slots(container, slots)
 	if container is FanHand:
 		container.relayout()
 
@@ -12671,6 +13079,7 @@ func _ghost_card(data: CardData, inst: CardInstance, node_name: String) -> MiniC
 	# A Button that never presses, like the deck builder's faces: the
 	# board under the fan is what a click there means.
 	ghost.disabled = true
+	ghost.set_meta(GHOST_META, true)
 	ghost.mouse_filter = Control.MOUSE_FILTER_PASS
 	ghost.mouse_entered.connect(func() -> void:
 		if _card_preview != null:
@@ -13061,7 +13470,7 @@ func _can_act_on(inst: CardInstance) -> bool:
 		var ability: ActivatedAbility = inst.cur_activated_abilities[index]
 		if not _may_activate(seat, inst, ability) or not _ability_open(seat, inst, ability):
 			continue
-		if game.activation_refusal(seat, inst, index) == "":
+		if _activation_refusal_now(seat, inst, index) == "":
 			return true
 	return false
 
@@ -14493,6 +14902,10 @@ func _on_control(event: InputEvent) -> void:
 	# held question, so Exit and Concede waited on the answer.
 	if _choice_overlay != null:
 		var choice := Controls.choice_index(event)
+		# A digit under a window above the question is not its answer
+		# (review 2026-11-21, [method _window_above_selection]).
+		if choice >= 0 and _window_above_selection():
+			return
 		if choice >= 0:
 			# A NUMBER question's digit k answers the line that says k
 			# (b6-1); any other question's, the k-th line.

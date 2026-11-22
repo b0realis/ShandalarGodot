@@ -120,6 +120,39 @@ static func files_of(id: String, folders: Array[String] = []) -> Dictionary:
 	return out
 
 
+## THE SAVES OF ADVENTURE [param id] KEPT UNDER ANOTHER NAME in [param
+## folders] (a copy the player renamed; the lists show it by the id it
+## holds, [method AdventurePlayer.scan_saves]): `{file name: path}` by the
+## name the save would have under its own id, for each name not in [param
+## found] — so an adventure the list shows can be exported (the review of
+## 2026-11-21: Export looked by file name alone and found nothing).
+static func renamed_of(id: String, folders: Array[String], found: Dictionary) -> Dictionary:
+	var out := {}
+	if not plain_id(id):
+		return out
+	var own := {}
+	for name in names_of(id):
+		own[name] = true
+	for folder in folders:
+		var dir := DirAccess.open(folder)
+		if dir == null:
+			continue
+		var names := Array(dir.get_files())
+		names.sort()
+		for file_name: String in names:
+			var kind := AdventurePlayer.kind_of(file_name)
+			if not file_name.ends_with(".json") or own.has(file_name) or not kind in kinds():
+				continue
+			var path := folder.path_join(file_name)
+			if String(AdventurePlayer.save_at(path).get("id", "")) != id:
+				continue
+			var name := "%s.%s.json" % [id, kind]
+			for pair: Array in [[name, path], [AdventurePlayer.backup_path(name), AdventurePlayer.backup_path(path)]]:
+				if not found.has(pair[0]) and not out.has(pair[0]) and FileAccess.file_exists(pair[1]):
+					out[pair[0]] = pair[1]
+	return out
+
+
 ## WHAT OF ADVENTURE [param id] IS HERE: `{files, saves, newest, hero}` —
 ## how many of its files there are, how many saves the lists read
 ## (without the `.bak` copies), the newest one's time as kept and its hero.
@@ -180,6 +213,7 @@ static func sha256(bytes: PackedByteArray) -> String:
 static func pack(id: String, to := OUTGOING, folders: Array[String] = []) -> Dictionary:
 	var out := {"ok": false, "message": "", "id": id, "hero": "", "saves": 0, "left_out": 0}
 	var found := files_of(id, folders)
+	found.merge(renamed_of(id, AdventurePlayer.saves_folders() if folders.is_empty() else folders, found))
 	var members: Array[Dictionary] = []
 	var read := {}
 	var total := 0

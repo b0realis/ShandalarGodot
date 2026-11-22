@@ -99,6 +99,19 @@ func _init() -> void:
 ## [param highlight_cb] maps an instance to a MiniCard.Highlight value.
 func populate(cards: Array, hidden: bool, click_cb: Callable,
 		highlight_cb: Callable) -> void:
+	# THE ROWS THAT STAND ARE KEPT (review 2026-11-21, [member keeps_rows]).
+	var highlights := _highlights_of(cards, hidden, highlight_cb)
+	var key := _structure_key(cards, hidden, click_cb, highlight_cb, highlights)
+	_cards = cards.duplicate()
+	_hidden = hidden
+	_click_cb = click_cb
+	_highlight_cb = highlight_cb
+	if keeps_rows and not cards.is_empty() and key == _built_key and _rows_stand():
+		_redress_rows(highlights)
+		kept_count += 1
+		return
+	_built_key = key
+	built_count += 1
 	# remove_child BEFORE queue_free. A freed-but-not-yet-collected child is
 	# still in `get_children()` for the rest of the frame, so a second
 	# populate in the same frame (collapse the hand, then the board's own
@@ -137,8 +150,10 @@ func populate(cards: Array, hidden: bool, click_cb: Callable,
 	var rows: Array[Button] = []
 	var faces: Array = []
 	var turned: Array = []
-	for card in cards:
-		var holder := _make_card(card, hidden, click_cb, highlight_cb)
+	for at in cards.size():
+		var card: CardInstance = cards[at]
+		var holder := _make_card(card, hidden, click_cb,
+			int(highlights[at]) if not hidden else MiniCard.Highlight.NONE)
 		var face := _face_in(holder)
 		rows.append(holder)
 		faces.append(face)
@@ -273,6 +288,123 @@ func pile_height(count: int, hidden := false) -> float:
 var glow_actionable := false
 
 
+# --- review 2026-11-21: the rows that stand are kept ---
+#
+# [method populate] freed every row and built each again, a [MiniCard] of
+# some twenty nodes a card, on every redraw of the table — whether or not
+# anything about the pile had moved — and the row under the pointer lost
+# its hover with it. A pile now knows WHAT IT WAS BUILT FROM
+# ([method _structure_key]: the cards themselves, in order, and everything
+# that decides a row's shape — hidden, collapsed, framed, which rows are
+# turned, which wear a glow, the callbacks). Asked for the same again, it
+# keeps its rows and has each face read its card afresh
+# ([method MiniCard.refresh], the one door every face is drawn through), so
+# a kept row shows what a rebuilt one would. Anything else rebuilds, as
+# before.
+
+## Does [method populate] keep the rows of an unchanged pile? Off unless
+## the owner says so: a caller that dresses the rows itself after each
+## populate must be ready to find the rows it dressed last time. The duel's
+## table asks row by row instead ([method redress]).
+var keeps_rows := false
+## How often [method populate] built the rows, and how often a pile kept
+## them ([method populate] with [member keeps_rows], [method redress]) —
+## plain counters for the tests.
+var built_count := 0
+var kept_count := 0
+var _built_key: Array = []
+var _cards: Array = []
+var _hidden := false
+var _click_cb: Callable
+var _highlight_cb: Callable
+
+
+## Each card's highlight, asked once ([param highlight_cb]); empty for a
+## hidden pile, whose rows show nothing.
+func _highlights_of(cards: Array, hidden: bool, highlight_cb: Callable) -> Array:
+	var out: Array = []
+	if hidden:
+		return out
+	for card in cards:
+		out.append(int(highlight_cb.call(card)))
+	return out
+
+
+## Does a row with [param highlight] wear the glow ([method _make_card])?
+func _glows(highlight: int) -> bool:
+	return highlight == MiniCard.Highlight.TARGET \
+		or highlight == MiniCard.Highlight.SELECTED \
+		or (glow_actionable and (highlight == MiniCard.Highlight.OPTIONAL
+			or highlight == MiniCard.Highlight.MANDATORY))
+
+
+## Everything that decides which rows the pile has and what shape each is.
+func _structure_key(cards: Array, hidden: bool, click_cb: Callable,
+		highlight_cb: Callable, highlights: Array) -> Array:
+	var strips := hidden or collapsed
+	var shapes: Array = []
+	for at in cards.size():
+		var card: CardInstance = cards[at]
+		if hidden:
+			shapes.append(0)
+			continue
+		# A face is turned when its card is tapped on the table and shows
+		# its face ([method MiniCard.wants_rotation]).
+		var turned := not strips and card.zone == Mtg.Zone.BATTLEFIELD \
+			and card.tapped and not card.face_down
+		var highlight := int(highlights[at])
+		shapes.append([turned, highlight if _glows(highlight) else -1])
+	return [cards.duplicate(), hidden, collapsed, framed, glow_actionable, game,
+		click_cb, highlight_cb, shapes]
+
+
+## Are the rows [method populate] built still this pile's children?
+func _rows_stand() -> bool:
+	var rows := 0
+	for child in get_children():
+		if child is Button and not child.is_queued_for_deletion():
+			rows += 1
+	return rows == _cards.size()
+
+
+## Every kept face reads its card afresh — what [method _make_card] sets
+## on a new one.
+func _redress_rows(highlights: Array) -> void:
+	if _hidden:
+		return
+	var at := 0
+	for child in get_children():
+		if not (child is Button) or child.is_queued_for_deletion():
+			continue
+		var face := _face_in(child)
+		if face != null and at < _cards.size():
+			face.face_down = (_cards[at] as CardInstance).face_down
+			face.refresh()
+			face.castable = int(highlights[at]) == MiniCard.Highlight.CASTABLE
+		at += 1
+
+
+## THE SAME PILE, READ AGAIN: true when it still stands for the cards it
+## was last populated with — and then every face has read its card afresh
+## — false when its shape has moved (a land tapped, a glow lit) and the
+## caller has to build it anew.
+func redress() -> bool:
+	if _cards.is_empty() or not _rows_stand():
+		return false
+	var highlights := _highlights_of(_cards, _hidden, _highlight_cb)
+	if _structure_key(_cards, _hidden, _click_cb, _highlight_cb, highlights) != _built_key:
+		return false
+	_redress_rows(highlights)
+	kept_count += 1
+	return true
+
+
+## The cards the pile was last populated with, in order.
+func shown_cards() -> Array:
+	return _cards
+# --- end review 2026-11-21 ---
+
+
 ## The [MiniCard] a row draws, or null for a face-down (hidden) row. The
 ## same walk `DuelScreen._arm_pile_drag` makes over this pile's children,
 ## and it has to stay findable: the card is a DIRECT child of the holder
@@ -286,7 +418,7 @@ static func _face_in(holder: Control) -> MiniCard:
 
 
 func _make_card(inst: CardInstance, hidden: bool, click_cb: Callable,
-		highlight_cb: Callable) -> Button:
+		highlight: int) -> Button:
 	# STOP — the `Button` default, and the one node in a pile that is meant
 	# to take the mouse. The press that taps a land, the double-click that
 	# casts it and the drag that carries it across the table all arrive
@@ -307,7 +439,6 @@ func _make_card(inst: CardInstance, hidden: bool, click_cb: Callable,
 	# ONE call to the highlight callback, not two: it reaches back into the
 	# duel screen (`_highlight_for` -> `_can_act_on`, a legality question)
 	# and a pile asks it once per card per rebuild.
-	var highlight: int = highlight_cb.call(inst)
 	var face := MiniCard.new(inst, game)
 	# A card that is face down IN THE GAME is face down in the pile too —
 	# the same one line `DuelScreen._make_card` carries, for the same

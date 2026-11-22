@@ -217,8 +217,41 @@ func test_structural_damage_is_still_refused() -> void:
 	(portless["regions"]["refuge"]["world"]["expansion"] as Dictionary).erase("port")
 	assert_null(AdventurePlayer.from_dict(portless), "a land with no way home")
 	for broken: Dictionary in [{"quests": "five"}, {"quests": [0, 0]}, {"quests": [-1]}, {"pending": [""]},
-			{"stages": {"x": 1}}, {"liberated": "yes"}]:
+			{"stages": {"x": 1}}]:
 		var damaged := saved.duplicate(true)
 		damaged["expansions"]["refuge"].merge(broken, true)
 		assert_null(AdventurePlayer.from_dict(damaged), "garbage under any version: %s" % [broken])
 	assert_not_null(AdventurePlayer.from_dict(saved), "the undamaged save opens")
+
+
+## A SWITCH THAT IS NO SWITCH HOLDS THE LAND (whole-project review of
+## 2026-11-21; this case stood under "structural damage" and refused the
+## whole save): which names are switches is the installed version's word
+## (`progress_schema.flags`) — an older version may have kept another value
+## under a name a newer one declares a switch ("other keys are kept as they
+## are"). So it is a change, not damage: the save opens, the land is held
+## with its progress as saved, and nothing of the installed version reads
+## the value.
+func test_a_switch_that_is_no_switch_holds_the_land() -> void:
+	for on_island in [false, true]:
+		var saved := _v1_save(on_island, true)
+		saved["expansions"]["refuge"]["liberated"] = "yes"
+		var loaded := AdventurePlayer.from_dict(saved)
+		_assert_held(loaded, saved, "a switch that is no switch")
+		if loaded == null: return
+		assert_null(AdventureExpansions.provider_for(loaded, "refuge"), "its content is never asked")
+		assert_eq(AdventureExpansions.status_lines(loaded), [] as Array[String])
+		assert_string_contains(AdventureExpansions.sail_refusal(loaded, "refuge"), "cannot read it")
+		var rows := AdventureTasks.rows(loaded)
+		if on_island:
+			assert_eq(rows.filter(func(task: Dictionary) -> bool: return task["region"] == "refuge").map(
+				func(task: Dictionary) -> String: return task["id"]), ["refuge/return"])
+			var point: Array = loaded.world.expansion["port"]
+			var pane := AdventureExpansions.describe(loaded, Vector2i(int(point[0]), int(point[1])))
+			assert_eq(pane.get("actions", [[]])[0], [AdventureExpansions.HOME_ACTION, "Sail to Shandalar", true])
+			assert_true(AdventureExpansions.voyage(loaded, AdventureRegions.MAINLAND), "home")
+			assert_true(AdventureExpansions.held(loaded, "refuge"), "still held at home")
+		else:
+			assert_true(AdventureExpansions.places(loaded.world).is_empty(), "no anchorage")
+			assert_false(_refuge().travel(loaded), "no voyage")
+			assert_false(rows.any(func(task: Dictionary) -> bool: return String(task["id"]).begins_with("refuge/")))

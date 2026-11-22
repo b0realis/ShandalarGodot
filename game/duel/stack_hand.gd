@@ -173,6 +173,9 @@ func _init() -> void:
 	_title_bg.add_child(_title)
 
 	_pile = CardPile.new()
+	# An unchanged hand keeps its rows over a redraw (review 2026-11-21,
+	# [member CardPile.keeps_rows]): the row under the pointer stays.
+	_pile.keeps_rows = true
 	_pile.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_pile.offset_top = TITLE_HEIGHT
 	_pile.offset_left = BORDER

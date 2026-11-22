@@ -749,6 +749,12 @@ func minimap_shown() -> bool:
 ## THE QUEST PANE shown or hidden (the options), remembered: it shows when
 ## something calls the hero — a quest, a siege, a bonus for the next duel,
 ## a wizard's mana taps — as the 1997 frame's quest panel did.
+## The quest pane itself (null before the panel is made): what the guides
+## keep clear of ([method WorldScreen._show_hero]).
+func quest_pane() -> Control:
+	return _quest_pane
+
+
 func show_quest_pane(shown: bool) -> void:
 	Settings.set_value(QUEST_SETTING, shown)
 	refresh_quest()

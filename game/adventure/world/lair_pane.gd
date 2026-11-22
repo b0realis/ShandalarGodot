@@ -365,6 +365,30 @@ func _pay_the_ghost() -> void:
 	ask_whose_deck(clampi(int(event.get("color", 1)), 1, 5))
 
 
+## THE LAIR CLOSED OUT AT ONCE once its duel is settled ([member
+## duel_spoils]) — for the window closed there ([method
+## WorldScreen._close_out_lair]; the review of 2026-11-21). The lair was
+## spent and saved as it was entered, so nothing here can be had twice:
+## the duel's result stands — a win's cards the hero's, the next duel's
+## gifts spent either way ([method LairDuels.settle]) — the pages left
+## unread, a card still to be found given as leaving gives it. Before the
+## duel is settled nothing is closed out (the lead's ruling C: a window
+## closed mid-event forfeits what still waited). True when the lair is left.
+func close_out() -> bool:
+	if _done or duel_spoils.is_empty() or duel_step == "duel":
+		return false
+	for _page in 4:
+		if _done:
+			break
+		leave_lair()
+	return _done
+
+
+## Whether the lair is left.
+func done() -> bool:
+	return _done
+
+
 ## LEAVING: a card still to be found is shown first; then it is the
 ## hero's and the lair is left.
 func leave_lair() -> void:
