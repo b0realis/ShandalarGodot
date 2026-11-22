@@ -1230,7 +1230,8 @@ static func _cleaned_adventures(value: Variant) -> Array:
 
 
 ## THE SITES PLUGINS' PROGRESS of a save ([member sites]): by plugin id
-## ([method AdventurePlugins.valid_id]), each `{uses, flags, dungeons}` —
+## ([method AdventurePlugins.valid_id]), each `{uses, flags, dungeons}` and,
+## when it counted anything, `counters` (whole counts from 0 by name) —
 ## the uses whole counts from 0 under keys of text, the flags names, the
 ## dungeons slots of the dungeon slots — anything else dropped, not the
 ## save; at most [constant MOST_SITES] plugins and [constant MOST_SITE_KEYS]
@@ -1245,7 +1246,8 @@ static func _cleaned_sites(value: Variant) -> Dictionary:
 		var uses := {}
 		var counted := _object(record.get("uses"))
 		for key: Variant in counted:
-			if key is String and String(key).length() <= 80 and _is_number(counted[key]) and uses.size() < MOST_SITE_KEYS:
+			# 120: a use counted for one land is "<site>.<action>@<land>" (API 3).
+			if key is String and String(key).length() <= 120 and _is_number(counted[key]) and uses.size() < MOST_SITE_KEYS:
 				uses[key] = clampi(_number(counted[key]), 0, DataSites.MOST_USES)
 		var flags: Array = []
 		for flag: Variant in _list(record.get("flags")):
@@ -1262,6 +1264,15 @@ static func _cleaned_sites(value: Variant) -> Dictionary:
 				if slot >= DungeonDoors.CASTLES and slot < WorldClues.MOST_SLOTS:
 					dungeons[key] = slot
 		out[id] = {"uses": uses, "flags": flags, "dungeons": dungeons}
+		# The counters (API 3), written only when the plugin counted anything:
+		# a record without them is the same save it was before.
+		var counters := {}
+		var kept := _object(record.get("counters"))
+		for key: Variant in kept:
+			if key is String and String(key).length() <= 40 and _is_number(kept[key]) and counters.size() < MOST_SITE_KEYS:
+				counters[key] = clampi(_number(kept[key]), 0, DataSites.MOST_USES)
+		if not counters.is_empty():
+			out[id]["counters"] = counters
 	return out
 
 

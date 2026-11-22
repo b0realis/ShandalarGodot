@@ -1,0 +1,18 @@
+{
+	"plugin_format": 1,
+	"api_version": 3,
+	"kind": "sites",
+	"id": "riddle_stone",
+	"name": "The Riddle Stone",
+	"version": "1.0.0",
+	"minimum_game_version": "0.70.6",
+	"authors": [
+		"Shandalar Godot"
+	],
+	"license": "GPL-3.0 (the game's own license; see LICENSE.txt)",
+	"description": "A standing stone that asks one riddle: three answers, a hint for those who fail twice, and 100 gold for the right one.",
+	"requires": {
+		"card_packs": []
+	},
+	"learning_note": "A study of talk: one place whose answers are buttons that open named panes, with a counter of wrong answers and a hint that appears after two. Original fiction, not official Magic canon."
+}

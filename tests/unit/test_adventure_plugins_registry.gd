@@ -157,7 +157,8 @@ func test_manifest_problems_name_each_field() -> void:
 		[{"colour": "red"}, "unknown field \"colour\""],
 		[{"region": null}, "the field \"region\" is missing"],
 		[{"plugin_format": 2}, "plugin_format must be 1"],
-		[{"api_version": 3}, "This plugin needs plugin API 3; this game reads API 2. A newer game is needed."],
+		# API 3 is read since 2026-11-22 (the places' new words); 4 is the unknown one now.
+		[{"api_version": 4}, "This plugin needs plugin API 4; this game reads API 3. A newer game is needed."],
 		[{"kind": "town"}, "plugin.json: kind must be one of island, sites."],
 		[{"kind": "sites"}, "plugin.json: a sites plugin has no region; its places are described in sites.json."],
 		[{"api_version": 0.5}, "api_version must be a whole number"],

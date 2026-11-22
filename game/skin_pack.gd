@@ -1540,6 +1540,10 @@ func restart() -> void:
 # ------------------------------------------------------------- the drop --
 
 func _on_files_dropped(files: PackedStringArray) -> void:
+	# A screen that takes its own drops (a card zip is no skin) is open:
+	# its layer says so, and nothing dropped then is adopted here.
+	if is_inside_tree() and get_tree().root.has_node(^"CardForgeLayer"):
+		return
 	for path in files:
 		if path.get_extension().to_lower() == "zip" or TarPack.is_tar_name(path) \
 				or TarPack.is_tar(path):

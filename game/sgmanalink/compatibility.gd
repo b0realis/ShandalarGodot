@@ -105,7 +105,8 @@ static func card_digest(spec: Dictionary) -> String:
 ## other difference (a subtype, legendary, a rule) is another card.
 static func _playing_spec(spec: Dictionary) -> Dictionary:
 	var out := spec.duplicate(true)
-	for key in ["look", "flavor", "artist", "set_name", "rarity", "format", "version"]:
+	for key in ["look", "flavor", "artist", "set_name", "rarity", "format", "version",
+			"author", "card_version", "id"]:
 		out.erase(key)
 	return out
 

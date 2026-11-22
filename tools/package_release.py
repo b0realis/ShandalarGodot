@@ -192,7 +192,11 @@ PLUGIN_FOLDER = adventure_plugin.FOLDER_NAME
 PROTOTYPE = PLUGIN_FOLDER + "/Fallen_Empires_Refuge_prototype"
 # The places (sites plugins, adventure plugin API 2, the owner's 2026-11-21):
 # shipped beside the prototype, each its own zip, each checked as it is.
-PLACES = (PLUGIN_FOLDER + "/Old_Adventurers_Hut", PLUGIN_FOLDER + "/Conjuration_Wizard_Guild")
+PLACES = (PLUGIN_FOLDER + "/Old_Adventurers_Hut", PLUGIN_FOLDER + "/Conjuration_Wizard_Guild",
+          # The study places of API 3 (0.70.6), each made with the authoring
+          # tool's own commands (its README holds them).
+          PLUGIN_FOLDER + "/Gamblers_Den", PLUGIN_FOLDER + "/Riddle_Stone",
+          PLUGIN_FOLDER + "/Wandering_Collector", PLUGIN_FOLDER + "/Duelists_Ring")
 SHIPPED_PLUGINS = (PROTOTYPE,) + PLACES
 PLUGIN_README = PLUGIN_FOLDER + "/README.txt"
 PLUGIN_GUIDE = PLUGIN_FOLDER + "/GUIDE"

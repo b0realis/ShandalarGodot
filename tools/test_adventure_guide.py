@@ -49,11 +49,11 @@ DEV_DOC = ROOT / "docs" / "adventure-plugins.md"
 ## pictures it may show (no card art, no 1997 or skin picture).
 PICTURES = {"img/refuge_harbor.jpg", "img/refuge_castle.jpg",
             "img/refuge_port_map.webp", "img/refuge_castle_map.webp"}
-## Pages every guide page lists, in order; reference.html is written by
-## `tools/adventure_plugin.py guide`.
+## Pages every guide page lists, in order; reference.html and
+## cheatsheet.html are written by `tools/adventure_plugin.py guide`.
 PAGES = ["index.html", "first-plugin.html", "world.html", "quests.html", "foes-rewards.html",
          "text.html", "art-music.html", "saves.html", "testing.html", "refuge.html",
-         "sites.html", "reference.html", "faq.html"]
+         "sites.html", "cheatsheet.html", "reference.html", "faq.html"]
 EXTERNAL = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//)", re.I)
 
 
@@ -249,8 +249,8 @@ def between(text: str, start: str, end: str) -> str:
 
 
 def hand_pages() -> list[str]:
-    """The guide's own pages (reference.html is the tool's)."""
-    return [name for name in PAGES if name != "reference.html"]
+    """The guide's own pages (reference.html and cheatsheet.html are the tool's)."""
+    return [name for name in PAGES if name not in ("reference.html", "cheatsheet.html")]
 
 
 class TheGuideStandsAlone(unittest.TestCase):

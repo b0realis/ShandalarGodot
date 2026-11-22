@@ -1,0 +1,174 @@
+{
+	"salt": 643663442,
+	"flags": [
+		"stone_solved"
+	],
+	"pictures": {
+		"riddle_stone_stone": "art/riddle_stone_stone.png"
+	},
+	"dungeons": {},
+	"sites": {
+		"stone": {
+			"name": "The Riddle Stone",
+			"where": [
+				"mainland"
+			],
+			"picture": "riddle_stone_stone",
+			"sprite": {
+				"file": "art/riddle_stone_stone_map.png",
+				"width": 80
+			},
+			"gap": 3,
+			"panes": [
+				{
+					"when": [
+						{
+							"flag": "stone_solved"
+						}
+					],
+					"lines": [
+						"stone.intro",
+						"stone.silent"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "stone.leave"
+						}
+					]
+				},
+				{
+					"lines": [
+						"stone.intro",
+						"stone.riddle",
+						{
+							"text": "stone.tries",
+							"when": [
+								{
+									"counter": {
+										"name": "stone_tries",
+										"min": 1
+									}
+								}
+							]
+						}
+					],
+					"actions": [
+						{
+							"do": "talk",
+							"to": "wrong",
+							"effects": [
+								{
+									"counter": {
+										"name": "stone_tries",
+										"add": 1
+									}
+								}
+							],
+							"id": "answer_a",
+							"label": "stone.answer_a"
+						},
+						{
+							"id": "answer_b",
+							"do": "talk",
+							"to": "right",
+							"label": "stone.answer_b",
+							"when": [
+								{
+									"not_flag": "stone_solved"
+								}
+							],
+							"effects": [
+								{
+									"set_flag": "stone_solved"
+								},
+								{
+									"gold": 100
+								}
+							]
+						},
+						{
+							"do": "talk",
+							"to": "wrong",
+							"effects": [
+								{
+									"counter": {
+										"name": "stone_tries",
+										"add": 1
+									}
+								}
+							],
+							"id": "answer_c",
+							"label": "stone.answer_c"
+						},
+						{
+							"id": "listen",
+							"do": "talk",
+							"label": "stone.listen",
+							"when": [
+								{
+									"counter": {
+										"name": "stone_tries",
+										"min": 2
+									}
+								},
+								{
+									"not_flag": "stone_solved"
+								}
+							],
+							"to": "hint"
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "stone.leave"
+						}
+					]
+				},
+				{
+					"id": "wrong",
+					"lines": [
+						"stone.wrong"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "stone.leave"
+						}
+					]
+				},
+				{
+					"id": "right",
+					"lines": [
+						"stone.right"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "stone.leave"
+						}
+					]
+				},
+				{
+					"id": "hint",
+					"lines": [
+						"stone.hint_line1"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "stone.leave"
+						}
+					]
+				}
+			]
+		}
+	},
+	"counters": [
+		"stone_tries"
+	]
+}

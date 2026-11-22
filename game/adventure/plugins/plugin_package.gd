@@ -56,6 +56,22 @@ const MANIFEST := "plugin.json"
 ## Litter left by other systems, ignored (lower case).
 const LITTER: Array[String] = ["thumbs.db", "desktop.ini"]
 const LITTER_FOLDER := "__macosx"
+## The zip's own marks: a local entry, a row of its list, its end record,
+## and the zip64 pair no classic zip holds.
+const SIG_LOCAL := 0x04034b50
+const SIG_ROW := 0x02014b50
+const SIG_END := 0x06054b50
+const SIG_END64 := 0x06064b50
+const SIG_LOCATOR64 := 0x07064b50
+## Deflate never packs tighter than this: an entry claiming more is no
+## honest one, and is refused before a byte of it is unpacked.
+const MAX_RATIO := 1032
+
+## Tests: how many entries were unpacked or copied out of a zip, and the
+## bytes those entries were allowed (their checked sizes, summed).
+static var _huge: RegEx = null
+static var unpack_calls := 0
+static var unpack_bytes := 0
 
 
 ## Read the plugin at [param path] (a `.zip` file or a folder). Returns
@@ -300,6 +316,16 @@ static func json(rel: String, bytes: PackedByteArray) -> Dictionary:
 	# character. Construct the character at runtime for compiled exports.
 	if text.begins_with(String.chr(0xfeff)):
 		text = text.substr(1)
+	# A number past what a number can hold (1e999) makes the engine's parser
+	# complain aloud: found and refused first, strings stepped over.
+	if _huge == null:
+		_huge = RegEx.create_from_string("\"(?:[^\"\\\\]|\\\\.)*\"|[0-9]{300,}|[0-9][eE]\\+?0*([0-9]{3,})")
+	for found in _huge.search_all(text):
+		var digits := found.get_string(1)
+		if found.get_string().begins_with("\"") or (digits != "" and digits.length() == 3 and int(digits) <= 290):
+			continue
+		return {"value": null, "problem": "%s: line %d: a number is too large." % [rel,
+			(text.count("\n", 0, found.get_start()) if found.get_start() > 0 else 0) + 1]}
 	var parser := JSON.new()
 	if parser.parse(text) != OK:
 		# "FILE: line N: MESSAGE", lines counted from 1 as an editor counts
@@ -426,41 +452,73 @@ static func _take(out: Dictionary, rel: String, bytes: PackedByteArray) -> void:
 # ---------------------------------------------------------------- a zip --
 
 ## The entries of the zip at [param path] by its central directory, read
-## before anything is inflated: `{entries: [{name, size, method, flags,
-## link}], problem}`. Classic zip only: an end record within the file's
-## last 64 KiB, its directory whole and reaching it.
+## before anything is inflated: `{entries: [{name, size, packed, method,
+## flags, link, crc, offset}], problem, length, directory}`. Classic zip
+## only: an end record within the file's last 64 KiB, its directory whole
+## and reaching it.
+##
+## ONE LIST, WHOEVER READS (2026-11-22). A zip may carry two end records, or
+## a zip64 one beside the classic, and two readers then see two different
+## lists — one checked, the other unpacked. So the end record taken here
+## must be the LAST such mark in the file, its comment reaching the file's
+## very end, with no zip64 record anywhere behind it: there is then only one
+## list to find. And nothing here or below unpacks through another reader:
+## [method entry_bytes] reads each entry by this list alone.
 static func zip_entries(path: String) -> Dictionary:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		return {"entries": [], "problem": "%s: the zip could not be opened." % path.get_file()}
+		return _no_entries("%s: the zip could not be opened." % path.get_file())
 	var length := file.get_length()
 	if length > MAX_TOTAL:
-		return {"entries": [], "problem": "%s is bigger than 32 MiB." % path.get_file()}
+		return _no_entries("%s is bigger than 32 MiB." % path.get_file())
 	if length < 22:
-		return {"entries": [], "problem": "%s is not a whole zip." % path.get_file()}
+		return _no_entries("%s is not a whole zip." % path.get_file())
 	var tail_size := mini(65557, length)
 	file.seek(length - tail_size)
 	var tail := file.get_buffer(tail_size)
-	var end := tail.size() - 22
-	while end >= 0:
-		if tail.decode_u32(end) == 0x06054b50 and end + 22 + tail.decode_u16(end + 20) == tail.size():
-			break
-		end -= 1
-	if end < 0:
-		return {"entries": [], "problem": "%s is not a whole zip (its list of files is missing)." % path.get_file()}
+	if tail.size() != tail_size:
+		return _no_entries("%s: the zip could not be read." % path.get_file())
+	# The last end mark of the file, wherever it sits.
+	var last := tail.size() - 4
+	while last >= 0 and tail.decode_u32(last) != SIG_END:
+		last -= 1
+	if last < 0:
+		return _no_entries("%s is not a whole zip (its list of files is missing)." % path.get_file())
+	var end := last
+	if end + 22 > tail.size() or end + 22 + tail.decode_u16(end + 20) != tail.size():
+		# Not the record a zip ends with. An earlier whole one makes this a
+		# zip of two lists; none, a cut or padded file.
+		end = mini(last - 1, tail.size() - 22)
+		while end >= 0:
+			if tail.decode_u32(end) == SIG_END and end + 22 + tail.decode_u16(end + 20) == tail.size():
+				return _no_entries("%s holds a second end record after its list of files; save it as a plain zip." \
+					% path.get_file())
+			end -= 1
+		return _no_entries("%s is not a whole zip (its list of files is missing)." % path.get_file())
+	# A zip64 locator that leads to a zip64 end record: another list.
+	var at64 := tail.find(0x07)
+	while at64 >= 0:
+		if at64 >= 3 and at64 + 13 <= tail.size() and tail.decode_u32(at64 - 3) == SIG_LOCATOR64:
+			var where := tail.decode_s64(at64 + 5)
+			if where >= 0 and where + 4 <= length:
+				file.seek(where)
+				if file.get_32() == SIG_END64:
+					return _no_entries("%s: a zip64 or damaged zip; save it as a plain zip." % path.get_file())
+		at64 = tail.find(0x07, at64 + 1)
 	var count := tail.decode_u16(end + 10)
 	var directory_size := tail.decode_u32(end + 12)
 	var offset := tail.decode_u32(end + 16)
 	var directory_end := length - tail_size + end
-	if count == 0xFFFF or offset == 0xFFFFFFFF or offset + directory_size != directory_end:
-		return {"entries": [], "problem": "%s: a zip64 or damaged zip; save it as a plain zip." % path.get_file()}
+	if count == 0xFFFF or offset == 0xFFFFFFFF or offset + directory_size != directory_end \
+			or tail.decode_u16(end + 4) != 0 or tail.decode_u16(end + 6) != 0 or tail.decode_u16(end + 8) != count:
+		return _no_entries("%s: a zip64 or damaged zip; save it as a plain zip." % path.get_file())
 	file.seek(offset)
 	var directory := file.get_buffer(directory_size)
 	var entries: Array[Dictionary] = []
 	var at := 0
 	for n in count:
-		if at + 46 > directory.size() or directory.decode_u32(at) != 0x02014b50:
-			return {"entries": [], "problem": "%s is damaged (its list of files)." % path.get_file()}
+		if at + 46 > directory.size() or directory.decode_u32(at) != SIG_ROW:
+			return _no_entries("%s is damaged (its list of files)." % path.get_file())
 		var made_by := directory.decode_u16(at + 4)
 		var flags := directory.decode_u16(at + 8)
 		var method := directory.decode_u16(at + 10)
@@ -470,18 +528,113 @@ static func zip_entries(path: String) -> Dictionary:
 		var skip := name_length + directory.decode_u16(at + 30) + directory.decode_u16(at + 32)
 		var external := directory.decode_u32(at + 38)
 		if at + 46 + skip > directory.size():
-			return {"entries": [], "problem": "%s is damaged (its list of files)." % path.get_file()}
+			return _no_entries("%s is damaged (its list of files)." % path.get_file())
 		var raw := directory.slice(at + 46, at + 46 + name_length)
 		var name := raw.get_string_from_utf8() if is_utf8(raw) else ""
 		# Unix's file kind rides in the attributes' high half: 0xA000 (octal
 		# 120000) of the 0xF000 mask a symbolic link.
 		var link := (made_by >> 8) == 3 and ((external >> 16) & 0xF000) == 0xA000
 		entries.append({"name": name, "raw": raw, "size": size, "packed": packed, "method": method,
-			"flags": flags, "link": link, "crc": directory.decode_u32(at + 16)})
+			"flags": flags, "link": link, "crc": directory.decode_u32(at + 16),
+			"offset": directory.decode_u32(at + 42), "disk": directory.decode_u16(at + 34)})
 		at += 46 + skip
 		if entries.size() > MAX_FILES + MAX_FOLDERS:
-			return {"entries": [], "problem": "%s holds more than %d files." % [path.get_file(), MAX_FILES]}
-	return {"entries": entries, "problem": ""}
+			return _no_entries("%s holds more than %d files." % [path.get_file(), MAX_FILES])
+	# The list is its rows and nothing else: no room for a second one.
+	if at != directory.size():
+		return _no_entries("%s is damaged (its list of files)." % path.get_file())
+	return {"entries": entries, "problem": "", "length": length, "directory": offset}
+
+
+static func _no_entries(problem: String) -> Dictionary:
+	return {"entries": [], "problem": problem, "length": 0, "directory": 0}
+
+
+## THE BYTES OF ONE ENTRY of [param listed] ([method zip_entries]'s answer
+## for the zip [param file] is open on), by that list alone: `{ok, bytes}`.
+## Never more than [param cap] bytes and never more than the entry's own
+## listed size — the room it unpacks into is exactly that size, so a stream
+## that holds more fails instead of growing. Refused, nothing unpacked: an
+## entry on another disk, encrypted, packed in a way this game does not
+## read, bigger than [param cap], claiming more than deflate can pack, lying
+## outside the file's data, or whose own header (name, method, sizes)
+## differs from its row in the list. A deflated entry is checked against
+## the list's CRC-32 as it is unpacked.
+static func entry_bytes(file: FileAccess, listed: Dictionary, entry: Dictionary, cap: int) -> Dictionary:
+	var none := {"ok": false, "bytes": PackedByteArray()}
+	if file == null or String(listed.get("problem", "?")) != "" or file.get_length() != int(listed["length"]):
+		return none
+	var size := int(entry["size"])
+	var packed := int(entry["packed"])
+	var method := int(entry["method"])
+	var flags := int(entry["flags"])
+	var offset := int(entry["offset"])
+	var directory := int(listed["directory"])
+	if int(entry.get("disk", 0)) != 0 or flags & 1 != 0 or method not in [0, 8] or bool(entry["link"]) \
+			or size > cap or size > MAX_TOTAL or packed > directory:
+		return none
+	if (method == 0 and packed != size) or (method == 8 and size > packed * MAX_RATIO + 64):
+		return none
+	var raw: PackedByteArray = entry["raw"]
+	if offset + 30 + raw.size() + packed > directory:
+		return none
+	file.seek(offset)
+	var local := file.get_buffer(30)
+	if local.size() != 30 or local.decode_u32(0) != SIG_LOCAL or local.decode_u16(8) != method \
+			or (local.decode_u16(6) & 1) != 0 or local.decode_u16(26) != raw.size():
+		return none
+	# A streamed entry (flag bit 3) leaves its sizes for after its data:
+	# zeros here. Any other header names what the list names.
+	var streamed := (local.decode_u16(6) & 8) != 0
+	for pair: Array in [[14, int(entry["crc"])], [18, packed], [22, size]]:
+		var value := local.decode_u32(int(pair[0]))
+		if value != int(pair[1]) and not (streamed and value == 0):
+			return none
+	if file.get_buffer(raw.size()) != raw:
+		return none
+	var data_at := offset + 30 + raw.size() + local.decode_u16(28)
+	if data_at + packed > directory:
+		return none
+	unpack_calls += 1
+	unpack_bytes += size
+	if size == 0:
+		return {"ok": true, "bytes": PackedByteArray()}
+	file.seek(data_at)
+	var data := file.get_buffer(packed)
+	if data.size() != packed:
+		return none
+	if method == 0:
+		return {"ok": true, "bytes": data}
+	# Deflated: dressed as a gzip stream so the engine checks the CRC-32 and
+	# the size the list names, and unpacked into exactly that much room.
+	var stream := PackedByteArray([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 255])
+	stream.append_array(data)
+	stream.resize(stream.size() + 8)
+	stream.encode_u32(stream.size() - 8, int(entry["crc"]))
+	stream.encode_u32(stream.size() - 4, size)
+	var bytes := stream.decompress(size, FileAccess.COMPRESSION_GZIP)
+	if bytes.size() != size:
+		return none
+	return {"ok": true, "bytes": bytes}
+
+
+## Whether the engine's own zip reader lists the very entries [param
+## entries] names, in their order — asked before anything is unpacked: a
+## zip two readers read differently is refused whole. (That reader tells no
+## sizes; [method entry_bytes] holds each entry's own header to the list.)
+static func engine_agrees(path: String, entries: Array) -> bool:
+	var reader := ZIPReader.new()
+	if reader.open(path) != OK:
+		return false
+	var names := reader.get_files()
+	reader.close()
+	if names.size() != entries.size():
+		return false
+	for i in names.size():
+		var name := String((entries[i] as Dictionary)["name"])
+		if name != "" and name != names[i]:
+			return false
+	return true
 
 
 static func _read_zip(path: String, manifest := MANIFEST) -> Dictionary:
@@ -542,7 +695,7 @@ static func _read_zip(path: String, manifest := MANIFEST) -> Dictionary:
 		if problem != "":
 			problems.append(problem)
 			continue
-		keep.append({"name": name, "rel": rel, "size": int(entry["size"])})
+		keep.append({"name": name, "rel": rel, "size": int(entry["size"]), "entry": entry})
 	if tops.size() > 1:
 		problems.append("Every file of a plugin's zip goes inside ONE top folder; found %d (%s)." % [tops.size(),
 			", ".join(tops.keys().slice(0, 4))])
@@ -557,34 +710,56 @@ static func _read_zip(path: String, manifest := MANIFEST) -> Dictionary:
 		out["top"] = String(tops.keys()[0])
 	if tops.size() > 1 or keep.size() > MAX_FILES or total > MAX_TOTAL:
 		return out
-	var reader := ZIPReader.new()
-	if reader.open(path) != OK:
+	# Nothing is unpacked from a zip the engine's reader lists otherwise.
+	if not engine_agrees(path, listed["entries"]):
+		problems.append("%s: a zip64 or damaged zip; save it as a plain zip." % path.get_file())
+		return out
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
 		problems.append("%s: the zip could not be opened." % path.get_file())
 		return out
 	for row in keep:
-		var bytes := reader.read_file(String(row["name"]))
-		if bytes.size() != int(row["size"]):
+		var got := entry_bytes(file, listed, row["entry"], int(row["size"]))
+		if not bool(got["ok"]):
 			problems.append("%s: could not be read whole." % row["rel"])
 			continue
-		_take(out, String(row["rel"]), bytes)
-	reader.close()
+		_take(out, String(row["rel"]), got["bytes"])
+	file.close()
 	return out
 
 
 ## The bytes of [param rel] in the plugin at [param path] (as [method read]
 ## found it: [param kind] and the zip's [param top] folder), read again —
 ## for a picture or a tune wanted after the scan. Empty when it is not there.
-static func read_one(path: String, kind: String, top: String, rel: String) -> PackedByteArray:
+## Held to what [method read] holds a file to — the zip's list read anew,
+## one entry of that name, no more than its kind may be and never more than
+## [param cap] bytes (-1: the kind's own limit).
+static func read_one(path: String, kind: String, top: String, rel: String, cap := -1) -> PackedByteArray:
 	if path_problem(rel) != "" or kind_problem(rel) != "":
 		return PackedByteArray()
+	var most := one_limit(rel) if cap < 0 else mini(cap, one_limit(rel))
 	if kind == "folder":
-		if not FileAccess.file_exists(path.path_join(rel)):
+		var file := FileAccess.open(path.path_join(rel), FileAccess.READ)
+		if file == null or file.get_length() > most:
 			return PackedByteArray()
-		return FileAccess.get_file_as_bytes(path.path_join(rel))
-	var reader := ZIPReader.new()
-	if reader.open(path) != OK:
+		return file.get_buffer(file.get_length())
+	var listed := zip_entries(path)
+	if String(listed["problem"]) != "":
 		return PackedByteArray()
 	var name := top + "/" + rel
-	var bytes := reader.read_file(name) if reader.file_exists(name) else PackedByteArray()
-	reader.close()
-	return bytes
+	var found: Array[Dictionary] = []
+	for entry: Dictionary in listed["entries"]:
+		if String(entry["name"]).to_lower() == name.to_lower():
+			found.append(entry)
+	if found.size() != 1 or String(found[0]["name"]) != name:
+		return PackedByteArray()
+	var got := entry_bytes(FileAccess.open(path, FileAccess.READ), listed, found[0], most)
+	return got["bytes"] if bool(got["ok"]) else PackedByteArray()
+
+
+## The most bytes the file [param rel] may be, by its kind.
+static func one_limit(rel: String) -> int:
+	var extension := rel.get_extension().to_lower()
+	if extension in TEXTS:
+		return MAX_JSON
+	return MAX_OGG if extension == "ogg" else MAX_TOTAL

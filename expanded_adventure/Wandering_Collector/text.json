@@ -1,0 +1,12 @@
+{
+	"wagon.leave": "Leave",
+	"wagon.intro": "Nine iron-bound chests stand in a half circle under an awning. Among them sits a gray-haired woman, sorting cards by lamplight.",
+	"wagon.wants": "\"Ysolt, of the Nine Chests,\" she says without looking up. \"Eight are full. The ninth wants three brass birds. Ornithopters. I pay 150 gold for each, and I do not haggle.\"",
+	"wagon.have": "She looks up sharply. \"You have one. I can hear its wings ticking in your bag.\"",
+	"wagon.count": "Brass birds in the ninth chest so far: {count}.",
+	"wagon.trade": "Hand over {card} for 150 gold ({uses_left} left)",
+	"wagon.traded": "Ysolt takes {card} in both hands, winds it once to hear it tick, and lays it in the ninth chest. She counts out 150 gold.",
+	"wagon.spent": "The ninth chest is shut and locked. \"Thirty years,\" Ysolt says. \"Now I will have to think of a tenth.\"",
+	"wagon.gift": "Accept her parting gift",
+	"wagon.gift_done": "She opens the first chest, the oldest, and takes out a blue amulet wrapped in oilcloth, and bread for four days. \"For the road. You carried my birds; let these carry you.\""
+}

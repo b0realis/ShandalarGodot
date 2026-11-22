@@ -1,0 +1,18 @@
+{
+	"plugin_format": 1,
+	"api_version": 3,
+	"kind": "sites",
+	"id": "gamblers_den",
+	"name": "The Gambler's Den",
+	"version": "1.0.0",
+	"minimum_game_version": "0.70.6",
+	"authors": [
+		"Shandalar Godot"
+	],
+	"license": "GPL-3.0 (the game's own license; see LICENSE.txt)",
+	"description": "A striped tent by the road where Odo Three-Fingers throws bone dice: five throws at 50 gold, and a high table for those who stay.",
+	"requires": {
+		"card_packs": []
+	},
+	"learning_note": "A study of chance: one place whose button rolls on the plugin's own dice (the same result after a reload), with a counter of throws, a talk pane, and a second game that opens after three throws. Original fiction, not official Magic canon."
+}

@@ -322,6 +322,34 @@ static func act(screen: Node, action: String, place: Dictionary) -> bool:
 	return content.act(screen, action, place)
 
 
+# ------------------------------------------------------------- tasks --
+
+## THE SITES PLUGINS' ROWS FOR THE TASKS PANE (API 3, a plugin's `tasks`;
+## [method DataSites.task_rows]) on [param player]'s land: those of each
+## plugin on for the campaign, in the order found. [] at once when no sites
+## plugin is installed.
+static func task_rows(player: AdventurePlayer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if player == null or player.world == null or player.adventures.is_empty() or AdventurePlugins.site_ids().is_empty():
+		return out
+	for id in on_ids(player):
+		var content := provider(id)
+		if content != null and not (content.file().get("tasks", {}) as Dictionary).is_empty():
+			out.append_array(content.task_rows(player))
+	return out
+
+
+## The places the tasks guide the hero to ([method WorldStatus.targets]):
+## each task not done that has a tile, `{tile, kind: "quest", name}`.
+static func targets(player: AdventurePlayer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for row in task_rows(player):
+		var tile: Vector2i = row["tile"]
+		if String(row.get("status", "")) != "completed" and tile.x >= 0:
+			out.append({"tile": tile, "kind": "quest", "name": String(row["title"])})
+	return out
+
+
 ## A picture a sites plugin names by [param key], null when none does.
 static func picture(key: String) -> Texture2D:
 	for id in AdventurePlugins.site_ids():

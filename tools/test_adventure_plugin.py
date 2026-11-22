@@ -318,8 +318,10 @@ class CorpusTest(unittest.TestCase):
     def test_the_sites_cases_reach_every_condition_and_effect(self):
         """The good sites case uses every sites condition and effect, so
         both validators read each of them at least once."""
-        case = next(c for c in self.data["cases"] if c["name"] == "good_sites_every_condition_and_effect")
-        text = json.dumps(case)
+        # API 3's words stand in a case of their own (2026-11-22): the first
+        # case stays what a game of API 2 read.
+        text = "".join(json.dumps(c) for c in self.data["cases"]
+                       if c["name"] in ("good_sites_every_condition_and_effect", "good_sites_api3_every_word"))
         schema = ap.find_game().schema()["types"]
         for group in ("sites_condition", "sites_effect"):
             for option in schema[group]["options"]:
@@ -761,7 +763,8 @@ class PlaceToolsTest(unittest.TestCase):
         self.assertEqual([a["id"] for a in well["panes"][2]["actions"]], ["cellar", "leave"], "before the Leave")
         run = ap.walk_site(data, "well", 1000)
         self.assertEqual([s["pane"] for s in run["steps"] if s["kind"] == "pane"], [2, 2, 1, 0])
-        self.assertEqual(run["steps"][-1]["state"], {"gold": 750, "food": 0, "uses": {"well.cellar": 1}, "flags": [],
+        # Counted for the land (finding 1.1 of 2026-11-22: a priced action that raises a dungeon).
+        self.assertEqual(run["steps"][-1]["state"], {"gold": 750, "food": 0, "uses": {"well.cellar@mainland": 1}, "flags": [],
                                                     "dungeons": {"cellar": "cleared"}})
 
     def test_add_dungeon_extends_an_action_and_checks_cards_as_validate_does(self):
@@ -845,7 +848,8 @@ class PlaceToolsTest(unittest.TestCase):
         self.assertEqual(run["land"], "island")
         state = run["steps"][-1]["state"]
         self.assertEqual(state["dungeons"], {"vault": "cleared"})
-        self.assertEqual(state["uses"], {"cellar.tell": 2, "cellar.copy": 2, "cellar.raise": 1})
+        self.assertEqual(state["uses"], {"cellar.tell": 2, "cellar.copy": 2, "cellar.raise@island": 1},
+                         "the raise is counted for its land (finding 1.1 of 2026-11-22)")
         self.assertEqual(state["flags"], ["spent", "told"], "set, cleared by the raise, set again")
         self.assertEqual(state["gold"], 5000 - 100 - 200 - 50 + 10)
         self.assertEqual(run_tool("walk", str(path)).returncode, 0)
@@ -862,31 +866,47 @@ class PlaceToolsTest(unittest.TestCase):
         """SiteWalk's rules are DataSites': the lines it mirrors are in the
         game's source, and it reads every condition and effect of the schema."""
         source = gd("game/adventure/plugins/data_sites.gd")
-        for line in ("const MOST_USES := %d" % ap.MOST_USES,
+        for line in ("const MOST_USES := %d" % ap.MOST_USES, "const MOST_AMULETS := %d" % ap.MOST_AMULETS,
                      "return int(prices[done]) if done < prices.size() else -1",
                      "return maxi(0, prices.size() - uses(player, site_key, String(action[\"id\"])))",
                      '"gold_at_least": return player.gold >= int(value)',
                      '"on_mainland": return AdventureRegions.mainland(player) == bool(value)',
                      'return done >= int(value.get("min", 0)) and done <= int(value.get("max", MOST_USES))',
+                     'return done >= int(value.get("min", 1)) and done <= int(value.get("max", MOST_USES))',
+                     '"has_card": return held(player, String(value["card"])) >= int(value.get("min", 1))',
+                     '"gold_below": return player.gold < int(value)',
+                     '"gift_waiting": return player.duel_gift_waiting() == bool(value)',
                      'return say("site.no_gold", {"price": cost, "gold": player.gold})',
                      'return say("site.done")',
                      'out["uses_left"] = left if left >= 0 else ""',
                      '"gold": player.gold = maxi(0, player.gold + int(value))',
+                     '_per_land[key] = not (entry.get("prices", []) as Array).is_empty() and not spawned(entry).is_empty()',
+                     '_count_key(player, site_key + "." + action + ("@" + land(player) if per_land(site_key, action) else ""))',
+                     'var turn := day(player) if String(entry.get("by", "day")) == "day" else site_uses(player, site_key)',
+                     'if not option.has("id") and holds(player, site_key, option.get("when", [])):',
+                     'return say("site.needs_any_amulets", {"count": int(value.get("count", 1)), "amulets": player.amulet_count()})',
+                     'return say("site.dungeon_open", {"dungeon": dungeon_word(player, String(value))})',
+                     'player.amulets[color] = maxi(have, mini(MOST_AMULETS, have + count)) if count > 0 else maxi(0, have + count)',
+                     'if String(entry.get("count", "press")) != "win":',
                      'pane["actions"] = [[id + AdventureSites.BACK + site_key, say("site.back"), true], [id + AdventureSites.LEAVE, say("site.leave"), true]]',
                      'var filled := values(player, site_key, {}, {"price": cost, "card": card})',
                      'return result_place(player, site_key, lines if not lines.is_empty() else [say("site.copied", filled)])',
-                     'return result_place(player, site_key, _lines(player, site_key, entry["result"], values(player, site_key, {}, {"price": cost})))'):
+                     'var lines: Array = (entry.get("result", []) as Array) + (now["result"] as Array)',
+                     'return result_place(player, site_key, _lines(player, site_key, lines, after))'):
             self.assertIn(line, source, "DataSites no longer says: " + line)
+        self.assertEqual(ap.DEFAULT_LABELS, gd_const(source, "LABELS"))
+        self.assertEqual(ap.AMULET_COLORS, gd_const(source, "COLORS"))
         schema = ap.find_game().schema()["types"]
-        holds = source[source.index("func _holds("):source.index("# --------------------------------------------------------------- panes")]
-        self.assertEqual(re.findall(r'^\t\t"(\w+)"(?:, "(\w+)")?:', holds, re.M) and
-                         [w for pair in re.findall(r'^\t\t"(\w+)"(?:, "(\w+)")?:', holds, re.M) for w in pair if w],
+        holds = source[source.index("func _holds("):source.index("static func _named_condition(")]
+        self.assertEqual([w for pair in re.findall(r'^\t\t"(\w+)"(?:, "(\w+)")?:', holds, re.M) for w in pair if w],
                          list(schema["sites_condition"]["options"]))
-        apply = source[source.index("func apply("):source.index("func _spawn_problem(")]
-        self.assertEqual(sorted(re.findall(r'^\t\t\t"(\w+)"', apply, re.M)), sorted(schema["sites_effect"]["options"]))
+        apply = source[source.index("func apply("):source.index("func _reveal(")]
+        self.assertEqual(sorted(re.findall(r'^\t\t\t"(\w+)"', apply, re.M) + ["roll"]),
+                         sorted(schema["sites_effect"]["options"]), "a roll is drawn before apply (effects_now)")
         tool = SCRIPT.read_text(encoding="utf-8")
         walk = tool[tool.index("class SiteWalk:"):tool.index("def walk_site(")]
-        for option in list(schema["sites_condition"]["options"]) + list(schema["sites_effect"]["options"]):
+        for option in list(schema["sites_condition"]["options"]) + list(schema["sites_effect"]["options"]) \
+                + list(schema["sites_need"]["options"]) + schema["sites_action"]["fields"]["do"]["values"]:
             self.assertIn('"%s"' % option, walk, option)
         for key in ("site.leave", "site.back", "site.pay", "site.no_gold", "site.done", "site.copied", "site.copied_log"):
             self.assertIn('"%s"' % key, walk)
@@ -1152,7 +1172,13 @@ class Review20261121Test(unittest.TestCase):
                 self.assertNotIn("{dungeon}", words["%s.%s" % (key, part)])
         walk = ap.SiteWalk(data, 1000)
         walk.dungeons = {"cellar": "open", "attic": "open"}
-        self.assertEqual(walk.values("shrine")["dungeon"], "The Dusty Attic", "what {dungeon} would have said for both")
+        # {dungeon} with nothing to say which is the plugin's first now
+        # (finding 1.6 of 2026-11-22; it was the last one raised), and a
+        # pane that asks about a dungeon names that one.
+        self.assertEqual(walk.values("shrine")["dungeon"], "The Dry Cellar")
+        attic = next(p for p in data["sites"]["sites"]["shrine"]["panes"]
+                     if p["when"] == [{"dungeon": {"dungeon": "attic", "state": "open"}}])
+        self.assertEqual(walk.values("shrine", None, None, attic)["dungeon"], "The Dusty Attic")
         panes = data["sites"]["sites"]["shrine"]["panes"]
         cellar = next(p for p in panes if p["when"] == [{"dungeon": {"dungeon": "cellar", "state": "open"}}])
         self.assertTrue(walk.lines("shrine", cellar["lines"], walk.values("shrine"))[0].startswith(
@@ -1347,7 +1373,7 @@ class GuideTest(unittest.TestCase):
         self.assertIn('<p class="generated">', page)
         self.assertEqual(page.count('aria-current="page"'), 1)
         self.assertRegex(page, r'<a[^>]*href="reference\.html"[^>]*aria-current="page"')
-        self.assertIn('<a class="prev" href="sites.html">', page)
+        self.assertIn('<a class="prev" href="cheatsheet.html">', page)
         self.assertIn('<a class="next" href="faq.html">', page)
 
     def test_without_an_index_page_it_falls_back_to_its_own_toc(self):
@@ -1374,7 +1400,7 @@ class CommandLineTest(unittest.TestCase):
         self.assertIn("Exit codes", result.stdout)
         version = run_tool("--version")
         self.assertEqual(version.returncode, 0)
-        self.assertEqual(version.stdout.strip(), "adventure_plugin.py — Shandalar %s (adventure plugin API 2)"
+        self.assertEqual(version.stdout.strip(), "adventure_plugin.py — Shandalar %s (adventure plugin API 3)"
                          % ap.find_game().version)
         self.assertEqual(run_tool().returncode, 2)
         self.assertEqual(run_tool("frobnicate").returncode, 2)

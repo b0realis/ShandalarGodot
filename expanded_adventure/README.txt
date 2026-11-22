@@ -38,6 +38,17 @@ conjurers copy a card you carry for 2000 gold, then 4000, 8000 and 12000,
 and then never again. Neither needs a card pack. Each is a finished place,
 and a study for the places players wish for.
 
+THE STUDY PLACES
+Four small places, each made with a few of the authoring tool's commands
+(its README.txt holds them) to show one thing a place can do. In
+Gamblers_Den.zip, "The Gambler's Den", Odo Three-Fingers throws bone dice
+for 50 gold a throw. Riddle_Stone.zip, "The Riddle Stone", asks one riddle
+and pays 100 gold for the right answer. In Wandering_Collector.zip, "The
+Wandering Collector", a collector pays 150 gold for each Ornithopter you
+hand over. In Duelists_Ring.zip, "The Duelist's Ring", Marda Ironhand duels
+for a wager of 50 gold. None needs a card pack. Each is switched on or off
+by itself at the Embark, like every plugin; unticked, it changes nothing.
+
 MAKING YOUR OWN
 GUIDE/index.html is the authors' guide: how a plugin is made, tested and
 packed, with the full reference of every file; GUIDE/sites.html tells how a

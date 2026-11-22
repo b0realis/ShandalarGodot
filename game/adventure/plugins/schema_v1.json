@@ -1,7 +1,7 @@
 {
 	"schema": "shandalar-adventure-plugin",
-	"api_version": 2,
-	"about": "The content schema of adventure plugins, API v1 and v2 (v2 adds the sites plugins: site_files and the sites_ types): one source of truth for the game's PluginSchema and tools/adventure_plugin.py. Kinds: int, number, bool, string, text (a key of text.json), card (a card name), hex (six hex digits), file (a path inside the plugin), picture (a picture key), enum, array, object, map, oneof, single (an object with exactly one key of its options), ref (a named type). Object fields carry required, default and doc.",
+	"api_version": 3,
+	"about": "The content schema of adventure plugins, API v1 to v3 (v2 adds the sites plugins: site_files and the sites_ types; v3 adds the sites plugins' counters, foes, tasks, talk panes, duels, card trades and the words listed in v3_words — a plugin that uses one declares api_version 3): one source of truth for the game's PluginSchema and tools/adventure_plugin.py. Kinds: int, number, bool, string, text (a key of text.json), card (a card name), hex (six hex digits), file (a path inside the plugin), picture (a picture key), enum, array, object, map, oneof, single (an object with exactly one key of its options), ref (a named type). Object fields carry required, default and doc.",
 	"limits": {
 		"plugin_bytes": 33554432,
 		"files": 512,
@@ -39,8 +39,20 @@
 		"price": "a site action's price in gold, this time",
 		"uses_left": "how many more times a site action with prices can be done",
 		"gold": "the gold the hero carries",
-		"card": "the card a site copied",
-		"dungeon": "the name of the dungeon a site spawned"
+		"card": "the card a site copied, gave, took, sold or bought",
+		"dungeon": "the name of the dungeon a site's action or pane is about",
+		"food": "the food the hero carries",
+		"amulets": "the amulets the hero carries, all colors together",
+		"day": "the day of the journey"
+	},
+	"v3_words": {
+		"file": ["counters", "foes", "tasks"],
+		"pane": ["id"],
+		"line": ["one_of"],
+		"action": ["needs", "to", "foe", "win", "lose", "count", "cards", "stock"],
+		"do": ["talk", "duel", "buy_card", "sell_card"],
+		"condition": ["has_card", "amulets", "hero_color", "owns_magic", "food_at_least", "gold_below", "day_at_least", "wizards_defeated", "at_peace", "difficulty", "plugin_on", "counter", "site_used", "gift_waiting", "any"],
+		"effect": ["counter", "amulet", "give_card", "next_duel", "roll", "reveal_map"]
 	},
 	"skin_pictures": ["visit_city", "visit_village", "visit_dungeon", "visit_wiseman", "visit_news", "visit_buycards",
 		"visit_castle_black", "visit_castle_blue", "visit_castle_green", "visit_castle_red", "visit_castle_white",
@@ -294,7 +306,18 @@
 			"flags": {"kind": "array", "items": {"kind": "ref", "type": "flag_name"}, "max": 32, "default": [], "doc": "The plugin's own flags, all off at the start of a campaign."},
 			"pictures": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "file", "class": "pictures"}, "max": 32, "default": {}, "doc": "Picture keys (each beginning with the plugin id and _) to their files."},
 			"dungeons": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "ref", "type": "sites_dungeon"}, "max": 8, "default": {}, "doc": "The dungeons a site's spawn_dungeon can raise, by key."},
+			"counters": {"kind": "array", "items": {"kind": "ref", "type": "flag_name"}, "max": 32, "default": [], "doc": "API 3. The plugin's own counters, each a whole number from 0 to 1000, all 0 at the start of a campaign."},
+			"foes": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "ref", "type": "foe"}, "max": 8, "default": {}, "doc": "API 3. The opponents a duel action names, by key: a fixed deck, life and face, never scaled to the hero."},
+			"tasks": {"kind": "map", "keys": {"kind": "ref", "type": "id"}, "values": {"kind": "ref", "type": "sites_task"}, "max": 8, "default": {}, "doc": "API 3. Rows for the Tasks pane, each with a place on the map to guide the hero to."},
 			"sites": {"kind": "map", "keys": {"kind": "ref", "type": "sites_key"}, "values": {"kind": "ref", "type": "sites_place"}, "min": 1, "max": 8, "required": true, "doc": "The places, by id."}
+		}},
+		"sites_task": {"kind": "object", "fields": {
+			"title": {"kind": "text", "required": true, "doc": "The row's title, and the map target's name."},
+			"text": {"kind": "text", "required": true, "doc": "What to do."},
+			"done": {"kind": "text", "doc": "The words once done_when holds. Default: text."},
+			"at": {"kind": "string", "pattern": "^(place:[a-z][a-z0-9_]{0,31}|dungeon:[a-z][a-z0-9_]{0,39})$", "doc": "Where the map guides the hero: place:<a place of this plugin> or dungeon:<a dungeon of this plugin> (once raised). A task at a place is shown only on a land the place stands on."},
+			"when": {"kind": "ref", "type": "sites_conditions", "default": [], "doc": "The row is shown while these hold. used and used_up read the place named by at."},
+			"done_when": {"kind": "ref", "type": "sites_conditions", "default": [], "doc": "The row is done (and no longer a map target) once these hold. Empty: never done."}
 		}},
 		"sites_key": {"kind": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
 		"sites_place": {"kind": "object", "fields": {
@@ -306,25 +329,43 @@
 			"panes": {"kind": "array", "items": {"kind": "ref", "type": "sites_pane"}, "min": 1, "max": 8, "required": true}
 		}},
 		"sites_pane": {"kind": "object", "fields": {
-			"when": {"kind": "ref", "type": "sites_conditions", "default": [], "doc": "The first pane whose conditions hold is shown."},
+			"when": {"kind": "ref", "type": "sites_conditions", "default": [], "doc": "The first pane without an id whose conditions hold is shown. The last pane without an id has no when."},
+			"id": {"kind": "ref", "type": "sites_key", "doc": "API 3. A pane with an id is never chosen by itself: a talk action opens it by its to."},
 			"title": {"kind": "text", "doc": "Default: the site's name."},
 			"subtitle": {"kind": "text", "doc": "Default: the plugin's name."},
 			"picture": {"kind": "picture", "doc": "Default: the site's picture."},
 			"lines": {"kind": "ref", "type": "sites_lines", "default": []},
 			"actions": {"kind": "array", "items": {"kind": "ref", "type": "sites_action"}, "max": 8, "default": []}
 		}},
-		"sites_line": {"kind": "oneof", "options": [{"kind": "text"}, {"kind": "object", "fields": {"text": {"kind": "text", "required": true}, "when": {"kind": "ref", "type": "sites_conditions", "default": []}}}]},
+		"sites_line": {"kind": "oneof", "options": [{"kind": "text"}, {"kind": "object", "fields": {"text": {"kind": "text", "required": true}, "when": {"kind": "ref", "type": "sites_conditions", "default": []}}}, {"kind": "object", "fields": {"one_of": {"kind": "array", "items": {"kind": "text"}, "min": 2, "max": 16, "required": true, "doc": "API 3. One of these texts, in turn."}, "by": {"kind": "enum", "values": ["day", "uses"], "default": "day", "doc": "day: the next one each day; uses: the next one each time an action of this place is done."}, "when": {"kind": "ref", "type": "sites_conditions", "default": []}}}]},
 		"sites_lines": {"kind": "array", "items": {"kind": "ref", "type": "sites_line"}, "max": 16},
 		"sites_action": {"kind": "object", "fields": {
 			"id": {"kind": "ref", "type": "sites_key", "required": true, "doc": "The action's own name in its site: its uses are counted by it."},
-			"do": {"kind": "enum", "values": ["effects", "copy_card", "leave"], "required": true, "doc": "effects: pay and apply the effects; copy_card: pay and copy one of the hero's cards they pick; leave: close."},
+			"do": {"kind": "enum", "values": ["effects", "copy_card", "leave", "talk", "duel", "buy_card", "sell_card"], "required": true, "doc": "effects: pay and apply the effects; copy_card: pay and copy one of the hero's cards they pick; leave: close. API 3: talk: open the pane named by to (after paying and applying effects, when it has any); duel: pay the stake and fight foe, then win or lose; buy_card, sell_card: trade one of cards for gold."},
 			"label": {"kind": "text", "doc": "The button; {price} and {uses_left} are filled."},
 			"when": {"kind": "ref", "type": "sites_conditions", "default": []},
 			"prices": {"kind": "array", "items": {"kind": "int", "min": 0, "max": 1000000}, "max": 16, "default": [], "doc": "The gold each use costs, in turn; once all are used the action is gone. Empty: free, and never used up."},
 			"effects": {"kind": "ref", "type": "sites_effects", "default": []},
 			"result": {"kind": "ref", "type": "sites_lines", "default": [], "doc": "The lines shown once the action is done; none: the place's pane again."},
-			"pick_title": {"kind": "text", "doc": "copy_card: the card list's title."},
-			"pick_line": {"kind": "text", "doc": "copy_card: the line under it."}
+			"pick_title": {"kind": "text", "doc": "copy_card, buy_card, sell_card: the card list's title."},
+			"pick_line": {"kind": "text", "doc": "copy_card, buy_card, sell_card: the line under it."},
+			"needs": {"kind": "array", "items": {"kind": "ref", "type": "sites_need"}, "max": 4, "default": [], "doc": "API 3. What the action takes besides gold, each time; the button is refused, and nothing paid, while the hero lacks one. Not on leave, buy_card or sell_card."},
+			"to": {"kind": "ref", "type": "sites_key", "doc": "API 3. talk: the id of the pane of this place to open."},
+			"foe": {"kind": "ref", "type": "id", "doc": "API 3. duel: a key of sites.json foes."},
+			"win": {"kind": "ref", "type": "sites_branch", "default": {}, "doc": "API 3. duel: what a win brings."},
+			"lose": {"kind": "ref", "type": "sites_branch", "default": {}, "doc": "API 3. duel: what a loss or a draw brings."},
+			"count": {"kind": "enum", "values": ["press", "win"], "default": "press", "doc": "API 3. duel: when a use is counted (and the next price of prices is reached): each time the duel is begun, or only when it is won. The price is paid each time either way."},
+			"cards": {"kind": "map", "keys": {"kind": "card"}, "values": {"kind": "int", "min": 0, "max": 1000000}, "max": 32, "default": {}, "doc": "API 3. buy_card, sell_card: each card and its price in gold. The game never sells a card for less, nor buys one for more, than the most a town pays for it."},
+			"stock": {"kind": "int", "min": 1, "max": 1000, "doc": "API 3. buy_card, sell_card: how many of each card are traded in a campaign. Default: without end."}
+		}},
+		"sites_branch": {"kind": "object", "fields": {
+			"effects": {"kind": "ref", "type": "sites_effects", "default": []},
+			"result": {"kind": "ref", "type": "sites_lines", "default": [], "doc": "The lines shown; none: the engine's own sentence."}
+		}},
+		"sites_need": {"kind": "single", "options": {
+			"card": {"kind": "card", "doc": "One copy of this card is handed over (one in no deck first; else it leaves its decks)."},
+			"amulets": {"kind": "object", "fields": {"color": {"kind": "enum", "values": ["black", "blue", "green", "red", "white", "any"], "default": "any"}, "count": {"kind": "int", "min": 1, "max": 99, "default": 1}}, "doc": "Amulets of a color, or of any (taken from the color the hero has most of first)."},
+			"food": {"kind": "int", "min": 1, "max": 1000, "doc": "Food."}
 		}},
 		"sites_conditions": {"kind": "array", "items": {"kind": "ref", "type": "sites_condition"}, "max": 16, "doc": "All must hold."},
 		"sites_condition": {"kind": "single", "options": {
@@ -334,7 +375,22 @@
 			"on_mainland": {"kind": "bool", "doc": "The place stands on the mainland (true) or on an island (false)."},
 			"used": {"kind": "object", "fields": {"action": {"kind": "ref", "type": "sites_key", "required": true}, "min": {"kind": "int", "min": 0, "max": 1000, "default": 0}, "max": {"kind": "int", "min": 0, "max": 1000, "default": 1000}}, "doc": "This site's action was done min..max times."},
 			"used_up": {"kind": "ref", "type": "sites_key", "doc": "This site's action has used all its prices."},
-			"dungeon": {"kind": "object", "fields": {"dungeon": {"kind": "ref", "type": "id", "required": true}, "state": {"kind": "enum", "values": ["none", "open", "cleared"], "required": true}}, "doc": "The dungeon this plugin raised on this land: none yet, open (still holding cards) or cleared."}
+			"dungeon": {"kind": "object", "fields": {"dungeon": {"kind": "ref", "type": "id", "required": true}, "state": {"kind": "enum", "values": ["none", "open", "cleared"], "required": true}}, "doc": "The dungeon this plugin raised on this land: none yet, open (still holding cards) or cleared."},
+			"has_card": {"kind": "object", "fields": {"card": {"kind": "card", "required": true}, "min": {"kind": "int", "min": 1, "max": 99, "default": 1}}, "doc": "API 3. The hero holds at least min copies of the card, in a deck or not."},
+			"amulets": {"kind": "object", "fields": {"color": {"kind": "enum", "values": ["black", "blue", "green", "red", "white", "any"], "default": "any"}, "min": {"kind": "int", "min": 0, "max": 99, "default": 1}}, "doc": "API 3. The hero carries at least min amulets of the color (any: all colors together)."},
+			"hero_color": {"kind": "enum", "values": ["black", "blue", "green", "red", "white"], "doc": "API 3. The color the hero chose at the start."},
+			"owns_magic": {"kind": "enum", "values": ["Sleight of Hand", "Haggler's Coin", "Conjurer's Will", "Amulet of Swampwalk", "Leap of Fate", "Tome of Enlightenment", "Quickening", "Fruit of Sustenance", "Staff of Thunder", "Dwarven Pick", "Sword of Resistance", "Ring of the Guardian"], "doc": "API 3. The hero owns this World Magic."},
+			"food_at_least": {"kind": "int", "min": 0, "max": 100000, "doc": "API 3. The hero carries at least this much food."},
+			"gold_below": {"kind": "int", "min": 1, "max": 1000000, "doc": "API 3. The hero carries less gold than this."},
+			"day_at_least": {"kind": "int", "min": 0, "max": 100000, "doc": "API 3. The journey's day is this or later."},
+			"wizards_defeated": {"kind": "int", "min": 0, "max": 5, "doc": "API 3. At least this many of the five wizards are beaten."},
+			"at_peace": {"kind": "bool", "doc": "API 3. Arzakon is banished and the hero walks on (true), or not yet (false)."},
+			"difficulty": {"kind": "object", "fields": {"min": {"kind": "int", "min": 0, "max": 3, "default": 0}, "max": {"kind": "int", "min": 0, "max": 3, "default": 3}}, "doc": "API 3. The campaign's difficulty, 0 (the easiest) to 3, is within min..max."},
+			"plugin_on": {"kind": "ref", "type": "id", "doc": "API 3. The plugin of this id is part of the campaign and enabled; a plugin not installed is not."},
+			"counter": {"kind": "object", "fields": {"name": {"kind": "ref", "type": "flag_name", "required": true}, "min": {"kind": "int", "min": 0, "max": 1000, "default": 0}, "max": {"kind": "int", "min": 0, "max": 1000, "default": 1000}}, "doc": "API 3. The counter (declared in sites.json counters) is within min..max."},
+			"site_used": {"kind": "object", "fields": {"site": {"kind": "ref", "type": "sites_key", "required": true}, "action": {"kind": "ref", "type": "sites_key", "required": true}, "min": {"kind": "int", "min": 0, "max": 1000, "default": 1}, "max": {"kind": "int", "min": 0, "max": 1000, "default": 1000}}, "doc": "API 3. The action of another place of this plugin was done min..max times."},
+			"gift_waiting": {"kind": "bool", "doc": "API 3. A gift for the next duel (extra life, the first move or a card in play) already waits (true) or none does (false)."},
+			"any": {"kind": "array", "items": {"kind": "ref", "type": "sites_condition"}, "min": 1, "max": 8, "doc": "API 3. At least one of these holds. No any inside an any."}
 		}},
 		"sites_effects": {"kind": "array", "items": {"kind": "ref", "type": "sites_effect"}, "max": 16},
 		"sites_effect": {"kind": "single", "options": {
@@ -344,7 +400,13 @@
 			"food": {"kind": "int", "min": -1000, "max": 1000},
 			"log_clue": {"kind": "object", "fields": {"text": {"kind": "text", "required": true}}},
 			"log_event": {"kind": "object", "fields": {"event": {"kind": "ref", "type": "id", "required": true}, "text": {"kind": "text", "required": true}, "done": {"kind": "bool", "default": false}}},
-			"spawn_dungeon": {"kind": "ref", "type": "id", "doc": "Raise the named dungeon on this land, its place, creatures and rules known, unless it is open there already."}
+			"spawn_dungeon": {"kind": "ref", "type": "id", "doc": "Raise the named dungeon on this land, its place, creatures and rules known, unless it is open there already."},
+			"counter": {"kind": "object", "fields": {"name": {"kind": "ref", "type": "flag_name", "required": true}, "add": {"kind": "int", "min": -1000, "max": 1000}, "set": {"kind": "int", "min": 0, "max": 1000}}, "doc": "API 3. Add to a counter, or set it (one of add, set); it stays within 0..1000."},
+			"amulet": {"kind": "object", "fields": {"color": {"kind": "enum", "values": ["black", "blue", "green", "red", "white"], "required": true}, "count": {"kind": "int", "min": -9, "max": 9, "default": 1}}, "doc": "API 3. Give (or take) amulets of a color; the hero never carries fewer than 0 or more than 99 of one. Giving needs prices or needs on its action."},
+			"give_card": {"kind": "card", "doc": "API 3. One copy of the card into the hero's bag. Refused before anything is paid when the bag is full or the campaign's card rules allow no more copies. Needs prices or needs on its action."},
+			"next_duel": {"kind": "object", "fields": {"life": {"kind": "int", "min": 1, "max": 20}, "first_move": {"kind": "bool"}, "card": {"kind": "card"}}, "doc": "API 3. A gift for the hero's next duel, one of: life (extra life), first_move true, card (begins in play). Refused before anything is paid while a gift already waits."},
+			"roll": {"kind": "object", "fields": {"outcomes": {"kind": "array", "min": 2, "max": 6, "required": true, "items": {"kind": "object", "fields": {"weight": {"kind": "int", "min": 1, "max": 100, "default": 1}, "effects": {"kind": "ref", "type": "sites_effects", "default": []}, "result": {"kind": "ref", "type": "sites_lines", "default": []}}}}}, "doc": "API 3. One outcome by its weight, drawn on the plugin's own dice for this land, place, action and use (the same after a reload): its effects are applied and its result lines shown after the action's. One roll an action, none inside a roll or a duel's win or lose."},
+			"reveal_map": {"kind": "object", "fields": {"around": {"kind": "string", "pattern": "^(place|dungeon:[a-z][a-z0-9_]{0,39})$", "default": "place"}, "radius": {"kind": "int", "min": 1, "max": 8, "default": 4}}, "doc": "API 3. The map uncovered within radius tiles of this place, or of dungeon:<a dungeon of this plugin> once it is raised."}
 		}},
 		"sites_dungeon": {"kind": "object", "fields": {
 			"name": {"kind": "ref", "type": "name", "required": true},

@@ -92,13 +92,20 @@ static func _index(tail: String, count: int) -> int:
 ## life, padded as a creature meeting pads it; no ante; the foe's fixed
 ## deck, life and face — never scaled to the hero.
 static func duel_config(region: DataRegion, player: AdventurePlayer, quest: int) -> DuelConfig:
-	var config := DuelConfig.new()
 	var foe := region.foe_for(quest)
+	var foe_deck := String(foe.get("deck_name", ""))
+	if foe_deck == "": foe_deck = region.say(String(region.quests()[quest]["title"])) if quest >= 0 else region.title()
+	return foe_config(player, foe, foe_deck)
+
+
+## A duel against [param foe] (a plugin's `foe`: name, life, face, deck),
+## its deck called [param foe_deck] — an island's quest and a place's duel
+## ([code]site_journey.gd[/code]) alike.
+static func foe_config(player: AdventurePlayer, foe: Dictionary, foe_deck: String) -> DuelConfig:
+	var config := DuelConfig.new()
 	config.decks = [CreatureMeeting.padded_deck(player, player.deck_cards()), DataRegion.deck_of(foe)]
 	config.player_names = [player.name if player.name != "" else HERO, String(foe.get("name", ""))]
 	var deck_name := player.deck_names[player.current_deck] if player.current_deck < player.deck_names.size() else ""
-	var foe_deck := String(foe.get("deck_name", ""))
-	if foe_deck == "": foe_deck = region.say(String(region.quests()[quest]["title"])) if quest >= 0 else region.title()
 	config.deck_names = [deck_name if deck_name != "" else DECK % (player.current_deck + 1), foe_deck]
 	config.portraits = [player.portrait, CreatureBook.face_id(int(foe.get("face", 1)))]
 	config.lives = [CreatureMeeting.hero_life(player), int(foe.get("life", 20))]

@@ -584,6 +584,24 @@ static func cards_refusal(names: Array[String], what: String) -> String:
 	var packs_off := packs_refusal(lacking, what)
 	if packs_off != "":
 		return packs_off
+	# A community card that is gone is said as such, with where a card set
+	# aside by a LAN table's card transfer waits (2026-11-22).
+	var community := CommunityCards.known_missing(lacking)
+	if not community.is_empty():
+		var others: Array[String] = []
+		for card_name in lacking:
+			if not community.has(card_name):
+				others.append(card_name)
+		var aside: Array[String] = []
+		for card_name in community:
+			if bool(community[card_name]):
+				aside.append(card_name)
+		var text := "%s holds community cards that are not in play now: %s." % [what, ", ".join(community.keys())]
+		if not aside.is_empty():
+			text += " Set aside in %s: %s." % [GamePaths.shown(CommunityCards.aside_folder()), ", ".join(aside)]
+		if not others.is_empty():
+			text += " And cards this game does not have: %s." % ", ".join(others)
+		return text
 	return "%s holds cards this game does not have: %s." % [what, ", ".join(lacking)]
 
 

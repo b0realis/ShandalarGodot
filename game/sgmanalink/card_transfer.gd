@@ -151,14 +151,9 @@ static func _size_of(path: String) -> int:
 ## in the zip's list ([method CommunityCards.write_zip] writes card.json,
 ## the icon and the art under the card's top folder).
 static func _bound_of(card: String, spec: Dictionary) -> int:
-	var files := CommunityCards.files_of(card)
 	var sizes: Array[int] = [JSON.stringify(spec, "\t", false).to_utf8_buffer().size()]
-	var pictures: Array = CommunityCards.icon_pictures(files.get("icon", {}))
-	if not (files.get("art", {}) as Dictionary).is_empty():
-		pictures.append(files["art"])
-	for picture: Dictionary in pictures:
-		var bytes: PackedByteArray = picture["bytes"]
-		sizes.append(bytes.size())
+	# The pictures' sizes as the scan found them: no picture is read here.
+	sizes.append_array(CommunityCards.file_sizes_of(card))
 	var top := CommunityCards.file_name(String(spec.get("name", card))).length()
 	var bound := 22 + 1024
 	for n in sizes:
@@ -293,7 +288,10 @@ static func target_of_invitation(invitation: String) -> Dictionary:
 ## game); `own` every own single zip of the card, the one that plays and any
 ## the scan refused as found later, in any case; `stays` "" when that is
 ## every copy, else where another copy is ("beside" or "set") — a copy that
-## would play once the others went.
+## would play once the others went. `sets` names every set zip of the own
+## folder that holds a copy, `set_else` whether a set zip elsewhere does:
+## a card whose only other copies are in own set zips can still be taken
+## away, its sets unpacked into single cards first ([method _unpackable]).
 static func mine() -> Dictionary:
 	var own_root := ProjectSettings.globalize_path(CommunityCards.own_folder())
 	var copies := {}
@@ -308,21 +306,49 @@ static func mine() -> Dictionary:
 			playing[lower] = where
 		if not copies.has(lower):
 			copies[lower] = []
-		(copies[lower] as Array).append({"where": where, "path": path})
+		(copies[lower] as Array).append({"where": where, "path": path,
+			"own_set": where == "set" and path.get_base_dir() == own_root})
 	var out := {}
 	for card_id in CardRegistry.community_names():
 		var lower := card_id.to_lower()
 		var own: Array = []
 		var stays := ""
+		var sets: Array = []
+		var set_else := false
 		for copy: Dictionary in copies.get(lower, []):
 			if String(copy["where"]) == "own":
 				if not own.has(copy["path"]):
 					own.append(String(copy["path"]))
 			elif stays != "beside":
 				stays = String(copy["where"])
+			if String(copy["where"]) == "set":
+				if not bool(copy["own_set"]):
+					set_else = true
+				elif not sets.has(copy["path"]):
+					sets.append(String(copy["path"]))
 		out[card_id] = {"digest": SgCompatibility.card_digest(CommunityCards.spec_of(card_id)),
-			"where": String(playing.get(lower, "beside")), "own": own, "stays": stays}
+			"where": String(playing.get(lower, "beside")), "own": own, "stays": stays,
+			"sets": sets, "set_else": set_else}
 	return out
+
+
+## Whether a card left "in_set" ([method _left_of]) can be taken away after
+## all: every set zip that holds it is one of the own folder, which the
+## transfer unpacks into single cards first (the way Import takes a set).
+static func _unpackable(yours: Dictionary) -> bool:
+	return _left_of(yours) == "in_set" and not (yours.get("sets", []) as Array).is_empty() \
+		and not bool(yours.get("set_else", false))
+
+
+## [method _left_of], a card whose own set zips will be unpacked counted as
+## free to go — its set zips noted in [param p]'s `unpack`.
+static func _left_after_unpack(yours: Dictionary, p: Dictionary) -> String:
+	if not _unpackable(yours):
+		return _left_of(yours)
+	for path in yours["sets"]:
+		if not (p["unpack"] as Array).has(path):
+			(p["unpack"] as Array).append(String(path))
+	return ""
 
 
 ## Whether a scanned row is a copy of a card: one that plays, or one the
@@ -333,6 +359,13 @@ static func _a_copy(row: Dictionary) -> bool:
 		return false
 	var problems: Array = row.get("problems", [])
 	return problems.is_empty() or bool(row.get("shadowed", false))
+
+
+## Whether no copy of a card stays behind once its own set zips are
+## unpacked: its other copies are all in set zips of the own folder.
+static func _goes_whole(yours: Dictionary) -> bool:
+	return String(yours["stays"]) == "set" and not (yours.get("sets", []) as Array).is_empty() \
+		and not bool(yours.get("set_else", false))
 
 
 ## Where a card that cannot be taken away is reported ("" when every copy
@@ -356,10 +389,14 @@ static func _left_of(yours: Dictionary) -> String:
 ## they are, and still different: `stuck`, a copy beside the game;
 ## `in_set`, a copy in a set zip (its file holds other cards too);
 ## `too_large`, the host's that cannot be sent; `later`, past this
-## transfer's limits. And `same`, and the host's `mark` to match.
+## transfer's limits. And `same`, and the host's `mark` to match. `unpack`:
+## the own set zips unpacked into single cards first, so that a card of
+## theirs can be replaced or set aside like any other (the set zip itself is
+## then moved to the set-aside folder).
 static func plan(cards: Array, host_mark: String, have: Dictionary) -> Dictionary:
 	var out := {"mark": host_mark, "want": [], "bytes": 0, "add": [], "replace": [], "shadowed": [],
-		"set_aside": [], "stuck": [], "in_set": [], "too_large": [], "later": [], "same": 0, "host": cards.size()}
+		"set_aside": [], "stuck": [], "in_set": [], "too_large": [], "later": [], "same": 0, "host": cards.size(),
+		"unpack": []}
 	var rows := cards.duplicate()
 	rows.sort_custom(func(x: Array, y: Array) -> bool: return String(x[0]) < String(y[0]))
 	var lower_mine := {}
@@ -379,14 +416,14 @@ static func plan(cards: Array, host_mark: String, have: Dictionary) -> Dictionar
 			if String(yours["digest"]) == String(row[1]):
 				out["same"] = int(out["same"]) + 1
 				continue
-			if String(yours["where"]) != "own":
+			if String(yours["where"]) != "own" and not _unpackable(yours):
 				(out[_left_of(yours)] as Array).append(card_id)
 				continue
 			kind = "replace"
 		elif yours_id != "":
 			# Yours spelled otherwise ("ELF LORD") goes only if every copy can.
 			var left := _left_of(have[yours_id])
-			if left != "":
+			if left != "" and not _unpackable(have[yours_id]):
 				(out[left] as Array).append(card_id)
 				continue
 		var size := int(row[2])
@@ -396,11 +433,16 @@ static func plan(cards: Array, host_mark: String, have: Dictionary) -> Dictionar
 		if (out["want"] as Array).size() >= MAX_CARDS or int(out["bytes"]) + size > MAX_TOTAL:
 			(out["later"] as Array).append(card_id)
 			continue
+		# Only a card that does come has its set zips unpacked for it — and
+		# only one that plays from a set (an own zip is replaced as it is).
+		if yours_id == card_id and String((have[card_id] as Dictionary)["where"]) != "own":
+			_left_after_unpack(have[card_id], out)
 		(out["want"] as Array).append([card_id, String(row[1]), size])
 		coming[card_id.to_lower()] = true
 		out["bytes"] = int(out["bytes"]) + size
 		(out[kind] as Array).append(card_id)
-		if kind == "replace" and String((have[card_id] as Dictionary)["stays"]) != "":
+		if kind == "replace" and String((have[card_id] as Dictionary)["stays"]) != "" \
+				and not (String((have[card_id] as Dictionary)["where"]) != "own" and _goes_whole(have[card_id])):
 			(out["shadowed"] as Array).append(card_id)
 	var names := have.keys()
 	names.sort()
@@ -409,7 +451,7 @@ static func plan(cards: Array, host_mark: String, have: Dictionary) -> Dictionar
 		# comes now (too large, or left for later, it would leave neither).
 		var lower := String(card_id).to_lower()
 		if not listed.has(card_id) and not (listed_lower.has(lower) and not coming.has(lower)):
-			var left := _left_of(have[card_id])
+			var left := _left_after_unpack(have[card_id], out)
 			(out[left if left != "" else "set_aside"] as Array).append(String(card_id))
 	return out
 
@@ -442,9 +484,17 @@ static func plan_text(p: Dictionary) -> String:
 			% _names(p["shadowed"]))
 	if not (p["set_aside"] as Array).is_empty():
 		lines.append("Set aside, as the host has none: %s." % _names(p["set_aside"]))
+	var unpack: Array = p.get("unpack", [])
+	if not unpack.is_empty():
+		var files: Array = unpack.map(func(path: Variant) -> String: return String(path).get_file())
+		lines.append("Unpacked into single cards first, so its cards can be changed one by one: your set zip%s %s (moved to %s, its cards stay)." \
+			% ["" if files.size() == 1 else "s", _names(files), GamePaths.shown(aside_folder())])
 	if not (p["replace"] as Array).is_empty() or not (p["set_aside"] as Array).is_empty():
 		lines.append("Your replaced and set-aside cards are moved to %s, never deleted: move a zip back to use the card again." \
 			% GamePaths.shown(aside_folder()))
+		var decks := decks_using((p["replace"] as Array) + (p["set_aside"] as Array))
+		if not decks.is_empty():
+			lines.append("Your saved decks that use these cards: %s." % _names(decks))
 	if not (p["stuck"] as Array).is_empty():
 		lines.append("Found beside the game, outside your data folder, so they can't be set aside: %s. They still differ; move them by hand." \
 			% _names(p["stuck"]))
@@ -463,6 +513,34 @@ static func plan_text(p: Dictionary) -> String:
 			else "The download is at most %s. " % PortableMode.size_words(int(p["bytes"]))
 		lines.append(download + "You leave the host while the cards are installed, then join it again.")
 	return "\n".join(lines)
+
+
+## Tests: the folder the player's saved decks are read from.
+static var decks_folder_override := ""
+
+
+## The player's saved decks that hold any card of [param names] (main deck
+## or sideboard), by deck name — said before those cards are replaced or
+## set aside ([method plan_text]).
+static func decks_using(names: Array) -> Array[String]:
+	var out: Array[String] = []
+	var wanted := {}
+	for card_id in names:
+		wanted[String(card_id)] = true
+	if wanted.is_empty():
+		return out
+	# The deck store, asked at run time (it is not a class this one may
+	# name: the two would wait on each other to be read).
+	var store: GDScript = load("res://game/deck_builder/deck_store.gd")
+	var folder := decks_folder_override if decks_folder_override != "" else String(store.USER_DIR)
+	for path: String in store.deck_paths_in(folder):
+		var deck := DeckList.load_file(path, false)
+		for held in deck.cards + deck.sideboard:
+			if wanted.has(String(held)):
+				out.append(deck.deck_name if deck.deck_name != "" else String(path).get_file().get_basename())
+				break
+	out.sort()
+	return out
 
 
 ## A few names, then how many more.
@@ -502,6 +580,12 @@ static func apply(p: Dictionary, zips: Dictionary) -> Dictionary:
 		if why != "":
 			out["problem"] = why + " Nothing was changed."
 			return out
+	# The own set zips holding a card that changes are unpacked into single
+	# cards first: the same cards play, each from a zip of its own.
+	var unpacked := _unpack_sets(p.get("unpack", []))
+	if unpacked != "":
+		out["problem"] = unpacked + " Your cards play as they did."
+		return out
 	# Every move decided before any is made: [from, to, "move" | "copy"].
 	var have := mine()
 	var moves: Array = []
@@ -555,6 +639,32 @@ static func apply(p: Dictionary, zips: Dictionary) -> Dictionary:
 	return out
 
 
+## UNPACK THE OWN SET ZIPS at [param paths] ([method plan]'s `unpack`) into
+## single cards ([method CommunityCards.unpack_set]), each set zip then
+## moved to the set-aside folder: "" when done, else why not. Nothing that
+## plays changes by it — a set that could not be unpacked whole stays as it
+## was — so it is not undone when the transfer fails later.
+static func _unpack_sets(paths: Array) -> String:
+	var own := ProjectSettings.globalize_path(CommunityCards.own_folder())
+	for path: Variant in paths:
+		if not path is String or String(path).get_base_dir() != own or not FileAccess.file_exists(path) \
+				or not CommunityCards.is_set_zip(path):
+			return "%s changed since the host's cards were listed." % String(path).get_file()
+	var taken := {}
+	for path: String in paths:
+		var made := CommunityCards.unpack_set(path)
+		if String(made["problem"]) != "":
+			return "The set zip %s could not be unpacked (%s)." % [path.get_file(), made["problem"]]
+		var aside := _aside_path(path.get_file(), taken)
+		if aside == "" or DirAccess.rename_absolute(path, aside) != OK:
+			for written: String in made["written"]:
+				DirAccess.remove_absolute(written)
+			return "The set zip %s could not be set aside." % path.get_file()
+		# The next set, and the moves below, see the single cards.
+		CommunityCards.scan()
+	return ""
+
+
 ## Why [param bytes] are not the host's card [param card] as listed ("").
 ## A card zip holds one top folder with the card's own files only — its
 ## card.json, its icon and at most one art — that unpack to at most
@@ -568,7 +678,7 @@ static func _check(card: String, digest: String, size: int, bytes: Variant) -> S
 		return "%s was not downloaded." % card
 	if size > CommunityCards.MAX_ZIP or zip.size() > size:
 		return "The host's %s is not the size it listed." % card
-	if CardRegistry.game_name_like(card) != "":
+	if CommunityCards.game_card_like(card) != "":
 		return "A card named %s is already in the game." % card
 	var folder := CommunityCards.ensure_own_folder().path_join(CHECK_FOLDER)
 	DirAccess.make_dir_recursive_absolute(folder)

@@ -12,7 +12,7 @@ extends RefCounted
 
 const PLACEHOLDERS: Array[String] = ["pledges", "quests_total", "target", "town", "title", "foe", "life",
 	"count", "total", "required", "percent", "left", "color", "cards", "hero", "region",
-	"price", "uses_left", "gold", "card", "dungeon"]
+	"price", "uses_left", "gold", "card", "dungeon", "food", "amulets", "day"]
 
 ## The keys the interpreter speaks with, and what it says without them.
 const DEFAULTS := {
@@ -72,6 +72,34 @@ const DEFAULTS := {
 	"site.done": "It is done.",
 	"site.copied": "A copy of {card} is yours.",
 	"site.copied_log": "{card} copied for {price} gold.",
+	# API 3 (2026-11-22): the places' new words.
+	"site.dungeon_open": "{dungeon} still waits for you; there is nothing new to tell.",
+	"site.talk": "Ask",
+	"site.give": "Give {card} (it leaves your decks)",
+	"site.needs_card": "You need {card} for this; you hold none.",
+	"site.needs_amulets": "You need {count} {color} amulets for this.",
+	"site.needs_any_amulets": "You need {count} amulets for this; you carry {amulets}.",
+	"site.needs_food": "You need {count} food for this; you carry {food}.",
+	"site.card_limit": "You may hold no more copies of {card}.",
+	"site.gift_waiting": "A gift for your next duel already waits; fight that duel first.",
+	"site.duel": "Duel {foe}",
+	"site.duel_won": "You have defeated {foe}.",
+	"site.duel_lost": "{foe} has defeated you.",
+	"site.duel_won_log": "Defeated {foe}.",
+	"site.duel_lost_log": "Lost to {foe}.",
+	"site.duel_leave_question": "Return to the main menu? This unfinished duel is not saved. Your adventure resumes with the stake paid.",
+	"site.buy": "Buy a card",
+	"site.sell": "Sell a card",
+	"site.buy_title": "Buy a card",
+	"site.buy_line": "The number beside each card is its price in gold.",
+	"site.sell_title": "Sell a card",
+	"site.sell_line": "The number beside each card is the gold paid for it.",
+	"site.no_stock": "Nothing here is for sale to you now.",
+	"site.nothing_to_sell": "You hold no card that is wanted here.",
+	"site.bought": "{card} is yours for {price} gold.",
+	"site.sold": "You sell {card} for {price} gold.",
+	"site.bought_log": "{card} bought for {price} gold.",
+	"site.sold_log": "{card} sold for {price} gold.",
 }
 
 

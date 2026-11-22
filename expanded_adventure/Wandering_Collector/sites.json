@@ -1,0 +1,139 @@
+{
+	"salt": 1273046824,
+	"flags": [],
+	"pictures": {
+		"wandering_collector_wagon": "art/wandering_collector_wagon.png"
+	},
+	"dungeons": {},
+	"sites": {
+		"wagon": {
+			"name": "The Collector's Camp",
+			"where": [
+				"mainland"
+			],
+			"picture": "wandering_collector_wagon",
+			"sprite": {
+				"file": "art/wandering_collector_wagon_map.png",
+				"width": 80
+			},
+			"gap": 3,
+			"panes": [
+				{
+					"when": [
+						{
+							"used_up": "trade"
+						}
+					],
+					"lines": [
+						"wagon.intro",
+						"wagon.spent"
+					],
+					"actions": [
+						{
+							"id": "gift",
+							"do": "effects",
+							"label": "wagon.gift",
+							"prices": [
+								0
+							],
+							"effects": [
+								{
+									"amulet": {
+										"color": "blue",
+										"count": 1
+									}
+								},
+								{
+									"food": 4
+								}
+							],
+							"result": [
+								"wagon.gift_done"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "wagon.leave"
+						}
+					]
+				},
+				{
+					"lines": [
+						"wagon.intro",
+						"wagon.wants",
+						{
+							"text": "wagon.have",
+							"when": [
+								{
+									"has_card": {
+										"card": "Ornithopter",
+										"min": 1
+									}
+								}
+							]
+						},
+						{
+							"text": "wagon.count",
+							"when": [
+								{
+									"counter": {
+										"name": "wagon_trades",
+										"min": 1
+									}
+								}
+							]
+						}
+					],
+					"actions": [
+						{
+							"id": "trade",
+							"do": "effects",
+							"label": "wagon.trade",
+							"prices": [
+								0,
+								0,
+								0
+							],
+							"needs": [
+								{
+									"card": "Ornithopter"
+								}
+							],
+							"when": [
+								{
+									"has_card": {
+										"card": "Ornithopter",
+										"min": 1
+									}
+								}
+							],
+							"effects": [
+								{
+									"gold": 150
+								},
+								{
+									"counter": {
+										"name": "wagon_trades",
+										"add": 1
+									}
+								}
+							],
+							"result": [
+								"wagon.traded"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "wagon.leave"
+						}
+					]
+				}
+			]
+		}
+	},
+	"counters": [
+		"wagon_trades"
+	]
+}

@@ -308,6 +308,10 @@ func test_every_trigger_static_and_effect_of_the_catalogue_builds() -> void:
 		elif id == "animate":
 			spec = _spec({"name": "Ash Test", "cost": "{3}", "types": ["artifact"], "abilities": [
 				{"kind": kind, "cost": "{1}", "effects": [e]}]})
+		elif id in CommunityCard.TRIGGER_ONLY:
+			# 2026-11-22: two effects are a trigger's alone — each in its own.
+			spec = _spec({"name": "Ash Test", "abilities": [{"kind": "trigger",
+				"when": "land_tapped" if id == "extra_mana" else "dies", "effects": [e]}]})
 		assert_eq(CommunityCard.problems(spec), [] as Array[String], id)
 		assert_not_null(CommunityCard.effect_of(e), id)
 		assert_ne(CommunityCard.rules_text(spec), "", id)

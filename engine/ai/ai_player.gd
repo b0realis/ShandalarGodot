@@ -16772,37 +16772,70 @@ func _forced_arrival_harm(game: MtgGame, inst: CardInstance) -> bool:
 			continue
 		if trig.condition.is_valid() and not bool(trig.condition.call(game, inst, entry)):
 			continue
+		# A trigger that carries its own plan says, slot by slot, whether
+		# it harms what it targets ([method _arrival_plan]): its printed
+		# words are not read ("return target creature card from your
+		# graveyard" is no bounce, "-1/-1 counters" is harm).
+		var plan: Object = _arrival_plan(trig)
+		if plan != null:
+			if bool(plan.call(&"is_optional")):
+				continue
+			for slot in trig.target_slot_count():
+				if bool(plan.call(&"slot_harms", slot)) \
+						and _arrival_slot_forced(game, inst, trig.slot_spec(slot)):
+					return true
+			continue
 		if not _arrival_trigger_harms(trig):
 			continue
-		var spec: TargetSpec = trig.target_spec
-		var theirs := false
-		var ours: Array = []
-		for ref in spec.legal_targets(game, inst):
-			if ref.is_player:
-				if ref.player_id != pid: theirs = true
-				else: ours.append(null)
-				continue
-			var card := game.find_instance(ref.instance_id)
-			if card == null:
-				continue
-			if card.controller_id != pid: theirs = true
-			else: ours.append(card)
-		if theirs:
-			continue
-		# The arriving body is a target of ours where the spec takes it.
-		if inst.data.is_creature() and spec.kind in [TargetSpec.Kind.CREATURE,
-				TargetSpec.Kind.PERMANENT, TargetSpec.Kind.ANY] \
-				and (not spec.filter.is_valid() or bool(spec.filter.call(inst))):
-			ours.append(inst)
-		if ours.is_empty():
-			continue   # no legal target: the trigger is removed (CR 603.3d)
-		var relief := false
-		for card in ours:
-			if card is CardInstance and card != inst and _own_value(game, card) < 0.0:
-				relief = true   # a liability of ours is worth naming
-		if not relief:
+		if _arrival_slot_forced(game, inst, trig.target_spec):
 			return true
 	return false
+
+
+## The plan an arrival trigger carries, bound to its resolution: an object
+## that answers `is_optional()` and `slot_harms(slot)` for each of its
+## target slots (the data-built cards bind one). Null for every trigger
+## that carries none.
+func _arrival_plan(trig: TriggeredAbility) -> Object:
+	if not trig.on_resolve.is_valid():
+		return null
+	for arg in trig.on_resolve.get_bound_arguments():
+		if arg is Object and arg != null and (arg as Object).has_method(&"slot_harms") \
+				and (arg as Object).has_method(&"is_optional"):
+			return arg
+	return null
+
+
+## Must a harmful arrival target of [param spec] land on one of ours —
+## nothing of theirs to name, something of ours (the arriving body
+## counted), and no liability of ours worth naming?
+func _arrival_slot_forced(game: MtgGame, inst: CardInstance, spec: TargetSpec) -> bool:
+	var theirs := false
+	var ours: Array = []
+	for ref in spec.legal_targets(game, inst):
+		if ref.is_player:
+			if ref.player_id != pid: theirs = true
+			else: ours.append(null)
+			continue
+		var card := game.find_instance(ref.instance_id)
+		if card == null:
+			continue
+		if card.controller_id != pid: theirs = true
+		else: ours.append(card)
+	if theirs:
+		return false
+	# The arriving body is a target of ours where the spec takes it.
+	if inst.data.is_creature() and spec.kind in [TargetSpec.Kind.CREATURE,
+			TargetSpec.Kind.PERMANENT, TargetSpec.Kind.ANY] \
+			and (not spec.filter.is_valid() or bool(spec.filter.call(inst))):
+		ours.append(inst)
+	if ours.is_empty():
+		return false   # no legal target: the trigger is removed (CR 603.3d)
+	var relief := false
+	for card in ours:
+		if card is CardInstance and card != inst and _own_value(game, card) < 0.0:
+			relief = true   # a liability of ours is worth naming
+	return not relief
 
 
 ## THE ARRIVAL THAT RETURNS ITSELF (review of 2026-10-21, finding ai-3;

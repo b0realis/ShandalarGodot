@@ -1,0 +1,20 @@
+{
+	"den.leave": "Leave",
+	"den.intro": "A striped tent, its lamp lit though the sun is up. Inside, a thin man with three fingers on his right hand rattles bone dice in a leather cup.",
+	"den.offer": "\"Odo Three-Fingers, at your service,\" he says. \"Fifty gold a throw. Low, you lose. Middling, I pay seventy-five. Three sixes, a hundred and fifty. Five throws, and then luck needs her rest.\"",
+	"den.count": "Odo keeps the tally on his remaining fingers: you have thrown {count} times.",
+	"den.bet": "Throw the dice ({price} gold, {uses_left} left)",
+	"den.rolled": "You lay {price} gold on the felt. The cup turns over.",
+	"den.lost": "Low numbers. Odo sweeps the gold away so fast it seems never to have been yours.",
+	"den.won": "A fair throw. Odo counts out 75 gold, slowly, as if each coin were a tooth.",
+	"den.jackpot": "Three sixes. Odo looks at the dice, then at you, then pays 150 gold without a word.",
+	"den.spent": "The cup is packed away. \"Five throws, I said,\" Odo yawns. \"Come back in another life.\"",
+	"den.rules_line1": "\"Three dice,\" Odo says, holding them up. \"Half the time they fall low, and I keep your gold. One time in three they fall middling. One time in six, three sixes.\"",
+	"den.rules_line2": "\"You will say the house wins. The house says: the house has a tent to mend.\"",
+	"den.rules": "Ask how the game is played",
+	"den.high": "Sit at the high table ({price} gold, {uses_left} left)",
+	"den.high_roll1": "The dice fall badly, and the high table is a hard teacher.",
+	"den.high_roll2": "The dice fall well: 450 gold is pushed across the felt.",
+	"den.high_roll3": "A strange throw. Odo pays 300 gold, and adds a red amulet from his own neck. \"That one I lost fairly.\"",
+	"den.high_done": "Odo draws a curtain aside. The table behind it is older than the tent. You lay down {price} gold."
+}

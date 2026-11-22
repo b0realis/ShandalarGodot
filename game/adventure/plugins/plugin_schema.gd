@@ -356,7 +356,7 @@ static func _read_sites(manifest: Dictionary, content: Dictionary, refs: Diction
 	_check_words(data["text"], refs, problems)
 	_check_pictures(id, "sites.json", data["sites"]["pictures"], refs, problems)
 	_check_cards(data["packs"], refs, problems)
-	_check_sites(data["sites"], problems)
+	_check_sites(data["sites"], problems, int(manifest.get("api_version", AdventurePlugins.SITES_API)))
 	if not problems.is_empty():
 		return {"data": {}, "problems": problems}
 	return {"data": data, "problems": problems}
@@ -381,69 +381,246 @@ static func site_descriptor(manifest: Dictionary, data: Dictionary) -> Dictionar
 		"salt": int(file["salt"]), "pictures": (file["pictures"] as Dictionary).duplicate(), "sprites": sprites, "sites": places}
 
 
-## A sites plugin's own checks: the flags its conditions and effects name
-## are declared, the actions a condition names stand in the same site
-## (`used_up` one with prices), the dungeons named exist, an action's id is
-## its site's once, a dungeon's nearest no farther than its farthest.
-static func _check_sites(file: Dictionary, problems: Array[String]) -> void:
-	var flags: Array = file["flags"]
+## A sites plugin's own checks: the flags and counters its conditions and
+## effects name are declared, the actions a condition names stand in the
+## site named (`used_up` one with prices), the dungeons, foes, panes and
+## places named exist, an action's id is its site's once, a dungeon's
+## nearest no farther than its farthest; a place always opens on a pane
+## and every pane can be left (the campaign of 2026-11-22: a place with
+## neither held the hero until Escape); each kind of action carries only
+## its own fields; a card or amulets given have a price; and a word of API
+## 3 stands only in a plugin that declares [param api] 3 ([method
+## _check_api]).
+static func _check_sites(file: Dictionary, problems: Array[String], api := 3) -> void:
 	var dungeons: Dictionary = file["dungeons"]
+	var foes: Dictionary = file.get("foes", {})
+	var words: Array = []
+	for part in ["counters", "foes", "tasks"]:
+		if not file.get(part, []).is_empty(): words.append([part, "sites.json: " + part])
+	for i in file.get("counters", []).size():
+		if file["counters"].find(file["counters"][i]) != i: problems.append("sites.json: counters[%d]: %s is named twice." % [i, file["counters"][i]])
 	for key in dungeons:
 		var distance: Dictionary = dungeons[key]["distance"]
 		if int(distance["min"]) > int(distance["max"]):
 			problems.append("sites.json: dungeons.%s.distance: min %d is more than max %d." % [key, int(distance["min"]), int(distance["max"])])
+	for name in foes:
+		_check_foe(foes[name], "sites.json: foes.%s" % name, problems)
+	# Every site's actions first: a condition may name another site's.
+	var all := {}
 	for key in file["sites"]:
 		var site: Dictionary = file["sites"][key]
-		var at := "sites.json: sites.%s" % key
 		var actions := {}
 		for p in site["panes"].size():
 			for a in site["panes"][p]["actions"].size():
 				var action: Dictionary = site["panes"][p]["actions"][a]
 				var name := String(action["id"])
 				if actions.has(name) and actions[name] != action:
-					problems.append("%s.panes[%d].actions[%d].id: %s names another action of this site; an id is one action (the same action may stand in several panes)." % [at, p, a, name])
+					problems.append("sites.json: sites.%s.panes[%d].actions[%d].id: %s names another action of this site; an id is one action (the same action may stand in several panes)." % [key, p, a, name])
 				elif not actions.has(name):
 					actions[name] = action
+		all[key] = actions
+	var known := {"flags": file["flags"], "counters": file.get("counters", []), "dungeons": dungeons, "sites": all, "words": words}
+	for key in file["sites"]:
+		var site: Dictionary = file["sites"][key]
+		var at := "sites.json: sites.%s" % key
+		var actions: Dictionary = all[key]
+		var panes := {}
+		var opening := -1
+		for p in site["panes"].size():
+			var pane: Dictionary = site["panes"][p]
+			if pane.has("id"):
+				words.append(["id", "%s.panes[%d].id" % [at, p]])
+				if panes.has(pane["id"]): problems.append("%s.panes[%d].id: %s is another pane's id; a pane's id is its site's once." % [at, p, pane["id"]])
+				panes[pane["id"]] = true
+			else:
+				opening = p
+		# A WAY IN AND A WAY OUT: without them the place showed an empty pane
+		# with no button.
+		if opening < 0:
+			problems.append("%s.panes: every pane has an id, so none opens by itself; the place needs a pane without an id to open on." % at)
+		elif not (site["panes"][opening]["when"] as Array).is_empty():
+			problems.append("%s.panes[%d].when: the last pane without an id must have no when, so the place always has a pane to show; add one more pane without a when after it." % [at, opening])
 		for p in site["panes"].size():
 			var pane: Dictionary = site["panes"][p]
 			var here := "%s.panes[%d]" % [at, p]
-			_check_site_conditions(pane["when"], here + ".when", flags, actions, dungeons, problems)
-			for l in pane["lines"].size():
-				if pane["lines"][l] is Dictionary:
-					_check_site_conditions(pane["lines"][l]["when"], "%s.lines[%d].when" % [here, l], flags, actions, dungeons, problems)
+			_check_site_conditions(pane["when"], here + ".when", known, actions, problems)
+			_check_site_lines(pane["lines"], here + ".lines", known, actions, problems)
+			var way_out := false
 			for a in pane["actions"].size():
 				var action: Dictionary = pane["actions"][a]
 				var spot := "%s.actions[%d]" % [here, a]
-				_check_site_conditions(action["when"], spot + ".when", flags, actions, dungeons, problems)
-				for l in action["result"].size():
-					if action["result"][l] is Dictionary:
-						_check_site_conditions(action["result"][l]["when"], "%s.result[%d].when" % [spot, l], flags, actions, dungeons, problems)
-				for e in action["effects"].size():
-					var effect: Dictionary = action["effects"][e]
-					var name: String = effect.keys()[0]
-					match name:
-						"set_flag", "clear_flag":
-							if not effect[name] in flags: problems.append("%s.effects[%d].%s: no flag %s in sites.json flags." % [spot, e, name, effect[name]])
-						"spawn_dungeon":
-							if not dungeons.has(effect[name]): problems.append("%s.effects[%d].spawn_dungeon: no dungeon %s in sites.json dungeons." % [spot, e, effect[name]])
-				if String(action["do"]) != "effects" and not (action["effects"] as Array).is_empty():
-					problems.append("%s.effects: only an action that does effects has effects." % spot)
+				if String(action["do"]) == "leave" and (action["when"] as Array).is_empty(): way_out = true
+				_check_site_conditions(action["when"], spot + ".when", known, actions, problems)
+				_check_site_lines(action["result"], spot + ".result", known, actions, problems)
+				_check_site_action(action, spot, known, actions, panes, foes, problems)
+			if not way_out:
+				problems.append("%s.actions: a pane needs an action that does \"leave\" and has no when, so the hero can always walk away." % here)
+	var tasks: Dictionary = file.get("tasks", {})
+	for name in tasks:
+		var task: Dictionary = tasks[name]
+		var at := "sites.json: tasks.%s" % name
+		var target := String(task.get("at", ""))
+		var actions := {}
+		var placed := target.begins_with("place:")
+		if placed:
+			if not all.has(target.trim_prefix("place:")): problems.append("%s.at: no place %s in sites.json sites." % [at, target.trim_prefix("place:")])
+			else: actions = all[target.trim_prefix("place:")]
+		elif target.begins_with("dungeon:") and not dungeons.has(target.trim_prefix("dungeon:")):
+			problems.append("%s.at: no dungeon %s in sites.json dungeons." % [at, target.trim_prefix("dungeon:")])
+		for part in ["when", "done_when"]:
+			if not placed:
+				for word in ["used", "used_up"]:
+					if DataSites._named_condition(task[part], word) != null:
+						problems.append("%s.%s: %s reads the place a task is at; give the task \"at\": \"place:…\", or use site_used." % [at, part, word])
+						task[part] = []
+			_check_site_conditions(task[part], "%s.%s" % [at, part], known, actions, problems)
+	_check_api(words, api, problems)
 
 
-static func _check_site_conditions(conditions: Array, at: String, flags: Array, actions: Dictionary, dungeons: Dictionary, problems: Array[String]) -> void:
+## A WORD OF API 3 IN A PLUGIN THAT DECLARES LESS is refused, each word
+## once and by name: a game that reads only API 2 would refuse the file for
+## a word it does not know, or worse, skip it; declared 3, that game says
+## plainly that a newer one is needed.
+static func _check_api(words: Array, api: int, problems: Array[String]) -> void:
+	if api >= 3: return
+	var named := {}
+	for pair in words:
+		if named.has(pair[0]): continue
+		named[pair[0]] = true
+		problems.append("%s: \"%s\" is a word of plugin API 3, and plugin.json declares api_version %d. Set \"api_version\": 3 there (the plugin then needs a game that reads API 3)." % [pair[1], pair[0], api])
+
+
+## The API 3 words of the schema's group [param group] (`v3_words`).
+static func _v3(group: String) -> Array:
+	return schema().get("v3_words", {}).get(group, [])
+
+
+static func _check_foe(foe: Dictionary, at: String, problems: Array[String]) -> void:
+	var cards := 0
+	for card in foe["deck"]: cards += int(foe["deck"][card])
+	if cards < 1 or cards > 250: problems.append("%s.deck holds %d cards; 1 to 250 are allowed." % [at, cards])
+	if not CreatureBook.is_row(int(foe["face"])) or int(foe["face"]) == CreatureBook.LAIR:
+		problems.append("%s.face: %d is not a creature row." % [at, int(foe["face"])])
+
+
+static func _check_site_lines(lines: Array, at: String, known: Dictionary, actions: Dictionary, problems: Array[String]) -> void:
+	for l in lines.size():
+		if not lines[l] is Dictionary: continue
+		if lines[l].has("one_of"): known["words"].append(["one_of", "%s[%d]" % [at, l]])
+		_check_site_conditions(lines[l]["when"], "%s[%d].when" % [at, l], known, actions, problems)
+
+
+## One action's checks: the fields of its kind, what it names, its effects.
+static func _check_site_action(action: Dictionary, spot: String, known: Dictionary, actions: Dictionary, panes: Dictionary, foes: Dictionary, problems: Array[String]) -> void:
+	var kind := String(action["do"])
+	var words: Array = known["words"]
+	if kind in _v3("do"): words.append([kind, spot + ".do"])
+	# Each field where it means something: a field that would be silently
+	# ignored is a mistake the author should hear of.
+	var allowed := {"effects": ["effects", "talk"], "prices": ["effects", "talk", "copy_card", "duel"], "needs": ["effects", "talk", "copy_card", "duel"],
+		"result": ["effects", "copy_card", "buy_card", "sell_card"], "to": ["talk"], "foe": ["duel"], "win": ["duel"], "lose": ["duel"],
+		"cards": ["buy_card", "sell_card"], "stock": ["buy_card", "sell_card"]}
+	for field in allowed:
+		var value: Variant = action.get(field)
+		var given: bool = value != null and not ((value is Array or value is Dictionary) and value.is_empty())
+		if field in ["win", "lose"]: given = value is Dictionary and not ((value["effects"] as Array).is_empty() and (value["result"] as Array).is_empty())
+		if not given: continue
+		if field in _v3("action"): words.append([field, "%s.%s" % [spot, field]])
+		if not kind in allowed[field]:
+			problems.append("%s.%s: only an action that does %s has %s." % [spot, field, " or ".join(allowed[field]), field])
+	if String(action.get("count", "press")) != "press":
+		words.append(["count", spot + ".count"])
+		if kind != "duel": problems.append("%s.count: only an action that does duel has count." % spot)
+	match kind:
+		"talk":
+			if not action.has("to"): problems.append("%s: a talk needs \"to\": the id of the pane to open." % spot)
+			elif not panes.has(action["to"]): problems.append("%s.to: this site has no pane with the id %s." % [spot, action["to"]])
+		"duel":
+			if not action.has("foe"): problems.append("%s: a duel needs \"foe\": a key of sites.json foes." % spot)
+			elif not foes.has(action["foe"]): problems.append("%s.foe: no foe %s in sites.json foes." % [spot, action["foe"]])
+		"buy_card", "sell_card":
+			if (action["cards"] as Dictionary).is_empty(): problems.append("%s: %s needs \"cards\": each card and its price." % [spot, kind])
+	var priced: bool = not (action["prices"] as Array).is_empty() or not (action["needs"] as Array).is_empty()
+	_check_site_effects(action["effects"], spot + ".effects", known, actions, priced, 0, problems)
+	for branch in ["win", "lose"]:
+		_check_site_effects(action[branch]["effects"], "%s.%s.effects" % [spot, branch], known, actions, priced, 2, problems)
+		_check_site_lines(action[branch]["result"], "%s.%s.result" % [spot, branch], known, actions, problems)
+
+
+## A list of effects' checks. [param priced]: its action has prices or
+## needs; [param inside] 0 an action's own list, 1 a roll's outcome, 2 a
+## duel's branch.
+static func _check_site_effects(effects: Array, at: String, known: Dictionary, actions: Dictionary, priced: bool, inside: int, problems: Array[String]) -> void:
+	var rolls := 0
+	for e in effects.size():
+		var effect: Dictionary = effects[e]
+		var name: String = effect.keys()[0]
+		var value: Variant = effect[name]
+		var spot := "%s[%d].%s" % [at, e, name]
+		if name in _v3("effect"): known["words"].append([name, spot])
+		match name:
+			"set_flag", "clear_flag":
+				if not value in known["flags"]: problems.append("%s: no flag %s in sites.json flags." % [spot, value])
+			"spawn_dungeon":
+				if not known["dungeons"].has(value): problems.append("%s: no dungeon %s in sites.json dungeons." % [spot, value])
+			"counter":
+				if not value["name"] in known["counters"]: problems.append("%s: no counter %s in sites.json counters." % [spot, value["name"]])
+				if value.has("add") == value.has("set"): problems.append("%s: one of add or set is needed, not both." % spot)
+			"amulet":
+				if int(value["count"]) == 0: problems.append("%s: count 0 gives nothing." % spot)
+				elif int(value["count"]) > 0 and not priced: problems.append("%s: amulets are given without end; give the action prices (a ladder that ends) or needs." % spot)
+			"give_card":
+				if not priced: problems.append("%s: a card is given without end; give the action prices (a ladder that ends) or needs." % spot)
+			"next_duel":
+				var gifts := 0
+				for gift in ["life", "first_move", "card"]:
+					if value.has(gift): gifts += 1
+				if gifts != 1: problems.append("%s: exactly one of life, first_move or card is needed (one gift waits at a time)." % spot)
+				elif value.has("first_move") and not bool(value["first_move"]): problems.append("%s: first_move is true, or left out." % spot)
+			"reveal_map":
+				var around := String(value["around"])
+				if around.begins_with("dungeon:") and not known["dungeons"].has(around.trim_prefix("dungeon:")):
+					problems.append("%s.around: no dungeon %s in sites.json dungeons." % [spot, around.trim_prefix("dungeon:")])
+			"roll":
+				rolls += 1
+				if inside == 1: problems.append("%s: no roll inside a roll's outcome." % spot)
+				elif inside == 2: problems.append("%s: no roll in a duel's win or lose; the duel is the gamble." % spot)
+				elif rolls > 1: problems.append("%s: one roll an action; put every outcome in it." % spot)
+				for o in value["outcomes"].size():
+					var outcome: Dictionary = value["outcomes"][o]
+					_check_site_effects(outcome["effects"], "%s.outcomes[%d].effects" % [spot, o], known, actions, priced, 1, problems)
+					_check_site_lines(outcome["result"], "%s.outcomes[%d].result" % [spot, o], known, actions, problems)
+
+
+## [param known]: `{flags, counters, dungeons, sites: {site: {action id:
+## action}}, words}`; [param actions] the actions of the site the
+## conditions stand in.
+static func _check_site_conditions(conditions: Array, at: String, known: Dictionary, actions: Dictionary, problems: Array[String], inside := false) -> void:
 	for i in conditions.size():
 		var name: String = conditions[i].keys()[0]
 		var value: Variant = conditions[i][name]
+		if name in _v3("condition"): known["words"].append([name, "%s[%d].%s" % [at, i, name]])
 		match name:
 			"flag", "not_flag":
-				if not value in flags: problems.append("%s[%d].%s: no flag %s in sites.json flags." % [at, i, name, value])
+				if not value in known["flags"]: problems.append("%s[%d].%s: no flag %s in sites.json flags." % [at, i, name, value])
 			"used":
 				if not actions.has(value["action"]): problems.append("%s[%d].used: this site has no action %s." % [at, i, value["action"]])
 			"used_up":
 				if not actions.has(value): problems.append("%s[%d].used_up: this site has no action %s." % [at, i, value])
 				elif (actions[value]["prices"] as Array).is_empty(): problems.append("%s[%d].used_up: the action %s has no prices, so it is never used up." % [at, i, value])
 			"dungeon":
-				if not dungeons.has(value["dungeon"]): problems.append("%s[%d].dungeon: no dungeon %s in sites.json dungeons." % [at, i, value["dungeon"]])
+				if not known["dungeons"].has(value["dungeon"]): problems.append("%s[%d].dungeon: no dungeon %s in sites.json dungeons." % [at, i, value["dungeon"]])
+			"counter":
+				if not value["name"] in known["counters"]: problems.append("%s[%d].counter: no counter %s in sites.json counters." % [at, i, value["name"]])
+				if int(value["min"]) > int(value["max"]): problems.append("%s[%d].counter: min %d is more than max %d." % [at, i, int(value["min"]), int(value["max"])])
+			"difficulty":
+				if int(value["min"]) > int(value["max"]): problems.append("%s[%d].difficulty: min %d is more than max %d." % [at, i, int(value["min"]), int(value["max"])])
+			"site_used":
+				if not known["sites"].has(value["site"]): problems.append("%s[%d].site_used: no place %s in sites.json sites." % [at, i, value["site"]])
+				elif not known["sites"][value["site"]].has(value["action"]): problems.append("%s[%d].site_used: the place %s has no action %s." % [at, i, value["site"], value["action"]])
+			"any":
+				if inside: problems.append("%s[%d].any: no any inside an any; list its conditions in the outer one." % [at, i])
+				else: _check_site_conditions(value, "%s[%d].any" % [at, i], known, actions, problems, true)
 
 
 # ------------------------------------------------------ the cross checks --

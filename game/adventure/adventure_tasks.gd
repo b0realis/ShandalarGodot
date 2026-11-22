@@ -23,6 +23,10 @@ static func rows(player: AdventurePlayer) -> Array[Dictionary]:
 		var saved: Dictionary = player.regions[region]
 		var data: Dictionary = saved.get("world", {})
 		key.append([region, saved.get("record", {}).get("quest", {}), saved.get("clocks", {}).get("quest_timer", 0), data.get("sites", []), data.get("encounters", []), data.get("expansion", {})])
+	# The sites plugins' tasks (API 3): their progress, and the rows as they
+	# read now — a task's conditions may ask the gold, the cards, the day.
+	key.append(player.sites)
+	key.append(AdventureSites.task_rows(player))
 	looks += 1
 	if key != _key:
 		_key = key.duplicate(true)
@@ -121,6 +125,8 @@ static func _build(player: AdventurePlayer) -> Array[Dictionary]:
 			var task := row("dungeon:%d" % slot, region, title, "Find and enter this known dungeon. Its clues remain below.", Vector2i(dungeon.get("x", -1), dungeon.get("y", -1)), "clue")
 			if int(dungeon.get("entered", 0)) > 0: completed(task, "Dungeon visited. You can return to explore its remaining rooms.")
 			out.append(task)
+	# A sites plugin's own tasks on the land the hero walks (API 3).
+	out.append_array(AdventureSites.task_rows(player))
 	# Do not retain inactive providers just because the Tasks page inspected them.
 	AdventureExpansions.release_inactive(active)
 	return out

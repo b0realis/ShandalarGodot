@@ -18973,6 +18973,107 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-22 — Version 0.70.6
+
+Version 0.70.6 (Android version code 70006) gathers the entry below it:
+adventure plugin API 3, the words that let a places plugin's place talk,
+gamble, ask for a card, amulets or food, give gifts, duel and trade, the
+authoring tool's recipes and edit commands, and four study places shipped
+beside the game. Its notes are `docs/releases/0.70.6.md`. LAN stays
+protocol 32; 0.70.6 plays only 0.70.6.
+
+## 2026-11-22 — Places plugins, API 3: mechanics and recipes
+
+The owner: *"make it easy to create new places that give additional
+context and users can make do various game mechanics"*. A place of API 2
+could sell a service for gold, copy a card and raise a dungeon. API 3
+gives it the rest of what the adventure's own places do, still as data: a
+closed list of words read by the game's interpreter, nothing of a plugin
+ever run.
+
+- **The API gate.** The new words are listed in `schema_v1.json`'s
+  `v3_words`; a sites plugin that uses one declares `"api_version": 3`, and
+  one that declares less is refused once per word, by name
+  (`PluginSchema._check_api`). A game that reads only API 2 then refuses
+  the whole plugin with the plain "needs plugin API 3" it always had,
+  instead of stumbling over a word. Every API 1 and API 2 plugin loads as
+  before; the Hut and the Guild still declare 2.
+- **Fifteen conditions**: `has_card`, `amulets`, `hero_color`,
+  `owns_magic`, `food_at_least`, `gold_below`, `day_at_least`,
+  `wizards_defeated`, `at_peace`, `difficulty`, `plugin_on`, `counter`,
+  `site_used`, `gift_waiting`, and `any` (one of up to eight). **Six
+  effects**: `counter`, `amulet`, `give_card`, `next_duel` (extra life,
+  the first move or a card in play), `roll`, `reveal_map`. **A cost
+  besides gold**, `needs`: a card, amulets or food, taken each time.
+- **Talk, duels, trades, tasks.** A pane with an `id` is opened by a
+  `talk` button, so a conversation or a riddle is panes and buttons; a
+  line may be `one_of` several, turning by the day or by the place's uses.
+  `do: "duel"` stakes the price on a duel against one of the plugin's own
+  `foes` (a fixed deck, life and face), with `win` and `lose` branches.
+  `buy_card` and `sell_card` trade listed cards for gold, with an optional
+  `stock`. `tasks` adds rows to the Tasks pane, each with the map's arrow
+  to a place or a raised dungeon (`AdventureSites.task_rows`, `targets`).
+  `counters` are the plugin's own numbers, 0–1000.
+- **No free lunch.** A card or amulets given need a price or a need on
+  their action, or the plugin is refused. Every refusal comes before
+  anything is paid: a full bag, the card rules' copy limit, a gift for the
+  next duel already waiting, a need not met. A place never sells a card
+  for less, nor buys one for more, than the most a town pays for it. A
+  roll is on the plugin's own dice, keyed by the land, the place, the
+  action and the use, so a reload throws the same again and the
+  adventure's dice are untouched. A duel's stake is paid and the world
+  saved before the duel is dealt: one closed mid-way is a loss with the
+  stake paid, never a free second try. A place's duel pads the hero's deck
+  as every adventure duel does (`CreatureMeeting.padded_deck`), which
+  casts the adventure's dice once — the one place a sites plugin touches
+  them, and only at the player's own press.
+- **Fixes found on the way.** A place on the mainland and the islands
+  sold its once-paid dungeon once for all lands; such an action is now
+  counted on each land (`"<site>.<action>@<land>"`, an older save's count
+  read for the land that holds the dungeon). A place whose every pane had
+  a condition, or a pane without a Leave, could hold the hero until
+  Escape; the checker now refuses a place without a pane to open on or a
+  way out. A plugin's `log_event` is kept under the plugin's id, so no
+  plugin's word counts as one of the game's duels, quests or treasures.
+  `{dungeon}` names the action's own dungeon, before it is raised too.
+  Paying for a dungeon that is still open is refused
+  (`site.dungeon_open`).
+- **The save** stays version 9: an optional `counters` map in a plugin's
+  `sites` record, written only when it counted anything; the per-land use
+  keys; a trade's stock among the uses.
+- **Plugin zips are read more strictly** (`PluginPackage.zip_entries`,
+  `entry_bytes`): one checked list of files, whoever reads it. A zip with
+  a second end record, a zip64 locator behind its list, or an entry whose
+  own header disagrees with the directory is refused before anything is
+  unpacked, and each entry is read into exactly its listed size.
+- **The authoring tool** (`tools/adventure_plugin.py`): ten recipes
+  (`add-place --recipe lore | gift | healer | toll | gambler | riddle |
+  collector | duelist | shop | quest`), each a whole place that validates
+  and walks as written; the edit commands `add-action`, `add-pane`,
+  `add-flag`, `add-counter`, `add-foe`, `set-text`, `set-info`,
+  `remove-place`, so no JSON file needs opening, and `add-place --free`;
+  a `walk` whose hero can be given gold, food, cards, amulets, a color, a
+  day, flags and counters, that presses the buttons named (`--press`),
+  crosses both lands (`--both`), settles duels and rolls (`--win`,
+  `--lose`, `--roll`) and lists what it never reached; `validate`'s
+  warnings for what loads but is not finished, with the nearest names for
+  a mistyped key or card; a cheat sheet page written from the schema
+  (`GUIDE/cheatsheet.html`).
+- **Four study places** ship beside the game, each a plugin of its own
+  made with those commands alone (its README lists them):
+  `Gamblers_Den/` (a roll), `Riddle_Stone/` (talk panes and a counter),
+  `Wandering_Collector/` (a card as the price) and `Duelists_Ring/` (duels
+  for a wager). None needs a card pack; unticked, the vanilla adventure is
+  untouched. The releases carry seven plugin zips
+  (`tools/package_release.py`'s `PLACES`).
+- Docs: `docs/adventure-plugins.md` (*Sites plugins (API 2 and API 3)*),
+  the authors' guide's `sites.html` and `cheatsheet.html`,
+  `expanded_adventure/README.txt`, `docs/player-files.md`, CODE_MAP
+  ("0.70.6"). Tests: `tests/unit/test_c1122_places.gd`,
+  `tests/ui/test_c1122_places_ui.gd`, `tests/unit/test_c1122_ptool.gd`,
+  `tests/unit/test_c1122_files.gd`, `tools/test_c1122_places_tool.py`, the
+  corpus's `sites_api3_` cases.
+
 ## 2026-11-22 — Version 0.70.5
 
 Version 0.70.5 (Android version code 70005) gathers the entry below it: the

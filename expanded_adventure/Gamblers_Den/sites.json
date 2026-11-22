@@ -1,0 +1,273 @@
+{
+	"salt": 1981154592,
+	"flags": [],
+	"pictures": {
+		"gamblers_den_den": "art/gamblers_den_den.png"
+	},
+	"dungeons": {},
+	"sites": {
+		"den": {
+			"name": "The Gambler's Den",
+			"where": [
+				"mainland"
+			],
+			"picture": "gamblers_den_den",
+			"sprite": {
+				"file": "art/gamblers_den_den_map.png",
+				"width": 80
+			},
+			"gap": 3,
+			"panes": [
+				{
+					"when": [
+						{
+							"used_up": "bet"
+						}
+					],
+					"lines": [
+						"den.intro",
+						"den.spent"
+					],
+					"actions": [
+						{
+							"id": "high",
+							"do": "effects",
+							"label": "den.high",
+							"when": [
+								{
+									"counter": {
+										"name": "den_plays",
+										"min": 3
+									}
+								}
+							],
+							"prices": [
+								200,
+								200
+							],
+							"effects": [
+								{
+									"roll": {
+										"outcomes": [
+											{
+												"weight": 3,
+												"effects": [],
+												"result": [
+													"den.high_roll1"
+												]
+											},
+											{
+												"weight": 1,
+												"effects": [
+													{
+														"gold": 450
+													}
+												],
+												"result": [
+													"den.high_roll2"
+												]
+											},
+											{
+												"weight": 1,
+												"effects": [
+													{
+														"gold": 300
+													},
+													{
+														"amulet": {
+															"color": "red",
+															"count": 1
+														}
+													}
+												],
+												"result": [
+													"den.high_roll3"
+												]
+											}
+										]
+									}
+								}
+							],
+							"result": [
+								"den.high_done"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "den.leave"
+						}
+					]
+				},
+				{
+					"lines": [
+						"den.intro",
+						"den.offer",
+						{
+							"text": "den.count",
+							"when": [
+								{
+									"counter": {
+										"name": "den_plays",
+										"min": 1
+									}
+								}
+							]
+						}
+					],
+					"actions": [
+						{
+							"id": "bet",
+							"do": "effects",
+							"label": "den.bet",
+							"prices": [
+								50,
+								50,
+								50,
+								50,
+								50
+							],
+							"effects": [
+								{
+									"counter": {
+										"name": "den_plays",
+										"add": 1
+									}
+								},
+								{
+									"roll": {
+										"outcomes": [
+											{
+												"weight": 3,
+												"effects": [],
+												"result": [
+													"den.lost"
+												]
+											},
+											{
+												"weight": 2,
+												"effects": [
+													{
+														"gold": 75
+													}
+												],
+												"result": [
+													"den.won"
+												]
+											},
+											{
+												"weight": 1,
+												"effects": [
+													{
+														"gold": 150
+													}
+												],
+												"result": [
+													"den.jackpot"
+												]
+											}
+										]
+									}
+								}
+							],
+							"result": [
+								"den.rolled"
+							]
+						},
+						{
+							"id": "rules",
+							"do": "talk",
+							"label": "den.rules",
+							"to": "rules"
+						},
+						{
+							"id": "high",
+							"do": "effects",
+							"label": "den.high",
+							"when": [
+								{
+									"counter": {
+										"name": "den_plays",
+										"min": 3
+									}
+								}
+							],
+							"prices": [
+								200,
+								200
+							],
+							"effects": [
+								{
+									"roll": {
+										"outcomes": [
+											{
+												"weight": 3,
+												"effects": [],
+												"result": [
+													"den.high_roll1"
+												]
+											},
+											{
+												"weight": 1,
+												"effects": [
+													{
+														"gold": 450
+													}
+												],
+												"result": [
+													"den.high_roll2"
+												]
+											},
+											{
+												"weight": 1,
+												"effects": [
+													{
+														"gold": 300
+													},
+													{
+														"amulet": {
+															"color": "red",
+															"count": 1
+														}
+													}
+												],
+												"result": [
+													"den.high_roll3"
+												]
+											}
+										]
+									}
+								}
+							],
+							"result": [
+								"den.high_done"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "den.leave"
+						}
+					]
+				},
+				{
+					"id": "rules",
+					"lines": [
+						"den.rules_line1",
+						"den.rules_line2"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "den.leave"
+						}
+					]
+				}
+			]
+		}
+	},
+	"counters": [
+		"den_plays"
+	]
+}

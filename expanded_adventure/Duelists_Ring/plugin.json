@@ -1,0 +1,18 @@
+{
+	"plugin_format": 1,
+	"api_version": 3,
+	"kind": "sites",
+	"id": "duelists_ring",
+	"name": "The Duelist's Ring",
+	"version": "1.0.0",
+	"minimum_game_version": "0.70.6",
+	"authors": [
+		"Shandalar Godot"
+	],
+	"license": "GPL-3.0 (the game's own license; see LICENSE.txt)",
+	"description": "A roped ring where Marda Ironhand duels for a wager of 50 gold; beat her twice and the Ringmaster himself steps in.",
+	"requires": {
+		"card_packs": []
+	},
+	"learning_note": "A study of duels: one place whose button stakes gold on a duel against the plugin's own opponent, with a counter of wins that opens a second, harder duel. Original fiction, not official Magic canon."
+}

@@ -308,6 +308,8 @@ static func targets(player: AdventurePlayer) -> Array[Dictionary]:
 			"name": WorldNames.site_name(player.world, target)})
 	# A timed errand takes priority over the island's continuing story.
 	out.append_array(AdventureExpansions.targets(player))
+	# A sites plugin's tasks (API 3), each a place or a raised dungeon.
+	out.append_array(AdventureSites.targets(player))
 	var portal := FinalBattle.portal_target(player)
 	if not portal.is_empty():
 		out.append(portal)

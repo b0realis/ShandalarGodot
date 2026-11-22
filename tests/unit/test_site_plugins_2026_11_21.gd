@@ -145,8 +145,12 @@ func test_the_manifest_rules_of_the_sites_kind() -> void:
 	island.erase("kind")
 	assert_has(AdventurePlugins.manifest_problems(island), "plugin.json: the field \"region\" is missing.", "an island still needs its region")
 	var newer := base.duplicate()
+	# API 3 is read since the places campaign of 2026-11-22 (it was the
+	# "newer" one here before); the rule itself is the same, one API on.
 	newer["api_version"] = 3
-	assert_has(AdventurePlugins.manifest_problems(newer), "This plugin needs plugin API 3; this game reads API 2. A newer game is needed.")
+	assert_eq(AdventurePlugins.manifest_problems(newer), [] as Array[String])
+	newer["api_version"] = 4
+	assert_has(AdventurePlugins.manifest_problems(newer), "This plugin needs plugin API 4; this game reads API 3. A newer game is needed.")
 
 
 func test_content_problems_are_named() -> void:

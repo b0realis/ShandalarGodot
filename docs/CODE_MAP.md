@@ -96,10 +96,11 @@ the authors' guide is `expanded_adventure/GUIDE/index.html`.
   `plugin.json`, `world.json`, `places.json`, `quests.json`, `foes.json`,
   `rewards.json`, `text.json`, `art/` (the island's own four pictures),
   `README.txt`, `LICENSE.txt`: a game-design and learning demo.
-- `expanded_adventure/GUIDE/`: the local HTML authors' guide (eleven pages,
-  `guide.css`, `img/`, and `reference.html` written by
-  `tools/adventure_plugin.py guide` from `schema_v1.json` — never edit it by
-  hand; `guide --check` and the tests flag a stale one).
+- `expanded_adventure/GUIDE/`: the local HTML authors' guide (twelve pages
+  written by hand, `guide.css`, `img/`, and `reference.html` and, since
+  0.70.6, `cheatsheet.html` written by
+  `tools/adventure_plugin.py guide` from `schema_v1.json` — never edit them
+  by hand; `guide --check` and the tests flag a stale one).
 - `tools/package_release.py` / `tools/test_package_release.py`: stage
   `expanded_adventure/` (the prototype zip, its README, the guide) into the
   desktop, Pi, Deck and ArkOS packages, ship the authors' tool, the schema and
@@ -128,6 +129,13 @@ the authors' guide is `expanded_adventure/GUIDE/index.html`.
   shell-script fixes, a stub standing in for Godot — `run_tests.sh` stops
   its started shards when a deal fails, `tools/expansion_lab.sh` removes
   its plugin copy however the run ends.
+- `tools/test_c1122_places_tool.py`: the authors' tool for places of
+  plugin API 3 (0.70.6) — the corpus's API 3 cases, `validate`'s hints and
+  warnings, the edit commands (`add-action`, `add-pane`, `add-flag`,
+  `add-counter`, `add-foe`, `set-text`, `set-info`, `remove-place`), the
+  ten recipes of `add-place`, `walk`'s options and its never-reached list,
+  `info` and `compat`, the cheat sheet and the guide's places page, and
+  the four study plugins made again from their READMEs. No Godot.
 - `tools/plugin_fixtures/`: the corpus of good and bad plugins and its
   `expected.json`, judged alike by the tool and the game.
 - `tests/unit/test_plugin_corpus.gd`: the game's loader judges the corpus as
@@ -405,6 +413,158 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/unit/test_community_cards.gd`, `tests/unit/test_card_balance.gd`,
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
+
+## 0.70.6 (2026-11-22): places plugins, API 3
+
+Version 0.70.6, Android version code 70006; `docs/releases/0.70.6.md`.
+Reference: `docs/adventure-plugins.md`, *Sites plugins (API 2 and API 3)*.
+The owner: *"make it easy to create new places that give additional
+context and users can make do various game mechanics"*.
+
+- `game/adventure/plugins/adventure_plugins.gd`: `API_VERSION` 3 (a sites
+  plugin that uses a word of API 3 declares 3; a game that reads less
+  refuses it whole by the "needs plugin API" rule).
+- `game/adventure/plugins/schema_v1.json`: `api_version` 3; `v3_words`
+  (the words of API 3 by group: `file`, `pane`, `line`, `action`, `do`,
+  `condition`, `effect`); `sites_file`'s `counters`, `foes`, `tasks`; the
+  types `sites_task`, `sites_need`, `sites_branch`; a pane's `id`; a
+  line's `one_of` and `by`; an action's `needs`, `to`, `foe`, `win`,
+  `lose`, `count`, `cards`, `stock` and the `do` values `talk`, `duel`,
+  `buy_card`, `sell_card`; fifteen conditions (`has_card` … `any`) and six
+  effects (`counter`, `amulet`, `give_card`, `next_duel`, `roll`,
+  `reveal_map`); the placeholders `food`, `amulets`, `day`.
+- `game/adventure/plugins/plugin_schema.gd`: `_check_sites` takes the
+  declared `api` (a place always opens on a pane and every pane can be
+  left; each kind of action carries only its own fields; a card or amulets
+  given have a price or a need), `_check_api` and `_v3` (a word of API 3
+  in a plugin that declares less, refused once by name), `_check_foe`,
+  `_check_site_lines`, `_check_site_action`, `_check_site_effects`
+  (`priced`, `inside`), `_check_site_conditions` (`inside` an `any`).
+- `game/adventure/plugins/plugin_text.gd`: `PLACEHOLDERS` with `food`,
+  `amulets`, `day`; twenty-seven more `site.*` defaults (the needs, the
+  gift, the duel, the trades, `site.dungeon_open`).
+- `game/adventure/plugins/data_sites.gd`: `MOST_AMULETS`, `LABELS`; `foe`,
+  `all_effects`, `spawned`, `per_land` (a priced action that may raise a
+  dungeon is counted land by land, `"<site>.<action>@<land>"`; an older
+  plain count read for each land that holds the dungeon), `uses` by land,
+  `site_uses`, `counter`, `day`, `held`; `values` with `pane`,
+  `dungeon_about`, `dungeon_word` (`{dungeon}` the action's own, never the
+  bare word), `counter_about`, `card_about`; `pane_of`, `label_key`,
+  `describe` with `pane_id`; `refusal` before anything is paid
+  (`_needs_problem`, `_effects_problem`, `deck_problem`), `take_card`,
+  `_take_amulets`, `_pay`; `effects_now`, `rolled` (the plugin's own dice,
+  the same after a reload); `plain_talk`; `duel_begin`, `duel_end`;
+  `town_price`, `stock_left`, `buyable`, `sellable`, `buy_card`,
+  `sell_card`; `_reveal`; `task_rows`; `apply` writes a `log_event` as
+  `"<plugin id>:<event>"`.
+- `game/adventure/plugins/site_journey.gd`: `_service` takes a talk and a
+  trade's card list; `_duel` (the stake paid and the press counted, the
+  world saved, then the duel dealt by `WorldDuels`), `_duel_over`.
+- `game/adventure/plugins/plugin_journey.gd`: `foe_config` split out of
+  `duel_config` — an island's quest and a place's duel alike.
+- `game/adventure/expansions/adventure_sites.gd`: `task_rows`, `targets`.
+  `game/adventure/adventure_tasks.gd`: the sites plugins' rows in `_build`
+  and in the cache key of `rows`. `game/adventure/world/world_status.gd`:
+  `targets` takes the tasks' places in.
+- `game/adventure/adventure_player.gd`: `_cleaned_sites` keeps the
+  optional `counters` and `uses` keys up to 120 characters; the save
+  format stays 9.
+- `game/adventure/plugins/plugin_package.gd`: one checked list of a zip,
+  whoever reads it — `SIG_LOCAL`, `SIG_ROW`, `SIG_END`, `SIG_END64`,
+  `SIG_LOCATOR64`, `MAX_RATIO`; `zip_entries` (the last end record, its
+  comment reaching the file's end; a second end record, a zip64 locator,
+  another disk and a directory of more than its rows refused; rows carry
+  `crc`, `offset`, `disk`), `entry_bytes` (an entry read by that list
+  alone into exactly its listed size, its local header held to its row),
+  `engine_agrees`, `read_one` with `cap`, `one_limit`; `json` refuses a
+  number too large quietly; the test counters `unpack_calls`,
+  `unpack_bytes`.
+- `tools/adventure_plugin.py`: `API_VERSION` 3, `SITES_WORDS_API`,
+  `api_words_of`; the commands `add-action`, `add-pane`, `add-flag`,
+  `add-counter`, `add-foe`, `set-text`, `set-info`, `remove-place`
+  (`command_add_action` and its like, `parse_condition`, `parse_effect`,
+  `parse_need`, `parse_card_prices`, `read_deck_list`, `_finish_edit`);
+  `add-place`'s `--recipe`, `--list-recipes`, `--card`, `--color`,
+  `--look`, `--free` (`RECIPES`, `place_recipe`, `PLACE_LOOKS`); `walk`'s
+  hero and coverage (`walk_hero`, `walk_site`, `walk_options`,
+  `never_reached`, `walk_hint`); `validate`'s warnings and hints
+  (`site_warnings`, `text_hints`, `card_hints`, `close_names`,
+  `suggested_key`); the cheat sheet (`cheatsheet_html`, `cheat_rows`,
+  `COMMAND_EXAMPLES`; `guide` writes it beside `reference.html`);
+  `info`'s `api_3_words`; `compat`'s counters, stock and per-land note.
+- `tools/plugin_fixtures/expected.json`: the `sites_api3_` cases (a good
+  and a bad plugin for every word of API 3, two of them recipes' places),
+  judged alike by the tool and the game; the cases of a newer API now ask
+  for API 4.
+- `tools/package_release.py`: `PLACES` holds six places (seven plugin
+  zips shipped with the prototype); `tools/test_package_release.py`.
+- `expanded_adventure/Gamblers_Den/`, `expanded_adventure/Riddle_Stone/`,
+  `expanded_adventure/Wandering_Collector/`,
+  `expanded_adventure/Duelists_Ring/`: the four study places, API 3
+  (`plugin.json`, `sites.json`, `text.json`, `art/`, README with the
+  commands that made it, LICENSE; the Ring's two deck lists).
+  `expanded_adventure/README.txt`: *The study places*.
+  `expanded_adventure/GUIDE/`: `sites.html` (API 3), `cheatsheet.html`
+  (new, the tool's), `reference.html`, the page list on every page.
+- `tools/test_c1122_places_tool.py` (new): the tool's side of all of the
+  above. Changed: `tools/test_adventure_plugin.py`,
+  `tools/test_adventure_guide.py` (the page list with the cheat sheet),
+  `tools/test_package_release.py`.
+- Tests: `tests/unit/test_c1122_places.gd` (the gate, the checks, every
+  new word in the interpreter, the save), `tests/ui/test_c1122_places_ui.gd`
+  (a talk, a roll, a duel and a purchase through the visit pane),
+  `tests/unit/test_c1122_ptool.gd` (the four study places loaded, placed
+  and played in the game), `tests/support/c1122_places_fixture.gd` (the
+  API 3 fixture plugin); `tests/unit/test_c1122_files.gd` (the zip
+  reader's refusals, for plugin zips and card zips; see the next rows);
+  changed: `tests/unit/test_site_plugins_2026_11_21.gd`,
+  `tests/unit/test_adventure_plugins_registry.gd` (a newer API is 4).
+
+Community card data (the section of 2026-11-17 above), the same day:
+
+- `engine/community/community_card.gd`: `warnings(spec)`, `counts`,
+  `count_words`, `count_labels`, `count_of`, `effects_of`, `aim_words`,
+  `effects_text`, `effect_text`; `TriggerPlan`; the trusted effects
+  `OwnDiscard`, `LeaveSelf`, `EndingTokens`, `ThatPlayer`, `Varying`,
+  `ReturnSelf`, `RaiseToTop`, `TopTutor`, `Borrow`; catalogues
+  `COUNT_WHAT`, `COUNT_WHOSE`, `HOST_TRIGGERS`, `EVENT_PLAYER_TRIGGERS`,
+  `DAMAGE_TRIGGERS`, `TRIGGER_CHOICES`, `QUIET_TRIGGERS`, `COST_WHO`,
+  `COST_SPELL_TYPES`, `SEARCH_WHERE` (with `library_top`), `TOKEN_ENDS`,
+  `ONLY`, `ONLY_TARGETS`, `PLAYER_TARGETS`, `NOT_IN_SPELLS`,
+  `TRIGGER_ONLY`, `VARYING_X`.
+- `engine/community/card_balance.gd`: `card_advice(data)`, `power(spec)`,
+  `power_of(rows)`, `set_advice(specs)`, `coverage()`; levels
+  `NOT_COMPARED`, `RARE`, `LEVEL_WORDS`; `USUAL`, `SIZE_USUAL`,
+  `SIZE_SMALL`, `KEYWORDS_FREE`, `EVIDENCE`, `PIE_EVIDENCE_FEW`;
+  `VOCABULARY`, `NOT_VOCABULARY`, `EFFECT_FIELDS`.
+- `engine/ai/ai_player.gd`: `_arrival_plan`, `_arrival_slot_forced` (an
+  arrival trigger's own plan read for its targets).
+- `game/community_cards.gd`: zips read through `PluginPackage.entry_bytes`;
+  `text_problems(spec)`, `odd_character`, `FLAVOR_LINES`, `AUTHOR_MAX`,
+  `ID_MAX`, `CARD_VERSION_MAX`; `compare(existing, incoming)`;
+  `game_card_like`, `skipped_notice`; `file_sizes_of`,
+  `forget_scan_memory`, `CACHE_FILE`, `CACHE_FORMAT`; `set_unlisted`,
+  `unpack_set`; `SET_ASIDE`, `ASIDE_BATCH`, `aside_folder`,
+  `set_aside_list`, `set_aside_count`, `set_aside_size`, `put_back`,
+  `delete_aside`, `known_missing`.
+- `game/card_forge_screen.gd`: `ask_new`, `load_spec`, `open_card`,
+  `press_save`, `ask_delete`, `move_item`, `ask_effect`, `set_effect`,
+  `filter_effects`, `EFFECT_GROUPS`, `TEXT_KEYS`; `drop_files`,
+  `drop_role`; `import_asked`, `import_lines`; `sort_open_list`,
+  `OPEN_SORTS`; `show_advice`, `validate_set`, `show_set_advice`,
+  `power_words`, `ADVICE_ORDER`, `ADVICE_COLUMNS`; `test_lands`,
+  `test_wants_creatures`, `test_config`, `test_duel`, `TEST_LANDS`,
+  `TEST_CREATURES`; `open_shelf`, `shelf_put_back`, `ask_delete_aside`.
+- `game/sgmanalink/card_transfer.gd`: `decks_using(names)`; `plan`'s
+  `unpack` list. `game/sgmanalink/compatibility.gd`: `_playing_spec`
+  leaves out `author`, `card_version`, `id`. `game/duel/match_saves.gd`:
+  a save's missing cards told apart by `CommunityCards.known_missing`.
+  `game/skin_pack.gd`: a file dropped while `CardForgeLayer` is open is
+  not adopted as a skin.
+- Tests: `tests/cards/test_c1122_rules.gd`, `tests/ui/test_c1122_editor.gd`,
+  `tests/unit/test_c1122_balance.gd`, `tests/unit/test_c1122_files.gd`;
+  changed: `tests/cards/test_community_card.gd`,
+  `tests/unit/test_card_balance.gd`.
 
 ## 0.70.5 (2026-11-22): the whole-project review's fixes
 

@@ -1,0 +1,14 @@
+{
+	"stone.leave": "Leave",
+	"stone.intro": "A standing stone on a low hill, taller than a rider. Words are cut deep into its face, and beneath them three hollows worn smooth by many hands.",
+	"stone.riddle": "\"Every wizard carries me, and I weigh nothing. Spent at dusk, I am back by dawn. Without me the mightiest spell is only a word. What am I?\"",
+	"stone.tries": "The stone remembers: you have answered wrongly {count} times.",
+	"stone.answer_a": "Lay your hand in the first hollow: \"A name.\"",
+	"stone.answer_b": "Lay your hand in the second hollow: \"Mana.\"",
+	"stone.answer_c": "Lay your hand in the third hollow: \"A shadow.\"",
+	"stone.wrong": "The hollow is cold under your palm, and stays cold. Somewhere inside the rock, something settles, like a sigh.",
+	"stone.right": "The hollow grows warm. A seam opens in the rock, and 100 gold spills out: the offerings of everyone who guessed before you.",
+	"stone.silent": "The words have faded to a shadow on the rock. The stone has asked its question and been answered.",
+	"stone.hint_line1": "You press your ear to the rock. Far inside, a voice like a spring under ice: \"Think of what your lands give you, traveler, each morning.\"",
+	"stone.listen": "Put your ear to the stone"
+}

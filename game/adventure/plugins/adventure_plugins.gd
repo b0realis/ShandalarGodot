@@ -41,8 +41,11 @@ extends RefCounted
 ## The plugin API this game reads. A plugin asking for a newer one is refused.
 ## API 2 (2026-11-21) brings the sites plugins ([constant KIND_SITES]):
 ## places of their own on the mainland and on other plugins' islands; every
-## API 1 plugin reads as before.
-const API_VERSION := 2
+## API 1 plugin reads as before. API 3 (2026-11-22) brings the places' new
+## words (counters, talk panes, duels, card trades, tasks —
+## `schema_v1.json` `v3_words`): a sites plugin that uses one declares 3, so
+## a game that reads only API 2 refuses it whole, by this same rule.
+const API_VERSION := 3
 ## A plugin's kind (the manifest's `kind`, API 2): an island reached by ship
 ## ([constant KIND_ISLAND], the default and API 1's only kind), or places that
 ## stand on the lands a campaign has ([constant KIND_SITES], [AdventureSites]).

@@ -14,6 +14,10 @@ import zipfile
 
 import package_release as pack
 
+# The places shipped beside the prototype, each as its own zip: the two of
+# 0.70.4 and the four studies of 0.70.6 (package_release.PLACES).
+PLACE_ZIPS = ["expanded_adventure/" + place.split("/")[-1] + ".zip" for place in pack.PLACES]
+
 
 class PackageReleaseTest(unittest.TestCase):
     def setUp(self):
@@ -335,12 +339,11 @@ class PackageReleaseTest(unittest.TestCase):
                             continue
                         self.assertEqual(sorted(mine), sorted(prefix + name for name in (
                             "expanded_adventure/Fallen_Empires_Refuge_prototype.zip",
-                            "expanded_adventure/Old_Adventurers_Hut.zip", "expanded_adventure/Conjuration_Wizard_Guild.zip",
+                            *PLACE_ZIPS,
                             "expanded_adventure/README.txt",
                             "expanded_adventure/GUIDE/index.html", "expanded_adventure/GUIDE/guide.css",
                             "expanded_adventure/GUIDE/img/map.svg")), "the guide as it is, its litter left out")
-                        for shipped in (plugin, prefix + "expanded_adventure/Old_Adventurers_Hut.zip",
-                                        prefix + "expanded_adventure/Conjuration_Wizard_Guild.zip"):
+                        for shipped in (plugin, *(prefix + name for name in PLACE_ZIPS)):
                             self.assertEqual(archive.getinfo(shipped).compress_type, zipfile.ZIP_STORED)
                             with tempfile.TemporaryDirectory() as work:
                                 target = Path(work) / shipped.split("/")[-1]
@@ -354,8 +357,8 @@ class PackageReleaseTest(unittest.TestCase):
         self.assertEqual(name, "Fallen_Empires_Refuge_prototype.zip")
         self.assertEqual(pack.prototype_zip(self.root)[1], data, "deterministic")
         targets = pack.write_adventure_plugins(self.out, self.root)
-        self.assertEqual([t.name for t in targets], ["Fallen_Empires_Refuge_prototype.zip",
-                                                     "Old_Adventurers_Hut.zip", "Conjuration_Wizard_Guild.zip"])
+        self.assertEqual([t.name for t in targets], ["Fallen_Empires_Refuge_prototype.zip"]
+                         + [name.split("/")[-1] for name in PLACE_ZIPS])
         target = targets[0]
         self.assertEqual(target.read_bytes(), data)
         self.assertEqual(pack.write_adventure_plugins(self.out, self.root), targets, "the same bytes again are fine")

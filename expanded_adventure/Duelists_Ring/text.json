@@ -1,0 +1,13 @@
+{
+	"ring.leave": "Leave",
+	"ring.intro": "Ropes mark a square of trampled grass where two roads cross. A crowd stands three deep around it, and coins change hands before anyone has moved.",
+	"ring.offer": "A broad woman with a scarred forearm leans on the ropes. \"Marda Ironhand. Fifty gold says you cannot beat me. Win, and you take a hundred. Three bouts, no more: I have a living to make.\"",
+	"ring.wins": "The crowd knows you now: you have won {count} bouts in this ring.",
+	"ring.duel": "Wager {price} gold against {foe} ({uses_left} left)",
+	"ring.won": "The crowd roars. {foe} spits, laughs, and pays you 100 gold. \"Fairly done.\"",
+	"ring.lost": "{foe} pockets your wager and helps you up. \"Come back when you have learned something.\"",
+	"ring.spent": "The ropes are coiled and the crowd has drifted off. Marda is counting her takings and does not look up.",
+	"ring.master": "Accept the Ringmaster's own bout ({price} gold against {foe})",
+	"ring.master_won": "{foe} bows, deeply, for the first time in years. He pays 400 gold from his own purse, and the crowd carries you twice around the ring.",
+	"ring.master_lost": "{foe} folds his coat back over his arm. \"You fought well. Not well enough.\" Your 150 gold stays with him."
+}

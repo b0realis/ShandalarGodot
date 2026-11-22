@@ -1,0 +1,214 @@
+{
+	"salt": 72752312,
+	"flags": [],
+	"pictures": {
+		"duelists_ring_ring": "art/duelists_ring_ring.png"
+	},
+	"dungeons": {},
+	"sites": {
+		"ring": {
+			"name": "The Duelist's Ring",
+			"where": [
+				"mainland"
+			],
+			"picture": "duelists_ring_ring",
+			"sprite": {
+				"file": "art/duelists_ring_ring_map.png",
+				"width": 80
+			},
+			"gap": 3,
+			"panes": [
+				{
+					"when": [
+						{
+							"used_up": "duel"
+						}
+					],
+					"lines": [
+						"ring.intro",
+						"ring.spent"
+					],
+					"actions": [
+						{
+							"id": "master",
+							"do": "duel",
+							"label": "ring.master",
+							"when": [
+								{
+									"counter": {
+										"name": "ring_wins",
+										"min": 2
+									}
+								}
+							],
+							"prices": [
+								150
+							],
+							"foe": "ringmaster",
+							"win": {
+								"effects": [
+									{
+										"gold": 400
+									},
+									{
+										"counter": {
+											"name": "ring_wins",
+											"add": 1
+										}
+									}
+								],
+								"result": [
+									"ring.master_won"
+								]
+							},
+							"lose": {
+								"result": [
+									"ring.master_lost"
+								]
+							}
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "ring.leave"
+						}
+					]
+				},
+				{
+					"lines": [
+						"ring.intro",
+						"ring.offer",
+						{
+							"text": "ring.wins",
+							"when": [
+								{
+									"counter": {
+										"name": "ring_wins",
+										"min": 1
+									}
+								}
+							]
+						}
+					],
+					"actions": [
+						{
+							"id": "duel",
+							"do": "duel",
+							"foe": "ring_champ",
+							"label": "ring.duel",
+							"prices": [
+								50,
+								50,
+								50
+							],
+							"win": {
+								"effects": [
+									{
+										"gold": 100
+									},
+									{
+										"counter": {
+											"name": "ring_wins",
+											"add": 1
+										}
+									}
+								],
+								"result": [
+									"ring.won"
+								]
+							},
+							"lose": {
+								"effects": [],
+								"result": [
+									"ring.lost"
+								]
+							}
+						},
+						{
+							"id": "master",
+							"do": "duel",
+							"label": "ring.master",
+							"when": [
+								{
+									"counter": {
+										"name": "ring_wins",
+										"min": 2
+									}
+								}
+							],
+							"prices": [
+								150
+							],
+							"foe": "ringmaster",
+							"win": {
+								"effects": [
+									{
+										"gold": 400
+									},
+									{
+										"counter": {
+											"name": "ring_wins",
+											"add": 1
+										}
+									}
+								],
+								"result": [
+									"ring.master_won"
+								]
+							},
+							"lose": {
+								"result": [
+									"ring.master_lost"
+								]
+							}
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "ring.leave"
+						}
+					]
+				}
+			]
+		}
+	},
+	"counters": [
+		"ring_wins"
+	],
+	"foes": {
+		"ring_champ": {
+			"name": "Marda Ironhand",
+			"life": 20,
+			"face": 30,
+			"deck": {
+				"Mountain": 16,
+				"Lightning Bolt": 4,
+				"Mons's Goblin Raiders": 4,
+				"Ironclaw Orcs": 4,
+				"Gray Ogre": 4,
+				"Hill Giant": 4,
+				"Disintegrate": 2,
+				"Fireball": 2
+			},
+			"deck_name": "Ironhand's Hammer"
+		},
+		"ringmaster": {
+			"name": "Brannoch the Ringmaster",
+			"life": 25,
+			"face": 40,
+			"deck": {
+				"Forest": 9,
+				"Plains": 9,
+				"Llanowar Elves": 4,
+				"Grizzly Bears": 4,
+				"White Knight": 3,
+				"Pearled Unicorn": 3,
+				"Serra Angel": 2,
+				"Giant Growth": 2,
+				"Disenchant": 2,
+				"Swords to Plowshares": 2
+			},
+			"deck_name": "The Ringmaster's Own"
+		}
+	}
+}

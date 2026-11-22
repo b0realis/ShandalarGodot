@@ -10,8 +10,21 @@ extends RefCounted
 ##
 ## A PLACE'S PROGRESS ([member AdventurePlayer.sites], keyed by the plugin's
 ## id): `{uses: {"<site>.<action>": n}, flags: [names on], dungeons:
-## {"<land>:<dungeon key>": encounter slot}}` — the uses counted for the
+## {"<land>:<dungeon key>": encounter slot}}` and, once the plugin counted
+## anything, `counters: {name: n}` (API 3) — the uses counted for the
 ## plugin as a whole (a guild's branches on two lands share one count).
+## BUT A PRICED ACTION THAT RAISES A DUNGEON IS COUNTED LAND BY LAND
+## (`"<site>.<action>@<land>"`, [method per_land]; the campaign of
+## 2026-11-22): the dungeon it raises is that land's, so the secret sold on
+## the mainland is still for sale on an island. A count kept under the old
+## key by an older game is read for each land that holds the dungeon.
+##
+## API 3 (2026-11-22; the owner: *"make it easy to create new places that
+## give additional context and users can make do various game mechanics"*)
+## adds conditions, effects, costs (`needs`), talk panes, a roll on the
+## plugin's own dice ([method AdventureSites.dice_for]; never the
+## adventure's), duels against the plugin's own foes, card trades and Tasks
+## rows — all still data: nothing a plugin writes is ever run.
 ##
 ## A SERVICE'S PRICES: the n-th use of an action costs its n-th price; once
 ## every price is paid the action is gone (the Conjuration Wizard Guild's
@@ -26,11 +39,16 @@ const MOST_USES := 1000
 const RULE_BITS := {"no_color": 0x10, "no_artifacts": 0x40, "no_instants": 0x80,
 	"life_carries": 0x01, "life_adds": 0x02}
 const COLORS: Array[String] = ["black", "blue", "green", "red", "white"]
+## The most amulets of one color an `amulet` effect leaves the hero with.
+const MOST_AMULETS := 99
+## The default button of each kind of action (`label` replaces it).
+const LABELS := {"talk": "site.talk", "duel": "site.duel", "buy_card": "site.buy", "sell_card": "site.sell"}
 
 var id := ""
 ## The scan whose data this reads ([member AdventurePlugins.revision]).
 var revision := 0
 var _data := {}
+var _per_land := {}
 
 
 func _init(plugin_id: String) -> void:
@@ -59,6 +77,11 @@ func site(key: String) -> Dictionary:
 
 func dungeon(key: String) -> Dictionary:
 	return file().get("dungeons", {}).get(key, {})
+
+
+## The opponent [param key] of the plugin's `foes` (API 3), {} for none.
+func foe(key: String) -> Dictionary:
+	return file().get("foes", {}).get(key, {}) if key != "" else {}
 
 
 ## [param key]'s words in the plugin's text.json (else the engine's),
@@ -92,10 +115,95 @@ func _state(player: AdventurePlayer) -> Dictionary:
 	return state
 
 
-## How often [param player] had [param site]'s action [param action] done.
+## EVERY EFFECT [param entry] MAY EVER APPLY: its own, each outcome's of a
+## roll among them, and both branches' of a duel.
+static func all_effects(entry: Dictionary) -> Array:
+	var out: Array = []
+	var lists: Array = [entry.get("effects", [])]
+	for branch in ["win", "lose"]:
+		if entry.get(branch) is Dictionary:
+			lists.append(entry[branch].get("effects", []))
+	for list: Array in lists:
+		for effect: Dictionary in list:
+			if effect.has("roll"):
+				for outcome: Dictionary in effect["roll"].get("outcomes", []):
+					out.append_array(outcome.get("effects", []))
+			else:
+				out.append(effect)
+	return out
+
+
+## The dungeons [param entry]'s effects may raise, by key.
+static func spawned(entry: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for effect: Dictionary in all_effects(entry):
+		if effect.has("spawn_dungeon") and not String(effect["spawn_dungeon"]) in out:
+			out.append(String(effect["spawn_dungeon"]))
+	return out
+
+
+## Whether [param site_key]'s [param action] is counted land by land: one
+## with prices that may raise a dungeon (the class doc).
+func per_land(site_key: String, action: String) -> bool:
+	var key := site_key + "." + action
+	if not _per_land.has(key):
+		var entry := action_of(site_key, action)
+		_per_land[key] = not (entry.get("prices", []) as Array).is_empty() and not spawned(entry).is_empty()
+	return _per_land[key]
+
+
+## How often [param player] had [param site]'s action [param action] done
+## (on this land, for an action counted land by land).
 func uses(player: AdventurePlayer, site_key: String, action: String) -> int:
 	var counted: Variant = progress(player).get("uses", {})
-	return int(counted.get(site_key + "." + action, 0)) if counted is Dictionary else 0
+	if not counted is Dictionary:
+		return 0
+	var plain := site_key + "." + action
+	if not per_land(site_key, action):
+		return int(counted.get(plain, 0))
+	var here := int(counted.get(plain + "@" + land(player), 0))
+	# A count an older game kept for the plugin as a whole: this land's when
+	# the dungeon it paid for was raised here.
+	if counted.has(plain):
+		var raised: Variant = progress(player).get("dungeons", {})
+		for key in spawned(action_of(site_key, action)):
+			if raised is Dictionary and (raised as Dictionary).has(land(player) + ":" + key):
+				return mini(MOST_USES, here + int(counted[plain]))
+	return here
+
+
+## Every use of [param site_key]'s actions together (a `one_of` line's turn
+## `by: "uses"`).
+func site_uses(player: AdventurePlayer, site_key: String) -> int:
+	var counted: Variant = progress(player).get("uses", {})
+	var total := 0
+	if counted is Dictionary:
+		for key: Variant in counted:
+			if String(key).begins_with(site_key + ".") and not "#" in String(key):
+				total += int(counted[key])
+	return total
+
+
+## The plugin's counter [param name] (API 3), 0 to [constant MOST_USES].
+func counter(player: AdventurePlayer, name: String) -> int:
+	var kept: Variant = progress(player).get("counters", {})
+	if not kept is Dictionary or not AdventurePlayer._is_number((kept as Dictionary).get(name, 0)):
+		return 0
+	return clampi(int(kept[name]), 0, MOST_USES) if (kept as Dictionary).has(name) else 0
+
+
+## The day of [param player]'s journey.
+static func day(player: AdventurePlayer) -> int:
+	return player.journey_steps() / WorldStatus.DAY
+
+
+## How many copies of [param card] the hero holds, in a deck or not.
+static func held(player: AdventurePlayer, card: String) -> int:
+	var count := 0
+	for row: Variant in player.cards:
+		if row is Dictionary and String(row.get("card", "")) == card:
+			count += 1
+	return count
 
 
 func flag(player: AdventurePlayer, name: String) -> bool:
@@ -211,25 +319,144 @@ func _holds(player: AdventurePlayer, site_key: String, condition: Dictionary) ->
 			return done >= int(value.get("min", 0)) and done <= int(value.get("max", MOST_USES))
 		"used_up": return used_up(player, site_key, action_of(site_key, String(value)))
 		"dungeon": return dungeon_state(player, String(value["dungeon"])) == String(value["state"])
+		# API 3.
+		"has_card": return held(player, String(value["card"])) >= int(value.get("min", 1))
+		"amulets":
+			var color := String(value.get("color", "any"))
+			return (player.amulet_count() if color == "any" else int(player.amulets.get(color, 0))) >= int(value.get("min", 1))
+		"hero_color": return player.color == String(value)
+		"owns_magic": return player.owns(String(value))
+		"food_at_least": return player.food >= int(value)
+		"gold_below": return player.gold < int(value)
+		"day_at_least": return day(player) >= int(value)
+		"wizards_defeated": return player.defeated_wizards.size() >= int(value)
+		"at_peace": return player.at_peace() == bool(value)
+		"difficulty": return player.difficulty >= int(value.get("min", 0)) and player.difficulty <= int(value.get("max", 3))
+		"plugin_on": return AdventureSites.on(player, String(value)) or AdventureExpansions.enabled_for(player, String(value))
+		"counter":
+			var count := counter(player, String(value["name"]))
+			return count >= int(value.get("min", 0)) and count <= int(value.get("max", MOST_USES))
+		"site_used":
+			var done := uses(player, String(value["site"]), String(value["action"]))
+			return done >= int(value.get("min", 1)) and done <= int(value.get("max", MOST_USES))
+		"gift_waiting": return player.duel_gift_waiting() == bool(value)
+		"any":
+			for option: Dictionary in value:
+				if _holds(player, site_key, option):
+					return true
+			return false
 	return false
+
+
+## The first condition named [param word] in [param conditions] (inside an
+## `any` too): its value, null for none.
+static func _named_condition(conditions: Array, word: String) -> Variant:
+	for condition: Dictionary in conditions:
+		if condition.has(word):
+			return condition[word]
+		if condition.has("any"):
+			var inside: Variant = _named_condition(condition["any"], word)
+			if inside != null:
+				return inside
+	return null
 
 
 # --------------------------------------------------------------- panes --
 
 ## The placeholders' values for [param site_key]'s [param action] ({} for
-## a pane's lines).
-func values(player: AdventurePlayer, site_key: String, action := {}, more := {}) -> Dictionary:
+## a pane's lines, then [param pane] the pane): the hero's, `{price}` and
+## `{uses_left}` of the action, `{dungeon}` the action's or the pane's own
+## dungeon ([method dungeon_about]) — its name before it is raised too,
+## never the bare word —, `{count}` the counter it names, `{foe}` and
+## `{life}` a duel's opponent, `{card}` the card it gives or takes.
+func values(player: AdventurePlayer, site_key: String, action := {}, more := {}, pane := {}) -> Dictionary:
 	var out := {"hero": player.name if player != null else "", "gold": player.gold if player != null else 0,
 		"region": AdventureExpansions.label(land(player), player) if player != null else ""}
+	if player == null:
+		out.merge(more, true)
+		return out
+	out["food"] = player.food
+	out["amulets"] = player.amulet_count()
+	out["day"] = day(player)
+	var about := dungeon_about(action, pane)
+	if about != "":
+		out["dungeon"] = dungeon_word(player, about)
+	var counted := counter_about(action, pane)
+	if counted != "":
+		out["count"] = counter(player, counted)
 	if not action.is_empty():
 		out["price"] = maxi(0, price(player, site_key, action))
 		var left := uses_left(player, site_key, action)
 		out["uses_left"] = left if left >= 0 else ""
-	for spawned in file().get("dungeons", {}):
-		if dungeon_index(player, spawned) >= 0:
-			out["dungeon"] = WorldNames.dungeon_name(dungeon_index(player, spawned), player.world)
+		var opponent := foe(String(action.get("foe", "")))
+		if not opponent.is_empty():
+			out["foe"] = String(opponent.get("name", ""))
+			out["life"] = int(opponent.get("life", 20))
+		var card := card_about(action)
+		if card != "":
+			out["card"] = card
 	out.merge(more, true)
 	return out
+
+
+## THE DUNGEON `{dungeon}` NAMES for [param action] (the first its effects
+## may raise, else the one its `when` asks about) or for [param pane] (the
+## one its `when` asks about, else the first one of its actions'); else the
+## plugin's first dungeon; "" for a plugin with none.
+func dungeon_about(action: Dictionary, pane := {}) -> String:
+	for source: Dictionary in [action, pane]:
+		if source.is_empty():
+			continue
+		var raised := spawned(source)
+		if not raised.is_empty():
+			return raised[0]
+		var asked: Variant = _named_condition(source.get("when", []), "dungeon")
+		if asked is Dictionary:
+			return String(asked["dungeon"])
+		for entry: Dictionary in source.get("actions", []):
+			var theirs := spawned(entry)
+			if not theirs.is_empty():
+				return theirs[0]
+	var all: Dictionary = file().get("dungeons", {})
+	return String(all.keys()[0]) if not all.is_empty() else ""
+
+
+## Dungeon [param key]'s name: the land's word for it once raised, the
+## plugin's before.
+func dungeon_word(player: AdventurePlayer, key: String) -> String:
+	var index := dungeon_index(player, key)
+	if index >= 0:
+		return WorldNames.dungeon_name(index, player.world)
+	return String(dungeon(key).get("name", key))
+
+
+## The counter `{count}` shows for [param action] (the first its effects
+## change, else the one its `when` asks about) or [param pane] (its
+## `when`'s); else the plugin's first counter; "" for a plugin with none.
+func counter_about(action: Dictionary, pane := {}) -> String:
+	for source: Dictionary in [action, pane]:
+		if source.is_empty():
+			continue
+		for effect: Dictionary in all_effects(source):
+			if effect.has("counter"):
+				return String(effect["counter"]["name"])
+		var asked: Variant = _named_condition(source.get("when", []), "counter")
+		if asked is Dictionary:
+			return String(asked["name"])
+	var all: Array = file().get("counters", [])
+	return String(all[0]) if not all.is_empty() else ""
+
+
+## The card `{card}` names for [param action]: the first it takes
+## (`needs`), else the first it gives.
+static func card_about(action: Dictionary) -> String:
+	for need: Dictionary in action.get("needs", []):
+		if need.has("card"):
+			return String(need["card"])
+	for effect: Dictionary in all_effects(action):
+		if effect.has("give_card"):
+			return String(effect["give_card"])
+	return ""
 
 
 func _lines(player: AdventurePlayer, site_key: String, entries: Array, filled: Dictionary) -> Array:
@@ -237,25 +464,64 @@ func _lines(player: AdventurePlayer, site_key: String, entries: Array, filled: D
 	for entry in entries:
 		if entry is String:
 			out.append(say(entry, filled))
-		elif holds(player, site_key, entry.get("when", [])):
-			out.append(say(String(entry["text"]), filled))
+			continue
+		if not holds(player, site_key, entry.get("when", [])):
+			continue
+		# A line that asks about a counter shows that one as {count}.
+		var own := filled
+		var asked: Variant = _named_condition(entry.get("when", []), "counter")
+		if asked is Dictionary:
+			own = filled.duplicate()
+			own["count"] = counter(player, String(asked["name"]))
+		if entry.has("one_of"):
+			# In turn, by the day or by the place's uses: no dice.
+			var options: Array = entry["one_of"]
+			var turn := day(player) if String(entry.get("by", "day")) == "day" else site_uses(player, site_key)
+			out.append(say(String(options[posmod(turn, options.size())]), own))
+		else:
+			out.append(say(String(entry["text"]), own))
 	return out
 
 
+## THE PANE [method describe] SHOWS: the pane named [param pane_id] (a
+## talk's, API 3) while its `when` holds, else the first pane without an id
+## whose `when` holds.
+func pane_of(player: AdventurePlayer, site_key: String, pane_id := "") -> Dictionary:
+	var panes: Array = site(site_key).get("panes", [])
+	if pane_id != "":
+		for option: Dictionary in panes:
+			if String(option.get("id", "")) == pane_id and holds(player, site_key, option.get("when", [])):
+				return option
+	for option: Dictionary in panes:
+		if not option.has("id") and holds(player, site_key, option.get("when", [])):
+			return option
+	return {}
+
+
+## The words of [param action]'s button: its `label`, else its kind's own.
+func label_key(action: Dictionary) -> String:
+	if action.has("label"):
+		return String(action["label"])
+	var kind := String(action["do"])
+	if LABELS.has(kind):
+		return LABELS[kind]
+	for need: Dictionary in action.get("needs", []):
+		if need.has("card"):
+			return "site.give"
+	return "site.pay"
+
+
 ## THE PANE OF PLACE [param site_key] for [param player]: the first pane
-## whose `when` holds — its lines, and each action whose `when` holds and
-## that is not used up, `[button, words, ready]` (ready: the hero carries
-## its price, and for a copy has a card to copy and room for it).
-func describe(player: AdventurePlayer, site_key: String) -> Dictionary:
+## whose `when` holds ([method pane_of]; [param pane_id] a talk's pane) —
+## its lines, and each action whose `when` holds and that is not used up,
+## `[button, words, ready]` (ready: the hero carries its price and what it
+## needs, and for a copy has a card to copy and room for it).
+func describe(player: AdventurePlayer, site_key: String, pane_id := "") -> Dictionary:
 	var place := site(site_key)
 	if place.is_empty():
 		return {}
-	var pane := {}
-	for option in place.get("panes", []):
-		if holds(player, site_key, option.get("when", [])):
-			pane = option
-			break
-	var filled := values(player, site_key)
+	var pane := pane_of(player, site_key, pane_id)
+	var filled := values(player, site_key, {}, {}, pane)
 	var actions: Array = []
 	for action in pane.get("actions", []):
 		if not holds(player, site_key, action.get("when", [])):
@@ -269,8 +535,9 @@ func describe(player: AdventurePlayer, site_key: String) -> Dictionary:
 					continue
 				var words := values(player, site_key, action)
 				actions.append([id + AdventureSites.ACT + site_key + ":" + name,
-					say(String(action.get("label", "site.pay")), words), refusal(player, site_key, action) == ""])
+					say(label_key(action), words), refusal(player, site_key, action) == ""])
 	return {"expansion": id, "kind": AdventureSites.PANE_KIND, "site": site_key, "slot": -1,
+		"pane": String(pane.get("id", "")),
 		"name": say(String(pane["title"]), filled) if pane.has("title") else String(place.get("name", site_key)),
 		"subtitle": say(String(pane["subtitle"]), filled) if pane.has("subtitle") else plugin_name(),
 		"picture": String(pane.get("picture", place.get("picture", "visit_city"))),
@@ -279,19 +546,206 @@ func describe(player: AdventurePlayer, site_key: String) -> Dictionary:
 
 ## WHY [param site_key]'s [param action] cannot be done now, in the
 ## plugin's words; "" when it can: its conditions hold, it is not used up,
-## the hero carries its price — and for a copy, a card may be copied and
-## the bag has room.
+## the hero carries its price and what it `needs` — and for a copy, a card
+## may be copied and the bag has room; for effects, each can be had (room
+## for a card given, no gift waiting for one given, no dungeon paid for
+## that is open already); for a duel, a deck to fight with; for a trade, a
+## card to trade. Asked before anything is paid.
 func refusal(player: AdventurePlayer, site_key: String, action: Dictionary) -> String:
 	if action.is_empty() or not holds(player, site_key, action.get("when", [])) or used_up(player, site_key, action):
 		return say("site.done")
 	var cost := price(player, site_key, action)
 	if player.gold < cost:
 		return say("site.no_gold", {"price": cost, "gold": player.gold})
-	if String(action["do"]) == "copy_card":
-		if player.bag_room() < 1:
-			return say("site.bag_full")
-		if copyable(player).is_empty():
-			return say("site.no_cards")
+	var lacking := _needs_problem(player, action)
+	if lacking != "":
+		return lacking
+	match String(action["do"]):
+		"copy_card":
+			if player.bag_room() < 1:
+				return say("site.bag_full")
+			if copyable(player).is_empty():
+				return say("site.no_cards")
+		"effects", "talk":
+			return _effects_problem(player, action, effects_now(player, site_key, action)["effects"])
+		"duel":
+			var deck := deck_problem(player)
+			if deck != "":
+				return deck
+			for branch in ["win", "lose"]:
+				var why := _effects_problem(player, action, action.get(branch, {}).get("effects", []))
+				if why != "":
+					return why
+		"buy_card":
+			if player.bag_room() < 1:
+				return say("site.bag_full")
+			if buyable(player, site_key, action).is_empty():
+				return say("site.no_stock")
+		"sell_card":
+			if sellable(player, site_key, action).is_empty():
+				return say("site.nothing_to_sell")
+	return ""
+
+
+## What of [param action]'s `needs` the hero lacks, "" for nothing.
+func _needs_problem(player: AdventurePlayer, action: Dictionary) -> String:
+	var cards := {}
+	var amulets: Dictionary = player.amulets.duplicate()
+	var food := player.food
+	for need: Dictionary in action.get("needs", []):
+		var key: String = need.keys()[0]
+		var value: Variant = need[key]
+		match key:
+			"card":
+				cards[value] = int(cards.get(value, 0)) + 1
+				if held(player, String(value)) < int(cards[value]):
+					return say("site.needs_card", {"card": value})
+			"amulets":
+				var color := String(value.get("color", "any"))
+				if not _take_amulets(amulets, color, int(value.get("count", 1))):
+					if color == "any":
+						return say("site.needs_any_amulets", {"count": int(value.get("count", 1)), "amulets": player.amulet_count()})
+					return say("site.needs_amulets", {"count": int(value.get("count", 1)), "color": color})
+			"food":
+				food -= int(value)
+				if food < 0:
+					return say("site.needs_food", {"count": int(value), "food": player.food})
+	return ""
+
+
+## [param count] amulets of [param color] taken out of [param amulets]
+## (`{color: n}`) — of "any": one at a time from the color there is most of,
+## black first among equals. False, and nothing sure about what was taken,
+## when there are too few (asked on a copy first, [method _needs_problem]).
+static func _take_amulets(amulets: Dictionary, color: String, count: int) -> bool:
+	if color != "any":
+		if int(amulets.get(color, 0)) < count:
+			return false
+		amulets[color] = int(amulets.get(color, 0)) - count
+		return true
+	for taken in count:
+		var best := ""
+		for hue in COLORS:
+			if int(amulets.get(hue, 0)) > (int(amulets.get(best, 0)) if best != "" else 0):
+				best = hue
+		if best == "":
+			return false
+		amulets[best] = int(amulets[best]) - 1
+	return true
+
+
+## One copy of [param card] out of the hero's cards: one in no deck first,
+## else the one in the fewest decks (it leaves them). False for none held.
+static func take_card(player: AdventurePlayer, card: String) -> bool:
+	var best := -1
+	var fewest := 1 << 30
+	for i in player.cards.size():
+		var row: Variant = player.cards[i]
+		if row is Dictionary and String(row.get("card", "")) == card:
+			var decks := (row["decks"] as Array).size() if row.get("decks") is Array else 0
+			if decks < fewest:
+				best = i
+				fewest = decks
+	if best < 0:
+		return false
+	player.cards.remove_at(best)
+	return true
+
+
+## [param action] paid: [param cost] gold and everything it `needs`.
+func _pay(player: AdventurePlayer, action: Dictionary, cost: int) -> void:
+	player.gold -= cost
+	for need: Dictionary in action.get("needs", []):
+		var key: String = need.keys()[0]
+		var value: Variant = need[key]
+		match key:
+			"card": take_card(player, String(value))
+			"amulets": _take_amulets(player.amulets, String(value.get("color", "any")), int(value.get("count", 1)))
+			"food": player.food = maxi(0, player.food - int(value))
+
+
+## THE EFFECTS [param entry] APPLIES NOW, `{effects, result}`: its own in
+## order, a `roll` replaced by the effects of the outcome drawn ([method
+## rolled]) and that outcome's lines in `result`.
+func effects_now(player: AdventurePlayer, site_key: String, entry: Dictionary) -> Dictionary:
+	var out := {"effects": [], "result": []}
+	for effect: Dictionary in entry.get("effects", []):
+		if effect.has("roll"):
+			var outcome := rolled(player, site_key, entry, effect["roll"])
+			(out["effects"] as Array).append_array(outcome.get("effects", []))
+			(out["result"] as Array).append_array(outcome.get("result", []))
+		else:
+			(out["effects"] as Array).append(effect)
+	return out
+
+
+## THE OUTCOME OF [param roll] for this use of [param entry]: one by its
+## weight, on the plugin's own dice ([method AdventureSites.dice_for]) for
+## this land, place, action and use — the adventure's dice are never cast,
+## and the same save rolls the same again.
+func rolled(player: AdventurePlayer, site_key: String, entry: Dictionary, roll: Dictionary) -> Dictionary:
+	var outcomes: Array = roll.get("outcomes", [])
+	if outcomes.is_empty():
+		return {}
+	var total := 0
+	for outcome: Dictionary in outcomes:
+		total += maxi(1, int(outcome.get("weight", 1)))
+	var name := String(entry["id"])
+	# The use stands first in the key: FNV-1a mixes what comes early through
+	# every later byte, and the dice's first draw is only as mixed as its
+	# seed (the use last gave runs of one outcome, use after use).
+	var dice := AdventureSites.dice_for(player.world, int(file().get("salt", 0)),
+		"%d:roll:%s:%s:%s" % [uses(player, site_key, name), id, site_key, name])
+	var at := dice.below(total)
+	for outcome: Dictionary in outcomes:
+		at -= maxi(1, int(outcome.get("weight", 1)))
+		if at < 0:
+			return outcome
+	return outcomes.back()
+
+
+## Why [param effects] of [param action] cannot be had now, "" when they
+## can — asked before anything is paid: a dungeon paid for that is open
+## already (the campaign of 2026-11-22: the price was taken for nothing), a
+## card and no room in the bag or no more copies allowed ([method
+## CardShop.classic_allows]), a gift for the next duel while one waits.
+func _effects_problem(player: AdventurePlayer, action: Dictionary, effects: Array) -> String:
+	var given := 0
+	var rule := {}
+	var rule_read := false
+	for effect: Dictionary in effects:
+		var key: String = effect.keys()[0]
+		var value: Variant = effect[key]
+		match key:
+			"spawn_dungeon":
+				if not (action.get("prices", []) as Array).is_empty() and dungeon_state(player, String(value)) == "open":
+					return say("site.dungeon_open", {"dungeon": dungeon_word(player, String(value))})
+			"give_card":
+				given += 1
+				if player.bag_room() < given:
+					return say("site.bag_full")
+				if not rule_read:
+					rule = CardShop.classic_rule(player).duplicate(true)
+					rule_read = true
+				if not CardShop.classic_allows(rule, String(value)):
+					return say("site.card_limit", {"card": value})
+				if not rule.is_empty():
+					rule["owned"][String(value)] = int(rule["owned"].get(String(value), 0)) + 1
+			"next_duel":
+				if player.duel_gift_waiting():
+					return say("site.gift_waiting")
+	return ""
+
+
+## Why no duel may begin now, "" when one may: no deck chosen, or a card in
+## it this game does not know (as [method DataRegion.deck_problem]).
+func deck_problem(player: AdventurePlayer) -> String:
+	var cards := player.deck_cards(true)
+	if cards.is_empty():
+		return say("deck.empty")
+	for card in cards:
+		if not CardRegistry.has_card(card):
+			return say("deck.unknown")
 	return ""
 
 
@@ -306,27 +760,44 @@ func result_place(player: AdventurePlayer, site_key: String, lines: Array) -> Di
 
 # ------------------------------------------------------------ actions --
 
-## A SERVICE DONE: [param site_key]'s effects action [param action] paid
-## and its effects applied, its use counted. The pane to show next: its
-## `result` lines (none: the place's pane again), or why it could not be
-## done — nothing paid then.
+## Whether [param entry] is a talk that only opens its pane: nothing paid,
+## nothing applied, nothing counted or saved.
+static func plain_talk(entry: Dictionary) -> bool:
+	return String(entry.get("do", "")) == "talk" and (entry.get("prices", []) as Array).is_empty() \
+		and (entry.get("effects", []) as Array).is_empty() and (entry.get("needs", []) as Array).is_empty()
+
+
+## A SERVICE DONE: [param site_key]'s effects action [param action] (or a
+## talk with a price or effects) paid and its effects applied, its use
+## counted. The pane to show next: its `result` lines and a roll's (none:
+## the place's pane again; a talk: the pane it names), or why it could not
+## be done — nothing paid then.
 func do_effects(player: AdventurePlayer, site_key: String, action: String) -> Dictionary:
 	var entry := action_of(site_key, action)
-	if entry.is_empty() or String(entry["do"]) != "effects":
+	if entry.is_empty() or not String(entry["do"]) in ["effects", "talk"]:
 		return describe(player, site_key)
 	var why := refusal(player, site_key, entry)
 	if why == "":
 		why = _spawn_problem(player, entry, site_key)
 	if why != "":
 		return result_place(player, site_key, [why])
+	var talk := String(entry["do"]) == "talk"
+	if plain_talk(entry):
+		return describe(player, site_key, String(entry.get("to", "")))
+	# Drawn before the use is counted: the roll is this use's.
+	var now := effects_now(player, site_key, entry)
 	var cost := price(player, site_key, entry)
 	var filled := values(player, site_key, entry)
-	player.gold -= cost
+	_pay(player, entry, cost)
 	_count(player, site_key, action)
-	apply(player, site_key, entry.get("effects", []), filled)
-	if (entry.get("result", []) as Array).is_empty():
+	apply(player, site_key, now["effects"], filled)
+	if talk:
+		return describe(player, site_key, String(entry.get("to", "")))
+	var lines: Array = (entry.get("result", []) as Array) + (now["result"] as Array)
+	if lines.is_empty():
 		return describe(player, site_key)
-	return result_place(player, site_key, _lines(player, site_key, entry["result"], values(player, site_key, {}, {"price": cost})))
+	var after := values(player, site_key, entry, {"price": cost})
+	return result_place(player, site_key, _lines(player, site_key, lines, after))
 
 
 ## A COPY MADE: [param site_key]'s copy action [param action] paid and one
@@ -345,7 +816,7 @@ func copy_card(player: AdventurePlayer, site_key: String, action: String, card: 
 	var cost := price(player, site_key, entry)
 	if not player.add_card(card):
 		return result_place(player, site_key, [say("site.bag_full")])
-	player.gold -= cost
+	_pay(player, entry, cost)
 	_count(player, site_key, action)
 	var filled := values(player, site_key, {}, {"price": cost, "card": card})
 	player.log_event("site", say("site.copied_log", filled), {"card": card, "site": id + ":" + site_key})
@@ -354,9 +825,150 @@ func copy_card(player: AdventurePlayer, site_key: String, action: String, card: 
 
 
 func _count(player: AdventurePlayer, site_key: String, action: String) -> void:
+	_count_key(player, site_key + "." + action + ("@" + land(player) if per_land(site_key, action) else ""))
+
+
+func _count_key(player: AdventurePlayer, key: String) -> void:
 	var counted: Dictionary = _state(player)["uses"]
-	var key := site_key + "." + action
 	counted[key] = mini(MOST_USES, int(counted.get(key, 0)) + 1)
+
+
+# -------------------------------------------------------------- duels --
+
+## A DUEL BEGUN (API 3): [param site_key]'s duel action [param action] —
+## its stake (the next price) and what it needs paid, the press counted
+## unless it counts wins. The gold paid, −1 when no duel may begin
+## ([method refusal]; nothing paid). The duel itself is the world screen's
+## ([code]site_journey.gd[/code]), which saves right after this: a duel
+## left unfinished is then a stake lost, and never one to try again free.
+func duel_begin(player: AdventurePlayer, site_key: String, action: String) -> int:
+	var entry := action_of(site_key, action)
+	if entry.is_empty() or String(entry["do"]) != "duel" or foe(String(entry.get("foe", ""))).is_empty() \
+			or refusal(player, site_key, entry) != "":
+		return -1
+	var cost := price(player, site_key, entry)
+	_pay(player, entry, cost)
+	if String(entry.get("count", "press")) != "win":
+		_count(player, site_key, action)
+	return cost
+
+
+## THE DUEL OVER: [param won] or not (a draw is not a win) — the branch's
+## effects applied, a win counted for an action that counts wins, the
+## result written in the journal under the plugin's own event
+## (`<plugin>:duel`, never the hero's duel record). The pane to show: the
+## branch's `result`, else the engine's sentence.
+func duel_end(player: AdventurePlayer, site_key: String, action: String, won: bool, cost := 0) -> Dictionary:
+	var entry := action_of(site_key, action)
+	if entry.is_empty() or String(entry["do"]) != "duel":
+		return describe(player, site_key)
+	var filled := values(player, site_key, entry, {"price": cost})
+	if won and String(entry.get("count", "press")) == "win":
+		_count(player, site_key, action)
+	var branch: Dictionary = entry.get("win" if won else "lose", {})
+	apply(player, site_key, branch.get("effects", []), filled)
+	player.log_event(id + ":duel", say("site.duel_won_log" if won else "site.duel_lost_log", filled), {"site": id + ":" + site_key})
+	var after := values(player, site_key, entry, {"price": cost})
+	var lines := _lines(player, site_key, branch.get("result", []), after)
+	return result_place(player, site_key, lines if not lines.is_empty() else [say("site.duel_won" if won else "site.duel_lost", after)])
+
+
+# ------------------------------------------------------------- trades --
+
+## The most a town pays for [param card] ([method CardShop.sell_range]): a
+## place never sells it for less nor buys it for more, so no card bought in
+## one and sold in the other makes gold.
+static func town_price(card: String) -> int:
+	return CardShop.sell_range(card).y
+
+
+func _stock_key(site_key: String, entry: Dictionary, card: String) -> String:
+	return "%s.%s#%08x" % [site_key, String(entry["id"]), AdventureSites.fnv(card)]
+
+
+## How many more of [param card] a trade trades (−1: without end).
+func stock_left(player: AdventurePlayer, site_key: String, entry: Dictionary, card: String) -> int:
+	if not entry.has("stock"):
+		return -1
+	var counted: Variant = progress(player).get("uses", {})
+	var traded := int(counted.get(_stock_key(site_key, entry, card), 0)) if counted is Dictionary else 0
+	return maxi(0, int(entry["stock"]) - traded)
+
+
+## What [param entry] (a `buy_card`) sells the hero now, `{card: gold}`:
+## each card in stock they may hold one more of, at its price — never under
+## [method town_price].
+func buyable(player: AdventurePlayer, site_key: String, entry: Dictionary) -> Dictionary:
+	var out := {}
+	var rule := CardShop.classic_rule(player)
+	var cards: Dictionary = entry.get("cards", {})
+	for card: String in cards:
+		if not CardRegistry.has_card(card) or stock_left(player, site_key, entry, card) == 0 \
+				or not CardShop.classic_allows(rule, card):
+			continue
+		out[card] = maxi(int(cards[card]), town_price(card))
+	return out
+
+
+## What [param entry] (a `sell_card`) buys of the hero now, `{card: gold}`:
+## each card they hold that is still wanted, at its price — never over
+## [method town_price].
+func sellable(player: AdventurePlayer, site_key: String, entry: Dictionary) -> Dictionary:
+	var out := {}
+	var cards: Dictionary = entry.get("cards", {})
+	for card: String in cards:
+		if held(player, card) < 1 or stock_left(player, site_key, entry, card) == 0:
+			continue
+		out[card] = mini(int(cards[card]), town_price(card))
+	return out
+
+
+## A CARD BOUGHT: [param card] of [param site_key]'s `buy_card` action in
+## the bag for its price ([method buyable]), or why not — nothing paid then.
+func buy_card(player: AdventurePlayer, site_key: String, action: String, card: String) -> Dictionary:
+	var entry := action_of(site_key, action)
+	if entry.is_empty() or String(entry["do"]) != "buy_card":
+		return describe(player, site_key)
+	var why := refusal(player, site_key, entry)
+	var offered := buyable(player, site_key, entry)
+	if why == "" and not offered.has(card):
+		why = say("site.no_stock")
+	if why == "" and player.gold < int(offered[card]):
+		why = say("site.no_gold", {"price": int(offered[card]), "gold": player.gold})
+	if why != "":
+		return result_place(player, site_key, [why])
+	if not player.add_card(card):
+		return result_place(player, site_key, [say("site.bag_full")])
+	var cost := int(offered[card])
+	player.gold -= cost
+	return _traded(player, site_key, entry, card, cost, "bought")
+
+
+## A CARD SOLD: one copy of [param card] (one in no deck first) for the
+## gold of [param site_key]'s `sell_card` action ([method sellable]).
+func sell_card(player: AdventurePlayer, site_key: String, action: String, card: String) -> Dictionary:
+	var entry := action_of(site_key, action)
+	if entry.is_empty() or String(entry["do"]) != "sell_card":
+		return describe(player, site_key)
+	var why := refusal(player, site_key, entry)
+	var wanted := sellable(player, site_key, entry)
+	if why == "" and not wanted.has(card):
+		why = say("site.nothing_to_sell")
+	if why != "" or not take_card(player, card):
+		return result_place(player, site_key, [why if why != "" else say("site.nothing_to_sell")])
+	var cost := int(wanted[card])
+	player.gold += cost
+	return _traded(player, site_key, entry, card, cost, "sold")
+
+
+func _traded(player: AdventurePlayer, site_key: String, entry: Dictionary, card: String, cost: int, word: String) -> Dictionary:
+	_count(player, site_key, String(entry["id"]))
+	if entry.has("stock"):
+		_count_key(player, _stock_key(site_key, entry, card))
+	var filled := values(player, site_key, {}, {"price": cost, "card": card})
+	player.log_event("site", say("site.%s_log" % word, filled), {"card": card, "site": id + ":" + site_key})
+	var lines := _lines(player, site_key, entry.get("result", []), filled)
+	return result_place(player, site_key, lines if not lines.is_empty() else [say("site." + word, filled)])
 
 
 ## The hero's cards a copy may be made of, `{name: count}`: every card
@@ -395,15 +1007,69 @@ func apply(player: AdventurePlayer, site_key: String, effects: Array, filled := 
 			"spawn_dungeon": spawn(player, String(value), site_key)
 			"log_clue": player.log_clue(say(String(value["text"]), values(player, site_key, {}, filled)), "clue")
 			"log_event":
+				# UNDER THE PLUGIN'S OWN NAME, `<plugin>:<event>` (the campaign of
+				# 2026-11-22): written as the plugin said it, "duel" counted as a
+				# lost duel on the hero's page, "quest" as a quest, "saved",
+				# "freed" and "treasure" as theirs — from a free button, without
+				# end. No id holds a colon, so none of the game's events can be
+				# named. A line an older game wrote is shown as it always was.
 				var words := say(String(value["text"]), values(player, site_key, {}, filled))
-				if bool(value.get("done", false)): player.log_event(String(value["event"]), words, {"done": true})
-				else: player.log_event(String(value["event"]), words)
+				if bool(value.get("done", false)): player.log_event(id + ":" + String(value["event"]), words, {"done": true})
+				else: player.log_event(id + ":" + String(value["event"]), words)
+			# API 3.
+			"counter":
+				if not state.get("counters") is Dictionary:
+					state["counters"] = {}
+				var name := String(value["name"])
+				state["counters"][name] = clampi(int(value["set"]) if value.has("set") else counter(player, name) + int(value.get("add", 0)), 0, MOST_USES)
+			"amulet":
+				var color := String(value["color"])
+				var have := int(player.amulets.get(color, 0))
+				var count := int(value.get("count", 1))
+				# Never over the cap by this gift, never under what is carried.
+				player.amulets[color] = maxi(have, mini(MOST_AMULETS, have + count)) if count > 0 else maxi(0, have + count)
+			"give_card": player.add_card(String(value))
+			"next_duel":
+				# One gift at a time, as 1997's one slot ([method
+				# AdventurePlayer.duel_gift_waiting]; asked before paying too).
+				if not player.duel_gift_waiting():
+					if value.has("life"): player.next_duel_life = clampi(int(value["life"]), 1, 20)
+					elif bool(value.get("first_move", false)): player.next_duel_first_move = true
+					elif value.has("card"): player.next_duel_card = String(value["card"])
+			"reveal_map": _reveal(player, site_key, value)
+
+
+## THE MAP UNCOVERED around the place (or a raised dungeon of the plugin's,
+## `around: "dungeon:<key>"`; nothing while it is not raised), every tile
+## within `radius` of it.
+func _reveal(player: AdventurePlayer, site_key: String, value: Dictionary) -> void:
+	var around := String(value.get("around", "place"))
+	var center := _here(player, site_key)
+	if around.begins_with("dungeon:"):
+		var index := dungeon_index(player, around.trim_prefix("dungeon:"))
+		if index < 0:
+			return
+		center = Vector2i(int(player.world.encounters[index].get("x", 0)), int(player.world.encounters[index].get("y", 0)))
+	var world := player.world
+	var radius := int(value.get("radius", 4))
+	var seen := false
+	for y in range(maxi(0, center.y - radius), mini(ShandalarWorld.TILES, center.y + radius + 1)):
+		for x in range(maxi(0, center.x - radius), mini(ShandalarWorld.TILES, center.x + radius + 1)):
+			if Vector2(x - center.x, y - center.y).length() > radius + 0.5:
+				continue
+			var at := y * ShandalarWorld.PAGE_WIDTH + x
+			if at < world.page.size() and world.page[at] & ShandalarWorld.EXPLORED == 0:
+				world.page[at] = world.page[at] | ShandalarWorld.EXPLORED
+				seen = true
+	if seen:
+		world.touch_page()
 
 
 ## Why the effects of [param entry] cannot be applied on this land, ""
 ## when they can: a dungeon to raise and no slot or tile left for it.
 func _spawn_problem(player: AdventurePlayer, entry: Dictionary, site_key := "") -> String:
-	for effect in entry.get("effects", []):
+	var effects: Array = effects_now(player, site_key, entry)["effects"] if site_key != "" else entry.get("effects", [])
+	for effect in effects:
 		if effect.keys()[0] != "spawn_dungeon":
 			continue
 		var key := String(effect["spawn_dungeon"])
@@ -535,6 +1201,44 @@ static func _nearest_town(world: ShandalarWorld, tile: Vector2i) -> int:
 			distance = gap
 			best = slot
 	return best
+
+
+# -------------------------------------------------------------- tasks --
+
+## THE PLUGIN'S ROWS FOR THE TASKS PANE on [param player]'s land (API 3,
+## `tasks`): each task whose `when` holds — one `at` a place only on a land
+## the place stands on —, done once its `done_when` holds; its tile the
+## place's, or the dungeon's once raised ([method AdventureTasks.row]).
+func task_rows(player: AdventurePlayer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var tasks: Dictionary = file().get("tasks", {})
+	for key: String in tasks:
+		var task: Dictionary = tasks[key]
+		var at := String(task.get("at", ""))
+		var site_key := at.trim_prefix("place:") if at.begins_with("place:") else ""
+		var tile := Vector2i(-1, -1)
+		var more := {}
+		if site_key != "":
+			var placed: Variant = player.world.expansion.get(AdventureSites.KEY, {})
+			var point: Variant = (placed as Dictionary).get(id + ":" + site_key) if placed is Dictionary else null
+			if not AdventureRegions.valid_point(point):
+				continue
+			tile = Vector2i(int(point[0]), int(point[1]))
+		elif at.begins_with("dungeon:"):
+			var index := dungeon_index(player, at.trim_prefix("dungeon:"))
+			if index >= 0:
+				tile = Vector2i(int(player.world.encounters[index].get("x", -1)), int(player.world.encounters[index].get("y", -1)))
+			more["dungeon"] = dungeon_word(player, at.trim_prefix("dungeon:"))
+		if not holds(player, site_key, task.get("when", [])):
+			continue
+		var filled := values(player, site_key, {}, more, task)
+		var row := AdventureTasks.row("site:%s:%s" % [id, key], land(player), say(String(task["title"]), filled),
+			say(String(task["text"]), filled), tile)
+		var done_when: Array = task.get("done_when", [])
+		if not done_when.is_empty() and holds(player, site_key, done_when):
+			AdventureTasks.completed(row, say(String(task.get("done", task["text"])), filled))
+		out.append(row)
+	return out
 
 
 ## The panes' buttons (UI side, [code]site_journey.gd[/code]).

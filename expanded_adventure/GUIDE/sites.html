@@ -25,6 +25,7 @@
 <li><a href="testing.html">Testing</a></li>
 <li><a href="refuge.html">The Refuge walkthrough</a></li>
 <li><a href="sites.html" aria-current="page">Places: sites plugins</a></li>
+<li><a href="cheatsheet.html">Places cheat sheet</a></li>
 <li><a href="reference.html">Reference</a></li>
 <li><a href="faq.html">FAQ</a></li>
 </ol></nav>
@@ -34,7 +35,7 @@
 <p class="lede">A sites plugin adds places, not a land: a hut in the woods, a wizards’ tower, a shrine by the road. Each place is a picture, a sprite on the map and panes of buttons. It stands on Shandalar’s mainland, on the islands a campaign sails to, or on both.</p>
 
 <h2 id="what">What a sites plugin is</h2>
-<p>A sites plugin is a plugin of its own kind, new in plugin API 2. It has no island, no ship, no port, no quests and no row in the Tasks list. It has places. A player ticks it at the Embark like any plugin, and its places stand in every adventure it is ticked for.</p>
+<p>A sites plugin is a plugin of its own kind, new in plugin API 2. It has no island, no ship, no port and no quests of an island’s kind. It has places, and from plugin API 3 on its places may talk, take costs, roll, duel, trade cards and put rows of their own into the Tasks list (<a href="#api3">Plugin API 3</a>). A player ticks it at the Embark like any plugin, and its places stand in every adventure it is ticked for.</p>
 <p>A place offers services. A service has a price in gold, and it can raise a dungeon, set a flag, give gold or food, write in the journal, or copy one of the hero’s cards. A price can climb with each use, and a service can end when its last price is paid.</p>
 <p>The safety rule is the same as an island’s: <b>data only, never code</b>. A place is a list of panes, a condition is one of a closed list, an effect is one of a closed list, and the game’s own interpreter reads them. A sites plugin may need card packs, as an island may (<code>requires</code>), and every card it names must be a card of the base game or of a pack it needs.</p>
 <p>The game ships two, each a finished place and a study to read: <b>An Old Adventurer’s Hut</b> and the <b>Conjuration Wizard Guild</b>. They are <a href="#examples">walked through below</a>.</p>
@@ -122,6 +123,9 @@
 <tr><td><code>flags</code></td><td class="wrap">The plugin’s own switches, at most 32, all off at the start of a campaign (<a href="#flags">Flags</a>).</td></tr>
 <tr><td><code>pictures</code></td><td class="wrap">Picture keys to files of the plugin, at most 32. Every key begins with the plugin’s id and <code>_</code>, as an island’s do (<a href="art-music.html#keys">Art and music</a>).</td></tr>
 <tr><td><code>dungeons</code></td><td class="wrap">The dungeons its places can raise, by key, at most 8 (<a href="#dungeons">Dungeons</a>).</td></tr>
+<tr><td><code>counters</code></td><td class="wrap">API 3. The plugin’s own counters, at most 32, each a whole number from 0 to 1000, all 0 at the start of a campaign (<a href="#counters">Counters</a>).</td></tr>
+<tr><td><code>foes</code></td><td class="wrap">API 3. The opponents its duel actions name, by key, at most 8 (<a href="#duels">Duels and foes</a>).</td></tr>
+<tr><td><code>tasks</code></td><td class="wrap">API 3. Rows for the Tasks list, by key, at most 8 (<a href="#tasks">Tasks</a>).</td></tr>
 <tr><td><code>sites</code></td><td class="wrap">Required: its places, by key, 1 to 8. A key is 1 to 32 lower-case letters, digits or <code>_</code>, a letter first. Saves know a place by its key: never change it.</td></tr>
 </tbody></table></div>
 
@@ -164,32 +168,43 @@
 
 <h2 id="actions">Actions</h2>
 <p>An action is a button. Its <code>do</code> is one of:</p>
-<ul class="chips" data-schema="site_actions"><li><code>effects</code></li><li><code>copy_card</code></li><li><code>leave</code></li></ul>
+<ul class="chips" data-schema="site_actions"><li><code>effects</code></li><li><code>copy_card</code></li><li><code>leave</code></li><li><code>talk</code></li><li><code>duel</code></li><li><code>buy_card</code></li><li><code>sell_card</code></li></ul>
 <div class="table-wrap"><table class="grid">
 <thead><tr><th>do</th><th>What a press does</th></tr></thead>
 <tbody>
 <tr><td><code>effects</code></td><td class="wrap">Pays the price, counts the use, then runs the action’s <code>effects</code> in order. Then the pane shows its <code>result</code> lines with a <b>Return</b> and a <b>Leave</b> button; without <code>result</code>, the place’s pane comes back at once.</td></tr>
 <tr><td><code>copy_card</code></td><td class="wrap">Lists the hero’s cards under <code>pick_title</code> and <code>pick_line</code>. The card picked is copied into the bag, the price paid and the use counted; then the <code>result</code> lines (default <code>site.copied</code>), and the journal says <code>site.copied_log</code>. Only a card the hero holds can be copied, and under the Classic MTG rules not one they already hold every copy of that the rules allow: the wise man’s rule for his copy. The copy needs room in the bag.</td></tr>
-<tr><td><code>leave</code></td><td class="wrap">Closes the pane. It costs nothing and is never counted.</td></tr>
+<tr><td><code>leave</code></td><td class="wrap">Closes the pane. It costs nothing and is never counted. Every pane needs one without a <code>when</code>: the way out.</td></tr>
+<tr><td><code>talk</code></td><td class="wrap">API 3. Opens the pane of this place whose <code>id</code> is its <code>to</code> (<a href="#talk">Talk panes</a>). With <code>prices</code>, <code>needs</code> or <code>effects</code> it first pays, counts and applies them; without any, nothing is paid or counted.</td></tr>
+<tr><td><code>duel</code></td><td class="wrap">API 3. Pays the price as a stake, then fights the <code>foe</code>; afterwards <code>win</code> or <code>lose</code> gives its effects and lines (<a href="#duels">Duels and foes</a>).</td></tr>
+<tr><td><code>buy_card</code></td><td class="wrap">API 3. Lists its <code>cards</code> with their prices; the one picked goes into the hero’s bag for its gold (<a href="#trades">Card trades</a>).</td></tr>
+<tr><td><code>sell_card</code></td><td class="wrap">API 3. Lists the cards of its <code>cards</code> the hero holds; the one picked is handed over for its gold.</td></tr>
 </tbody></table></div>
 <div class="table-wrap"><table class="grid">
 <thead><tr><th>Field</th><th>Rule</th></tr></thead>
 <tbody>
 <tr><td><code>id</code></td><td class="wrap">Required: 1 to 32 lower-case letters, digits or <code>_</code>, a letter first. The action’s name in its place. Its uses are counted by it, and conditions name it.</td></tr>
-<tr><td><code>do</code></td><td class="wrap">Required: <code>effects</code>, <code>copy_card</code> or <code>leave</code>.</td></tr>
-<tr><td><code>label</code></td><td class="wrap">The button’s text key. Default <code>site.pay</code> (“Pay {price} gold”), and <code>site.leave</code> for a leave.</td></tr>
+<tr><td><code>do</code></td><td class="wrap">Required: one of the list above.</td></tr>
+<tr><td><code>label</code></td><td class="wrap">The button’s text key. Default <code>site.pay</code> (“Pay {price} gold”), <code>site.leave</code> for a leave, and <code>site.talk</code>, <code>site.duel</code>, <code>site.buy</code>, <code>site.sell</code> for those; an action that needs a card wears <code>site.give</code>.</td></tr>
 <tr><td><code>when</code></td><td class="wrap">Conditions; the button is offered only while they hold. Default <code>[]</code>.</td></tr>
 <tr><td><code>prices</code></td><td class="wrap">At most 16 prices in gold, each 0 to 1,000,000. Default <code>[]</code>: free, and never used up (<a href="#prices">Prices</a>).</td></tr>
-<tr><td><code>effects</code></td><td class="wrap">At most 16 <a href="#effects">effects</a>. Only an action that does <code>effects</code> has them.</td></tr>
+<tr><td><code>effects</code></td><td class="wrap">At most 16 <a href="#effects">effects</a>. Only an action that does <code>effects</code> or <code>talk</code> has them.</td></tr>
 <tr><td><code>result</code></td><td class="wrap">Lines shown once the action is done, written as a pane’s lines. Default <code>[]</code>.</td></tr>
-<tr><td><code>pick_title</code>, <code>pick_line</code></td><td class="wrap"><code>copy_card</code> only: the card list’s title and the line under it. Defaults <code>site.pick_title</code> and <code>site.pick_line</code>.</td></tr>
+<tr><td><code>pick_title</code>, <code>pick_line</code></td><td class="wrap"><code>copy_card</code>, <code>buy_card</code>, <code>sell_card</code>: the card list’s title and the line under it. Defaults <code>site.pick_title</code> and <code>site.pick_line</code> for a copy, <code>site.buy_title</code>, <code>site.buy_line</code>, <code>site.sell_title</code> and <code>site.sell_line</code> for a trade.</td></tr>
+<tr><td><code>needs</code></td><td class="wrap">API 3. What the action takes besides gold, at most 4 (<a href="#needs">Costs besides gold</a>). On <code>effects</code>, <code>talk</code>, <code>copy_card</code> and <code>duel</code>.</td></tr>
+<tr><td><code>to</code></td><td class="wrap">API 3, <code>talk</code>: the <code>id</code> of the pane it opens.</td></tr>
+<tr><td><code>foe</code></td><td class="wrap">API 3, <code>duel</code>: a key of <code>sites.json</code>’s <code>foes</code>.</td></tr>
+<tr><td><code>win</code>, <code>lose</code></td><td class="wrap">API 3, <code>duel</code>: each an object of <code>effects</code> and <code>result</code> lines, for a win and for a loss or a draw.</td></tr>
+<tr><td><code>count</code></td><td class="wrap">API 3, <code>duel</code>: <code>press</code> (the default: a use is counted each time the duel begins) or <code>win</code> (only when it is won). The price is paid each time either way.</td></tr>
+<tr><td><code>cards</code></td><td class="wrap">API 3, <code>buy_card</code> and <code>sell_card</code>: at most 32 cards, each with its price in gold.</td></tr>
+<tr><td><code>stock</code></td><td class="wrap">API 3, <code>buy_card</code> and <code>sell_card</code>: how many of each card are traded in a campaign, 1 to 1000. Without it: without end.</td></tr>
 </tbody></table></div>
 <p>A button the hero cannot use now is shown grayed: they lack its price, or, for a copy, hold no card that may be copied or have no room in the bag. Should a press still fail, nothing is paid and the pane says why (<code>site.no_gold</code>, <code>site.bag_full</code>, <code>site.no_cards</code>, <code>site.no_room</code>).</p>
 <div class="note"><strong>One id, one action</strong><p>The same action may stand in several panes, written the same in each, field for field. Two different actions with one id refuse the plugin, and so do two <code>leave</code> buttons with one id that differ in any field, a label say: <code>sites.json: sites.shrine.panes[1].actions[1].id: leave names another action of this site; an id is one action (the same action may stand in several panes).</code> Copy a button word for word into every pane, or give it another id.</p></div>
 
 <h2 id="prices">Prices, and how an action is used up</h2>
 <p>The first use of an action costs its first price, the second use its second price, and so on. <b>Once every price is paid, the action is used up</b>: its button is gone from every pane, and the condition <code>used_up</code> holds for it. An action with no prices is free and never used up. A price of 0 is a free use that still counts.</p>
-<p>Uses are counted for the plugin as a whole. The Guild’s tower stands on the mainland and on every island, and all its towers share one count: four copies in all, wherever they are made. The Guild’s copy action:</p>
+<p>Uses are counted for the plugin as a whole. The Guild’s tower stands on the mainland and on every island, and all its towers share one count: four copies in all, wherever they are made. One kind of action is counted on each land by itself: an action with prices that raises a dungeon, since each land has its own dungeon to sell. The Guild’s copy action:</p>
 <figure class="quote" data-plugin="Conjuration_Wizard_Guild" data-file="sites.json" data-pointer="/sites/tower/panes/1/actions/0"><figcaption class="src"><b>Conjuration_Wizard_Guild/sites.json</b><span>/sites/tower/panes/1/actions/0</span></figcaption><pre class="code"><code><span class="j-p">{</span>
   <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"copy"</span><span class="j-p">,</span>
   <span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"copy_card"</span><span class="j-p">,</span>
@@ -203,7 +218,7 @@
 
 <h2 id="conditions">Conditions</h2>
 <p>A condition is an object with exactly one of these keys. In a list, every one must hold; an empty list always holds. At most 16 in a list. These are a sites plugin’s own: an island’s conditions (<code>stage</code>, <code>quest_done</code> and the rest, <a href="quests.html#conditions">Quests and steps</a>) are not read here, and these are not read in an island.</p>
-<ul class="chips" data-schema="site_conditions"><li><code>flag</code></li><li><code>not_flag</code></li><li><code>gold_at_least</code></li><li><code>on_mainland</code></li><li><code>used</code></li><li><code>used_up</code></li><li><code>dungeon</code></li></ul>
+<ul class="chips" data-schema="site_conditions"><li><code>flag</code></li><li><code>not_flag</code></li><li><code>gold_at_least</code></li><li><code>on_mainland</code></li><li><code>used</code></li><li><code>used_up</code></li><li><code>dungeon</code></li><li><code>has_card</code></li><li><code>amulets</code></li><li><code>hero_color</code></li><li><code>owns_magic</code></li><li><code>food_at_least</code></li><li><code>gold_below</code></li><li><code>day_at_least</code></li><li><code>wizards_defeated</code></li><li><code>at_peace</code></li><li><code>difficulty</code></li><li><code>plugin_on</code></li><li><code>counter</code></li><li><code>site_used</code></li><li><code>gift_waiting</code></li><li><code>any</code></li></ul>
 <div class="table-wrap"><table class="grid">
 <thead><tr><th>Condition</th><th>Example value</th><th>Holds when</th></tr></thead>
 <tbody>
@@ -214,13 +229,28 @@
 <tr><td><code>used</code></td><td><code>{"action": "copy", "min": 1}</code></td><td class="wrap">This place’s action was done at least <code>min</code> and at most <code>max</code> times (defaults 0 and 1000).</td></tr>
 <tr><td><code>used_up</code></td><td><code>"copy"</code></td><td class="wrap">This place’s action has used all its prices. Only an action with prices can be used up; naming one without is refused.</td></tr>
 <tr><td><code>dungeon</code></td><td><code>{"dungeon": "vault", "state": "open"}</code></td><td class="wrap">The plugin’s dungeon of that key, on the land the hero stands on, is in that state: <code>none</code> (not raised here), <code>open</code> (it still holds cards) or <code>cleared</code>.</td></tr>
+<tr><td><code>has_card</code></td><td><code>{"card": "Black Lotus"}</code></td><td class="wrap">API 3. The hero holds at least min copies of the card, in a deck or not.</td></tr>
+<tr><td><code>amulets</code></td><td><code>{"color": "red", "min": 2}</code></td><td class="wrap">API 3. The hero carries at least min amulets of the color (any: all colors together).</td></tr>
+<tr><td><code>hero_color</code></td><td><code>"red"</code></td><td class="wrap">API 3. The color the hero chose at the start.</td></tr>
+<tr><td><code>owns_magic</code></td><td><code>"Dwarven Pick"</code></td><td class="wrap">API 3. The hero owns this World Magic.</td></tr>
+<tr><td><code>food_at_least</code></td><td><code>10</code></td><td class="wrap">API 3. The hero carries at least this much food.</td></tr>
+<tr><td><code>gold_below</code></td><td><code>100</code></td><td class="wrap">API 3. The hero carries less gold than this.</td></tr>
+<tr><td><code>day_at_least</code></td><td><code>30</code></td><td class="wrap">API 3. The journey's day is this or later.</td></tr>
+<tr><td><code>wizards_defeated</code></td><td><code>2</code></td><td class="wrap">API 3. At least this many of the five wizards are beaten.</td></tr>
+<tr><td><code>at_peace</code></td><td><code>true</code></td><td class="wrap">API 3. Arzakon is banished and the hero walks on (true), or not yet (false).</td></tr>
+<tr><td><code>difficulty</code></td><td><code>{"min": 0, "max": 1}</code></td><td class="wrap">API 3. The campaign's difficulty, 0 (the easiest) to 3, is within min..max.</td></tr>
+<tr><td><code>plugin_on</code></td><td><code>"old_hut"</code></td><td class="wrap">API 3. The plugin of this id is part of the campaign and enabled; a plugin not installed is not.</td></tr>
+<tr><td><code>counter</code></td><td><code>{"name": "wins", "min": 3}</code></td><td class="wrap">API 3. The counter (declared in sites.json counters) is within min..max.</td></tr>
+<tr><td><code>site_used</code></td><td><code>{"site": "hut", "action": "secret"}</code></td><td class="wrap">API 3. The action of another place of this plugin was done min..max times.</td></tr>
+<tr><td><code>gift_waiting</code></td><td><code>false</code></td><td class="wrap">API 3. A gift for the next duel (extra life, the first move or a card in play) already waits (true) or none does (false).</td></tr>
+<tr><td><code>any</code></td><td><code>[{"flag": "told"}, {"gold_at_least": 500}]</code></td><td class="wrap">API 3. At least one of these holds. No any inside an any.</td></tr>
 </tbody></table></div>
 <p>The states of <code>dungeon</code>:</p>
 <ul class="chips" data-schema="dungeon_states"><li><code>none</code></li><li><code>open</code></li><li><code>cleared</code></li></ul>
 
 <h2 id="effects">Effects</h2>
 <p>An effect is an object with exactly one of these keys. An action’s effects run in order, after its price is paid. At most 16 in a list. Like the conditions, these are a sites plugin’s own.</p>
-<ul class="chips" data-schema="site_effects"><li><code>set_flag</code></li><li><code>clear_flag</code></li><li><code>gold</code></li><li><code>food</code></li><li><code>log_clue</code></li><li><code>log_event</code></li><li><code>spawn_dungeon</code></li></ul>
+<ul class="chips" data-schema="site_effects"><li><code>set_flag</code></li><li><code>clear_flag</code></li><li><code>gold</code></li><li><code>food</code></li><li><code>log_clue</code></li><li><code>log_event</code></li><li><code>spawn_dungeon</code></li><li><code>counter</code></li><li><code>amulet</code></li><li><code>give_card</code></li><li><code>next_duel</code></li><li><code>roll</code></li><li><code>reveal_map</code></li></ul>
 <div class="table-wrap"><table class="grid">
 <thead><tr><th>Effect</th><th>Example value</th><th>What it does</th></tr></thead>
 <tbody>
@@ -229,8 +259,14 @@
 <tr><td><code>gold</code></td><td><code>50</code></td><td class="wrap">Gold to the hero, from −100,000 to 100,000; it never falls below 0.</td></tr>
 <tr><td><code>food</code></td><td><code>6</code></td><td class="wrap">Food, from −1,000 to 1,000; never below 0.</td></tr>
 <tr><td><code>log_clue</code></td><td><code>{"text": "key"}</code></td><td class="wrap">A clue in the journal.</td></tr>
-<tr><td><code>log_event</code></td><td><code>{"event": "hut", "text": "key", "done": false}</code></td><td class="wrap">A line in the journal; <code>event</code> is a word of your own.</td></tr>
-<tr><td><code>spawn_dungeon</code></td><td><code>"vault"</code></td><td class="wrap">Raises the dungeon of that key on this land, unless one of it is open here already (<a href="#dungeons">Dungeons</a>). When no dungeon can be raised here, the whole action is refused and nothing is paid.</td></tr>
+<tr><td><code>log_event</code></td><td><code>{"event": "hut", "text": "key", "done": false}</code></td><td class="wrap">A line in the journal; <code>event</code> is a word of your own. The game keeps it under the plugin’s id, so it never counts as one of the game’s own events (a duel, a quest, a treasure).</td></tr>
+<tr><td><code>spawn_dungeon</code></td><td><code>"vault"</code></td><td class="wrap">Raises the dungeon of that key on this land, unless one of it is open here already (<a href="#dungeons">Dungeons</a>). When no dungeon can be raised here, the whole action is refused and nothing is paid; an action with prices is refused too, with <code>site.dungeon_open</code>, while its dungeon is still open.</td></tr>
+<tr><td><code>counter</code></td><td><code>{"name": "wins", "add": 1}</code></td><td class="wrap">API 3. Add to a counter, or set it (one of add, set); it stays within 0..1000.</td></tr>
+<tr><td><code>amulet</code></td><td><code>{"color": "red", "count": 1}</code></td><td class="wrap">API 3. Give (or take) amulets of a color; the hero never carries fewer than 0 or more than 99 of one. Giving needs prices or needs on its action.</td></tr>
+<tr><td><code>give_card</code></td><td><code>"Shivan Dragon"</code></td><td class="wrap">API 3. One copy of the card into the hero's bag. Refused before anything is paid when the bag is full or the campaign's card rules allow no more copies. Needs prices or needs on its action.</td></tr>
+<tr><td><code>next_duel</code></td><td><code>{"life": 5}</code></td><td class="wrap">API 3. A gift for the hero's next duel, one of: life (extra life), first_move true, card (begins in play). Refused before anything is paid while a gift already waits.</td></tr>
+<tr><td><code>roll</code></td><td><code>{"outcomes": [...]}</code></td><td class="wrap">API 3. One outcome by its weight, drawn on the plugin's own dice for this land, place, action and use (the same after a reload): its effects are applied and its result lines shown after the action's. One roll an action, none inside a roll or a duel's win or lose.</td></tr>
+<tr><td><code>reveal_map</code></td><td><code>{"around": "place", "radius": 4}</code></td><td class="wrap">API 3. The map uncovered within radius tiles of this place, or of dungeon:&lt;a dungeon of this plugin&gt; once it is raised.</td></tr>
 </tbody></table></div>
 
 <h2 id="flags">Flags</h2>
@@ -260,23 +296,257 @@
 <li>Put <code>spawn_dungeon</code> before a <code>log_clue</code> or <code>log_event</code> whose words name <code>{dungeon}</code>: the name is known only once the dungeon is raised.</li>
 </ul>
 
+<h2 id="api3">Plugin API 3: more words for a place</h2>
+<p>Everything above is plugin API 2. API 3 adds the words below: counters, costs besides gold, talk panes, lines that change, rolls, duels, card trades and tasks. A plugin that uses one of them says <code>"api_version": 3</code> in <code>plugin.json</code>, and then needs a game that reads API 3; an older game refuses it in one line and plays on without it. The tool’s commands set the number by themselves the moment a command adds such a word, and say so. Written by hand with the old number, the plugin is refused, naming the word and where it stands:</p>
+<pre class="code wrap"><code><span class="out">sites.json: sites.den.panes[0].actions[0].when[0].gold_below: "gold_below" is a word of plugin API 3, and plugin.json declares api_version 2. Set "api_version": 3 there (the plugin then needs a game that reads API 3).</span></code></pre>
+<p>The <a href="cheatsheet.html">cheat sheet</a> lists every word on one page, each with what to write and the command that writes it.</p>
+
+<h2 id="counters">Counters</h2>
+<p>A counter is a number of the plugin’s own, from 0 to 1000, 0 at the start of a campaign and kept in the save. Declare it in <code>sites.json</code>’s <code>counters</code>; change it with the effect <code>counter</code> (<code>{"name": "wins", "add": 1}</code>, or <code>{"name": "wins", "set": 0}</code>); ask about it with the condition <code>counter</code> (<code>{"name": "wins", "min": 3}</code>); show it with <code>{count}</code>. The Riddle Stone counts wrong answers, and shows a hint once there are two:</p>
+<figure class="quote"><figcaption class="src"><b>Riddle_Stone/sites.json</b><span>/sites/stone/panes/1/actions/3</span></figcaption><pre class="code" data-study="Riddle_Stone" data-study-file="sites.json" data-study-pointer="/sites/stone/panes/1/actions/3"><code>{
+  "id": "listen",
+  "do": "talk",
+  "label": "stone.listen",
+  "when": [
+    {
+      "counter": {
+        "name": "stone_tries",
+        "min": 2
+      }
+    },
+    {
+      "not_flag": "stone_solved"
+    }
+  ],
+  "to": "hint"
+}</code></pre></figure>
+<p><code>{count}</code> is the counter the action changes or its <code>when</code> asks about; in a line with a <code>when</code> of its own, the counter that line asks about; else the pane’s; else the plugin’s first.</p>
+
+<h2 id="needs">Costs besides gold</h2>
+<p><code>needs</code> is what an action takes besides its price, each time it is done. All of it is needed, and all of it is taken. While the hero lacks one, the button is grayed and nothing is paid; the pane says which (<code>site.needs_card</code>, <code>site.needs_amulets</code>, <code>site.needs_any_amulets</code>, <code>site.needs_food</code>).</p>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Need</th><th>Example value</th><th>What is taken</th></tr></thead>
+<tbody>
+<tr><td><code>card</code></td><td><code>"Black Lotus"</code></td><td class="wrap">One copy of this card is handed over (one in no deck first; else it leaves its decks).</td></tr>
+<tr><td><code>amulets</code></td><td><code>{"color": "any", "count": 3}</code></td><td class="wrap">Amulets of a color, or of any (taken from the color the hero has most of first).</td></tr>
+<tr><td><code>food</code></td><td><code>5</code></td><td class="wrap">Food.</td></tr>
+</tbody></table></div>
+<p>The Collector’s trade shows only while the hero holds the card, takes one copy, and pays for it. Its three prices of 0 mean “three times, free”:</p>
+<figure class="quote"><figcaption class="src"><b>Wandering_Collector/sites.json</b><span>/sites/wagon/panes/1/actions/0</span></figcaption><pre class="code" data-study="Wandering_Collector" data-study-file="sites.json" data-study-pointer="/sites/wagon/panes/1/actions/0"><code>{
+  "id": "trade",
+  "do": "effects",
+  "label": "wagon.trade",
+  "prices": [
+    0,
+    0,
+    0
+  ],
+  "needs": [
+    {
+      "card": "Ornithopter"
+    }
+  ],
+  "when": [
+    {
+      "has_card": {
+        "card": "Ornithopter",
+        "min": 1
+      }
+    }
+  ],
+  "effects": [
+    {
+      "gold": 150
+    },
+    {
+      "counter": {
+        "name": "wagon_trades",
+        "add": 1
+      }
+    }
+  ],
+  "result": [
+    "wagon.traded"
+  ]
+}</code></pre></figure>
+<div class="note"><strong>Something given needs an end</strong><p>An action that gives a card (<code>give_card</code>) or amulets (<code>amulet</code> with a count above 0) must have <code>prices</code> or <code>needs</code>, or it is refused: without them a hero could press it without end. A list of prices ends, and a need must be found again each time. For gold given freely <code>validate</code> only warns.</p></div>
+
+<h2 id="talk">Talk panes</h2>
+<p>A pane with an <code>id</code> is never chosen by itself. A <code>talk</code> action opens it, by its <code>to</code>. That is all a conversation needs: a question is a button, its answer is a pane, and a wrong answer leads to another pane. The pane a talk opens still needs its own Leave. A talk may carry <code>prices</code>, <code>needs</code> and <code>effects</code>, applied before the pane opens; a talk with none of them only turns the page, and is not counted as a use. The Stone’s right answer sets a flag and pays, once:</p>
+<figure class="quote"><figcaption class="src"><b>Riddle_Stone/sites.json</b><span>/sites/stone/panes/1/actions/1</span></figcaption><pre class="code" data-study="Riddle_Stone" data-study-file="sites.json" data-study-pointer="/sites/stone/panes/1/actions/1"><code>{
+  "id": "answer_b",
+  "do": "talk",
+  "to": "right",
+  "label": "stone.answer_b",
+  "when": [
+    {
+      "not_flag": "stone_solved"
+    }
+  ],
+  "effects": [
+    {
+      "set_flag": "stone_solved"
+    },
+    {
+      "gold": 100
+    }
+  ]
+}</code></pre></figure>
+<p>A place always needs a pane to open on: the last pane without an <code>id</code> must have no <code>when</code>. And every pane, named or not, needs a <code>leave</code> action without a <code>when</code>. A place without either is refused, since the hero could not get in, or out.</p>
+
+<h2 id="one-of">Lines that change</h2>
+<p>A line may be <code>{"one_of": ["inn.rumor1", "inn.rumor2", "inn.rumor3"], "by": "day"}</code>: one of 2 to 16 texts, in turn. With <code>"by": "day"</code> (the default) the next one each day of the journey; with <code>"by": "uses"</code> the next one each time an action of the place is done. No dice are cast, so the line is the same after a reload. It may have a <code>when</code> like any other line.</p>
+
+<h2 id="rolls">Rolls</h2>
+<p>The effect <code>roll</code> picks one of 2 to 6 outcomes by its <code>weight</code> (1 to 100, default 1), applies that outcome’s <code>effects</code> and shows its <code>result</code> lines after the action’s own. The Gambler’s Den:</p>
+<figure class="quote"><figcaption class="src"><b>Gamblers_Den/sites.json</b><span>/sites/den/panes/1/actions/0</span></figcaption><pre class="code" data-study="Gamblers_Den" data-study-file="sites.json" data-study-pointer="/sites/den/panes/1/actions/0"><code>{
+  "id": "bet",
+  "do": "effects",
+  "label": "den.bet",
+  "prices": [
+    50,
+    50,
+    50,
+    50,
+    50
+  ],
+  "effects": [
+    {
+      "counter": {
+        "name": "den_plays",
+        "add": 1
+      }
+    },
+    {
+      "roll": {
+        "outcomes": [
+          {
+            "weight": 3,
+            "effects": [],
+            "result": [
+              "den.lost"
+            ]
+          },
+          {
+            "weight": 2,
+            "effects": [
+              {
+                "gold": 75
+              }
+            ],
+            "result": [
+              "den.won"
+            ]
+          },
+          {
+            "weight": 1,
+            "effects": [
+              {
+                "gold": 150
+              }
+            ],
+            "result": [
+              "den.jackpot"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "result": [
+    "den.rolled"
+  ]
+}</code></pre></figure>
+<p>The dice are the plugin’s own, drawn for this land, place, action and use: reloading the game gives the same throw, and the adventure’s own dice are never touched. An action has one roll at most; there is none inside a roll’s outcome or a duel’s <code>win</code> or <code>lose</code>. <code>walk</code> prints every outcome with its chance and the gold a throw brings on average, and <code>validate</code> warns when that is more than the cheapest price.</p>
+
+<h2 id="duels">Duels and foes</h2>
+<p>A <code>foes</code> entry is an opponent: a <code>name</code>, <code>life</code> (1 to 99), a <code>face</code> (a creature row, as an island’s foes: <a href="foes-rewards.html">Foes and rewards</a>), a <code>deck</code> of 1 to 250 cards as <code>{"card": copies}</code>, and optionally a <code>deck_name</code>. The deck, life and face are fixed, never scaled to the hero. A <code>duel</code> action names one:</p>
+<figure class="quote"><figcaption class="src"><b>Duelists_Ring/sites.json</b><span>/sites/ring/panes/1/actions/0</span></figcaption><pre class="code" data-study="Duelists_Ring" data-study-file="sites.json" data-study-pointer="/sites/ring/panes/1/actions/0"><code>{
+  "id": "duel",
+  "do": "duel",
+  "foe": "ring_champ",
+  "label": "ring.duel",
+  "prices": [
+    50,
+    50,
+    50
+  ],
+  "win": {
+    "effects": [
+      {
+        "gold": 100
+      },
+      {
+        "counter": {
+          "name": "ring_wins",
+          "add": 1
+        }
+      }
+    ],
+    "result": [
+      "ring.won"
+    ]
+  },
+  "lose": {
+    "effects": [],
+    "result": [
+      "ring.lost"
+    ]
+  }
+}</code></pre></figure>
+<p>The price is the stake. It is paid as the duel begins, and a duel left unfinished is not saved: the adventure resumes with the stake paid. A draw is a loss. <code>win</code> and <code>lose</code> each have <code>effects</code> and <code>result</code> lines; without lines the game says <code>site.duel_won</code> or <code>site.duel_lost</code>. No ante is staked. <code>{foe}</code> and <code>{life}</code> are filled in the action’s label and lines. The hero needs a deck, as for any duel.</p>
+
+<h2 id="trades">Card trades</h2>
+<p><code>buy_card</code> sells the hero the cards of its <code>cards</code>, each at its price; <code>sell_card</code> buys those of its <code>cards</code> the hero holds. The hero picks from a card list whose numbers are the prices. With <code>stock</code>, that many of each card are traded in a campaign and no more.</p>
+<pre class="code"><code>{"id": "buy", "do": "buy_card", "cards": {"Jayemdae Tome": 300, "Rod of Ruin": 200}, "stock": 1}
+{"id": "sell", "do": "sell_card", "cards": {"Glasses of Urza": 60}}</code></pre>
+<p>A place is no way to mint gold: the game never sells a card for less, nor buys one for more, than the most a town pays for it. The tool has no card values, so <code>walk</code> trades at the prices you wrote. A trade has no <code>prices</code> and no <code>needs</code>; its lines are <code>result</code>, by default <code>site.bought</code> and <code>site.sold</code>.</p>
+
+<h2 id="tasks">Tasks</h2>
+<p>A <code>tasks</code> entry is a row of the hero’s Tasks list, with a place on the map to guide them to:</p>
+<pre class="code"><code>"tasks": {"errand": {"title": "errand.task_title", "text": "errand.task_text", "done": "errand.task_done",
+                     "at": "place:errand", "when": [{"flag": "errand_asked"}], "done_when": [{"flag": "errand_done"}]}}</code></pre>
+<p>The row is shown while <code>when</code> holds, and done, and no longer a map target, once <code>done_when</code> holds (never, when that is empty). <code>at</code> is <code>place:</code> and a place of this plugin, or <code>dungeon:</code> and one of its dungeons (once raised); a task at a place is shown only on a land the place stands on. In a task’s conditions <code>used</code> and <code>used_up</code> read the place named by <code>at</code>; without one, use <code>site_used</code>. A quest needs no machinery of its own: a talk that sets a flag, a need, a duel or a dungeon, and a task that shows the way.</p>
+
+<h2 id="recipes">Recipes</h2>
+<p>A recipe is a whole place, written by one command, that validates and walks as it is. Its sentences are plain ones for you to rewrite; its prices and cards are yours to change.</p>
+<pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-place my_places --list-recipes</code></pre><pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-place my_places --id den --name "The Gambler's Den" --recipe gambler</code></pre>
+<div class="table-wrap"><table class="grid">
+<thead><tr><th>Recipe</th><th>What it makes</th><th>Built from</th></tr></thead>
+<tbody>
+<tr><td><code>lore</code></td><td class="wrap">a place that tells: a rumor that changes by the day, and a tale behind a talk button</td><td class="wrap">a <code>one_of</code> line, a <code>talk</code> button, a pane with an <code>id</code>, a flag, <code>log_clue</code></td></tr>
+<tr><td><code>gift</code></td><td class="wrap">a gift given once: food and an amulet, or a card with --card</td><td class="wrap"><code>"prices": [0]</code>, <code>food</code> and <code>amulet</code>, or <code>give_card</code></td></tr>
+<tr><td><code>healer</code></td><td class="wrap">a blessing for the next duel behind three prices, and food for gold</td><td class="wrap"><code>next_duel</code> behind three prices and <code>gift_waiting</code>; <code>gold</code> and <code>food</code></td></tr>
+<tr><td><code>toll</code></td><td class="wrap">a gate that opens for gold, for an amulet, or for a hero of one color (--color)</td><td class="wrap"><code>hero_color</code>, <code>amulets</code>, <code>day_at_least</code>, a <code>needs</code> of an amulet, a flag, <code>reveal_map</code></td></tr>
+<tr><td><code>gambler</code></td><td class="wrap">five throws of the dice at 50 gold: a roll of three outcomes and a counter of plays</td><td class="wrap"><code>roll</code> behind a list of prices, a counter</td></tr>
+<tr><td><code>riddle</code></td><td class="wrap">a riddle with three answers: talk panes, a counter of wrong tries, gold for the right one</td><td class="wrap">three <code>talk</code> buttons, two panes with an <code>id</code>, a counter, a flag, <code>gold</code></td></tr>
+<tr><td><code>collector</code></td><td class="wrap">someone who wants a card (--card) and pays for each copy the hero hands over</td><td class="wrap"><code>has_card</code>, a <code>needs</code> of a card, <code>"prices": [0, 0, 0]</code>, a counter</td></tr>
+<tr><td><code>duelist</code></td><td class="wrap">a duel for a wager of gold against the place's own champion, and a counter of wins</td><td class="wrap"><code>do: "duel"</code>, a foe with a deck, <code>win</code> and <code>lose</code>, a counter</td></tr>
+<tr><td><code>shop</code></td><td class="wrap">a stall that sells a few cards and buys one</td><td class="wrap"><code>buy_card</code> with <code>stock</code>, <code>sell_card</code></td></tr>
+<tr><td><code>quest</code></td><td class="wrap">an errand: accept it, bring a card (--card), be paid; with a row in the Tasks list</td><td class="wrap"><code>talk</code>, two flags, <code>has_card</code>, <code>needs</code>, <code>log_event</code>, a task</td></tr>
+</tbody></table></div>
+<p><code>--card</code> names the card of a <code>gift</code>, <code>collector</code>, <code>quest</code> or <code>shop</code>; <code>--color</code> the color that passes a <code>toll</code> free; <code>--look</code> the stand-in pictures (<code>shrine</code>, <code>tent</code>, <code>stone</code>, <code>gate</code>, <code>ring</code>). Four finished places made this way ship with the game as studies, each with the commands that made it in its <code>README.txt</code>: <b>Gamblers_Den</b> (a roll), <b>Riddle_Stone</b> (talk panes and a counter), <b>Wandering_Collector</b> (a card as the price) and <b>Duelists_Ring</b> (duels for a wager).</p>
+
 <h2 id="words">Words and placeholders</h2>
-<p><code>text.json</code> works as an island’s (<a href="text.html">Text and placeholders</a>). API 2 adds five placeholders for places:</p>
+<p><code>text.json</code> works as an island’s (<a href="text.html">Text and placeholders</a>). These placeholders are for places; the last three came with API 3:</p>
 <div class="table-wrap"><table class="grid">
 <thead><tr><th>Placeholder</th><th>Is replaced by</th></tr></thead>
 <tbody>
 <tr><td><code>{price}</code></td><td class="wrap">An action’s price this time; after a press, the price just paid.</td></tr>
 <tr><td><code>{uses_left}</code></td><td class="wrap">How many more times the action can be done; empty for an action without prices.</td></tr>
 <tr><td><code>{gold}</code></td><td class="wrap">The gold the hero carries.</td></tr>
-<tr><td><code>{card}</code></td><td class="wrap">The card just copied.</td></tr>
-<tr><td><code>{dungeon}</code></td><td class="wrap">The name of the dungeon this plugin raised on this land (with several, the last of <code>sites.json</code>’s dungeons that stands here).</td></tr>
+<tr><td><code>{card}</code></td><td class="wrap">The card just copied, bought or sold; in an action that needs or gives a card, that card.</td></tr>
+<tr><td><code>{dungeon}</code></td><td class="wrap">The name of the dungeon the action raises or its <code>when</code> asks about; else the pane’s (its own <code>when</code>, or a button of it that raises one); else the plugin’s first. It is filled before the dungeon is raised too.</td></tr>
+<tr><td><code>{food}</code></td><td class="wrap">The food the hero carries.</td></tr>
+<tr><td><code>{amulets}</code></td><td class="wrap">The amulets the hero carries, all colors together.</td></tr>
+<tr><td><code>{day}</code></td><td class="wrap">The day of the journey, from 0.</td></tr>
 </tbody></table></div>
-<p>A place also fills <code>{hero}</code>, the hero’s name, and <code>{region}</code>, the land’s title: “Shandalar” on the mainland, the island’s title on an island. Each place fills its own set; a placeholder not filled there is shown as written:</p>
+<p>A place also fills <code>{hero}</code>, the hero’s name, <code>{region}</code>, the land’s title (“Shandalar” on the mainland, the island’s title on an island), <code>{count}</code>, a <a href="#counters">counter</a>, and in a duel action <code>{foe}</code> and <code>{life}</code>. Each place fills its own set; a placeholder not filled there is shown as written, and <code>validate</code> warns of it:</p>
 <div class="table-wrap"><table class="grid">
 <thead><tr><th>Where the words are said</th><th>Filled there</th></tr></thead>
 <tbody>
-<tr><td class="wrap">A pane’s title, subtitle and lines</td><td class="wrap"><code>{hero}</code>, <code>{gold}</code>, <code>{region}</code>, <code>{dungeon}</code></td></tr>
-<tr><td class="wrap">The label of an <code>effects</code> or <code>copy_card</code> action; a copy’s <code>pick_title</code> and <code>pick_line</code></td><td class="wrap">the same, and <code>{price}</code>, <code>{uses_left}</code></td></tr>
+<tr><td class="wrap">A pane’s title, subtitle and lines</td><td class="wrap"><code>{hero}</code>, <code>{gold}</code>, <code>{region}</code>, <code>{food}</code>, <code>{amulets}</code>, <code>{day}</code>, <code>{dungeon}</code>, <code>{count}</code></td></tr>
+<tr><td class="wrap">The label of an action; a card list’s <code>pick_title</code> and <code>pick_line</code></td><td class="wrap">the same, and <code>{price}</code>, <code>{uses_left}</code> (an action with prices), <code>{foe}</code>, <code>{life}</code> (a duel), <code>{card}</code> (an action that needs or gives a card)</td></tr>
 <tr><td class="wrap">An <code>effects</code> action’s <code>result</code> lines</td><td class="wrap"><code>{hero}</code>, <code>{gold}</code> (once paid), <code>{region}</code>, <code>{dungeon}</code>, <code>{price}</code> (the price paid)</td></tr>
 <tr><td class="wrap">The words of its <code>log_clue</code> and <code>log_event</code></td><td class="wrap"><code>{hero}</code>, <code>{gold}</code> and <code>{uses_left}</code> (as before the press), <code>{region}</code>, <code>{dungeon}</code>, <code>{price}</code></td></tr>
 <tr><td class="wrap">A copy’s <code>result</code> lines, <code>site.copied</code>, <code>site.copied_log</code></td><td class="wrap"><code>{hero}</code>, <code>{gold}</code>, <code>{region}</code>, <code>{dungeon}</code>, <code>{price}</code>, <code>{card}</code></td></tr>
@@ -299,19 +569,46 @@
 <tr><td><code>site.done</code></td><td class="wrap">It is done.</td></tr>
 <tr><td><code>site.copied</code></td><td class="wrap">A copy of <code>{card}</code> is yours.</td></tr>
 <tr><td><code>site.copied_log</code></td><td class="wrap"><code>{card}</code> copied for <code>{price}</code> gold.</td></tr>
+<tr><td><code>site.dungeon_open</code></td><td class="wrap"><code>{dungeon}</code> still waits for you; there is nothing new to tell.</td></tr>
+<tr><td><code>site.talk</code></td><td class="wrap">Ask</td></tr>
+<tr><td><code>site.give</code></td><td class="wrap">Give <code>{card}</code> (it leaves your decks)</td></tr>
+<tr><td><code>site.needs_card</code></td><td class="wrap">You need <code>{card}</code> for this; you hold none.</td></tr>
+<tr><td><code>site.needs_amulets</code></td><td class="wrap">You need <code>{count}</code> <code>{color}</code> amulets for this.</td></tr>
+<tr><td><code>site.needs_any_amulets</code></td><td class="wrap">You need <code>{count}</code> amulets for this; you carry <code>{amulets}</code>.</td></tr>
+<tr><td><code>site.needs_food</code></td><td class="wrap">You need <code>{count}</code> food for this; you carry <code>{food}</code>.</td></tr>
+<tr><td><code>site.card_limit</code></td><td class="wrap">You may hold no more copies of <code>{card}</code>.</td></tr>
+<tr><td><code>site.gift_waiting</code></td><td class="wrap">A gift for your next duel already waits; fight that duel first.</td></tr>
+<tr><td><code>site.duel</code></td><td class="wrap">Duel <code>{foe}</code></td></tr>
+<tr><td><code>site.duel_won</code></td><td class="wrap">You have defeated <code>{foe}</code>.</td></tr>
+<tr><td><code>site.duel_lost</code></td><td class="wrap"><code>{foe}</code> has defeated you.</td></tr>
+<tr><td><code>site.duel_won_log</code></td><td class="wrap">Defeated <code>{foe}</code>.</td></tr>
+<tr><td><code>site.duel_lost_log</code></td><td class="wrap">Lost to <code>{foe}</code>.</td></tr>
+<tr><td><code>site.duel_leave_question</code></td><td class="wrap">Return to the main menu? This unfinished duel is not saved. Your adventure resumes with the stake paid.</td></tr>
+<tr><td><code>site.buy</code></td><td class="wrap">Buy a card</td></tr>
+<tr><td><code>site.sell</code></td><td class="wrap">Sell a card</td></tr>
+<tr><td><code>site.buy_title</code></td><td class="wrap">Buy a card</td></tr>
+<tr><td><code>site.buy_line</code></td><td class="wrap">The number beside each card is its price in gold.</td></tr>
+<tr><td><code>site.sell_title</code></td><td class="wrap">Sell a card</td></tr>
+<tr><td><code>site.sell_line</code></td><td class="wrap">The number beside each card is the gold paid for it.</td></tr>
+<tr><td><code>site.no_stock</code></td><td class="wrap">Nothing here is for sale to you now.</td></tr>
+<tr><td><code>site.nothing_to_sell</code></td><td class="wrap">You hold no card that is wanted here.</td></tr>
+<tr><td><code>site.bought</code></td><td class="wrap"><code>{card}</code> is yours for <code>{price}</code> gold.</td></tr>
+<tr><td><code>site.sold</code></td><td class="wrap">You sell <code>{card}</code> for <code>{price}</code> gold.</td></tr>
+<tr><td><code>site.bought_log</code></td><td class="wrap"><code>{card}</code> bought for <code>{price}</code> gold.</td></tr>
+<tr><td><code>site.sold_log</code></td><td class="wrap"><code>{card}</code> sold for <code>{price}</code> gold.</td></tr>
 </tbody></table></div>
 
 <h2 id="saves">Progress and saves</h2>
 <p>Save version 9 keeps a sites plugin’s progress, all of it under the plugin’s id:</p>
 <ul>
 <li><code>hero.adventures</code>: the plugin’s row, as an island’s, with <code>"kind": "sites"</code>.</li>
-<li><code>sites.<i>id</i></code>: <code>uses</code>, each action’s count by <code>"<i>place</i>.<i>action</i>"</code>; <code>flags</code>, the names set; <code>dungeons</code>, each dungeon raised by <code>"<i>land</i>:<i>dungeon</i>"</code>.</li>
+<li><code>sites.<i>id</i></code>: <code>uses</code>, each action’s count by <code>"<i>place</i>.<i>action</i>"</code> (an action with prices that raises a dungeon is counted for each land, by <code>"<i>place</i>.<i>action</i>@<i>land</i>"</code>; a trade with a <code>stock</code> also counts each card traded); <code>flags</code>, the names set; <code>counters</code>, each counter that is not 0, by its name (API 3); <code>dungeons</code>, each dungeon raised by <code>"<i>land</i>:<i>dungeon</i>"</code>.</li>
 <li>Each land’s map keeps its places’ tiles (<code>expansion.sites</code>, by <code>"<i>plugin</i>:<i>place</i>"</code>), and a raised dungeon is part of its land like any dungeon.</li>
 </ul>
-<p>A save from before version 9 opens with no sites progress. <b>A plugin missing in the middle of a campaign</b>: the save still opens, its places hide, and their tiles and the plugin’s progress are kept, so putting it back brings everything back. A dungeon it raised stays an ordinary dungeon. A sites plugin never has a ship, a note on the mainland or a Tasks row, so nothing else changes. A card pack it needs switched off hides its places the same way.</p>
-<p><b>Updates.</b> Saves know a sites plugin by its id, a place by its key, an action by its id and a raised dungeon by its key. Change one of them and what was saved under it is lost: a renamed action starts again from its first price. Everything else is safe: words, pictures, panes, conditions and effects are read fresh; a new place is placed on the next load; prices may change (a save’s uses so far are kept, so do not shorten a price list or give a free action prices: a save that used it more often finds it used up); a new <code>salt</code>, <code>gap</code> or <code>where</code> reaches only lands where the place is not placed yet. Compare every release with the one players have:</p>
+<p>A save from before version 9 opens with no sites progress. <b>A plugin missing in the middle of a campaign</b>: the save still opens, its places hide, and their tiles and the plugin’s progress are kept, so putting it back brings everything back. A dungeon it raised stays an ordinary dungeon. A sites plugin never has a ship or a note on the mainland, and its Tasks rows (API 3) go with its places, so nothing else changes. A card pack it needs switched off hides its places the same way.</p>
+<p><b>Updates.</b> Saves know a sites plugin by its id, a place by its key, an action by its id, a counter by its name and a raised dungeon by its key. Change one of them and what was saved under it is lost: a renamed action starts again from its first price. Everything else is safe: words, pictures, panes, conditions and effects are read fresh; a new place is placed on the next load; prices may change (a save’s uses so far are kept, so do not shorten a price list or give a free action prices: a save that used it more often finds it used up); a new <code>salt</code>, <code>gap</code> or <code>where</code> reaches only lands where the place is not placed yet. Compare every release with the one players have:</p>
 <pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py compat dist/old/my_places.zip dist/my_places.zip</code></pre>
-<p>For a sites plugin <code>compat</code> lists a place removed or renamed, an action id removed and a dungeon key removed, and exits 1. It also warns, and exits 1, when a save may find an action used up: a free action that now has prices (its free uses were counted too) and a price list made shorter. It notes, and exits 0 for, a place added, a price list made longer or given other prices, an action made free, a dungeon recipe changed, a flag removed, and a new <code>where</code>, <code>gap</code> or <code>salt</code>.</p>
+<p>For a sites plugin <code>compat</code> lists a place removed or renamed, an action id removed and a dungeon key removed, and exits 1. It also warns, and exits 1, when a save may find an action used up: a free action that now has prices (its free uses were counted too) and a price list made shorter. It warns of a counter renamed or removed too. It notes, and exits 0 for, a place added, a price list made longer or given other prices, an action made free, a dungeon recipe changed, a flag removed, and a new <code>where</code>, <code>gap</code> or <code>salt</code>.</p>
 
 <h2 id="examples">The two examples, walked through</h2>
 <p>Both are in the game folder’s <code>expanded_adventure/</code>, need no card pack, and are original fiction, not official Magic canon.</p>
@@ -371,7 +668,8 @@
 
 <h2 id="tools">Tools for places</h2>
 <p>The authoring tool builds a place with you, step by step. Each step is one command of <code>tools/adventure_plugin.py</code>, run in the game folder; on Windows type <code>python</code> and <code>\</code> as on the <a href="first-plugin.html#new">first page</a>. The loop:</p>
-<ul class="chips"><li><code>new --kind sites</code></li><li><code>add-place</code></li><li><code>add-dungeon</code></li><li><code>walk</code></li><li><code>art</code></li><li><code>validate</code></li><li>the Lab</li><li><code>export</code></li></ul>
+<ul class="chips"><li><code>new --kind sites</code></li><li><code>add-place</code></li><li><code>add-action</code></li><li><code>add-pane</code></li><li><code>add-dungeon</code></li><li><code>set-text</code></li><li><code>walk</code></li><li><code>art</code></li><li><code>validate</code></li><li>the Lab</li><li><code>export</code></li></ul>
+<p>No JSON file needs to be opened for any of it: each command writes what it adds, checks the whole plugin as the game will, and changes nothing when the result would be refused. Each says what it did and which command comes next.</p>
 <ol class="steps">
 <li><h3 id="tool-new">Start a sites plugin</h3>
 <pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py new my_places --id my_places --name "My Places" --kind sites</code></pre>
@@ -383,7 +681,19 @@
 
 <li><h3 id="tool-add-dungeon">Add a dungeon</h3>
 <pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-dungeon my_places --id cellar --name "The Dry Cellar" --cards "Lightning Bolt,Llanowar Elves" --size large --place tower --price 250</code></pre>
-<p><code>add-dungeon</code> adds the recipe: <code>--cards</code> (1 to 6, joined by commas), <code>--color</code>, <code>--size</code>, <code>--rules</code>, <code>--min</code> and <code>--max</code>. With <code>--place</code> it also gives that place a button that raises the dungeon for <code>--price</code> gold (default 1000), and the Hut’s three panes: two new panes before the place’s others, for the dungeon cleared and open, with their words. <code>--action</code> names the button; name an effects action the place already has and <code>spawn_dungeon</code> is put first in its effects instead. The card names are checked as <code>validate</code> checks them, and an edit that would refuse the plugin changes nothing.</p></li>
+<p><code>add-dungeon</code> adds the recipe: <code>--cards</code> (1 to 6, joined by commas), <code>--color</code>, <code>--size</code>, <code>--rules</code>, <code>--min</code> and <code>--max</code>. With <code>--place</code> it also gives that place a button that raises the dungeon for <code>--price</code> gold (default 1000), and the Hut’s three panes: two new panes before the place’s others, for the dungeon cleared and open, with their words. At a place that already has a service both stay: the two new panes carry the place’s other buttons, and the dungeon’s button stands in every pane of the place’s own. <code>--action</code> names the button; name an effects action the place already has and <code>spawn_dungeon</code> is put first in its effects instead. The card names are checked as <code>validate</code> checks them, and an edit that would refuse the plugin changes nothing.</p></li>
+
+<li><h3 id="tool-recipe">Or start from a recipe</h3>
+<pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-place my_places --id camp --name "The Collector's Camp" --recipe collector --card "Ornithopter"</code></pre>
+<p><code>--recipe</code> writes a whole place of one of ten kinds (<a href="#recipes">Recipes</a>); <code>--list-recipes</code> prints them. <code>--service</code> is the older, plainer way: one button, and with <code>--free</code> a button that costs nothing and is never used up.</p></li>
+
+<li><h3 id="tool-edit">Add buttons, panes, flags, counters, foes</h3>
+<pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-counter my_places coins</code></pre><pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-action my_places --place tower --id wish --prices 5,5,5 --effect counter=coins+1 --effect food=2 --label "Throw in {price} gold ({uses_left} left)" --result "You have thrown {count} coins."</code></pre><pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-pane my_places --place tower --id cellar --line "Stairs lead down into the dark."</code></pre><pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-action my_places --place tower --id descend --do talk --to cellar --label "Go down the stairs"</code></pre>
+<p><code>add-action</code> puts a button into a place: <code>--do</code> (<code>effects</code>, <code>talk</code>, <code>duel</code>, <code>copy</code>, <code>buy</code>, <code>sell</code>), <code>--prices</code>, any number of <code>--effect</code>, <code>--needs</code> and <code>--when</code>, a <code>--label</code> and a <code>--result</code> written as plain words. An <code>--effect</code> is <code>gold=50</code>, <code>food=6</code>, <code>set_flag=told</code>, <code>counter=wins+1</code>, <code>amulet=red</code>, <code>give_card=Shivan Dragon</code>, <code>next_duel=life:5</code>, <code>spawn_dungeon=vault</code>, <code>reveal_map=place:4</code> or <code>log_clue=the words</code>; a <code>--when</code> is <code>flag=told</code>, <code>counter=wins:3</code>, <code>has_card=Black Lotus</code>, <code>hero_color=red</code> and so on, and <code>"A | B"</code> holds when one of the two does. A roll is two to six <code>--outcome "WEIGHT | EFFECTS | WORDS"</code>. <code>--pane</code> names the pane (a number, an id, or <code>all</code>). <code>add-pane</code> adds a pane with an <code>--id</code> (a talk opens it) or a <code>--when</code>; <code>add-flag</code> and <code>add-counter</code> declare a name; <code>add-foe</code> reads an opponent’s deck from a text file, one card a line, like <code>4 Lightning Bolt</code>. The <a href="cheatsheet.html">cheat sheet</a> has every form.</p></li>
+
+<li><h3 id="tool-words">Write the words</h3>
+<pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py set-text my_places tower.intro "A tower of green glass, humming faintly."</code></pre><pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py set-info my_places --description "A glass tower and what lies under it." --license "CC BY 4.0" --version 1.0.0</code></pre>
+<p><code>set-text</code> writes or changes one sentence of <code>text.json</code>; <code>set-info</code> sets the plugin’s name, description, license, authors and version in <code>plugin.json</code>. <code>remove-place --id KEY</code> takes a place out again, with its words, its pictures and whatever only it used.</p></li>
 
 <li><h3 id="tool-walk">Walk it</h3>
 <p><code>walk</code> plays each place as text, without the game. It shows the pane with no gold, then presses every ready service in turn, clears each dungeon it raised, and shows the pane after each step: the words filled in, each button pressable <code>(x)</code> or not, and why not. The Hut:</p>
@@ -410,6 +720,11 @@
 <span class="out">     [Old Adventurer's Hut | A hut in the woods]  picture old_hut_hut</span></code></pre>
 <p>The walk follows the game’s own rules for panes, conditions, prices and effects. A place that stands on the mainland and on the islands is walked once for each. It has no world: a dungeon always finds room, and the hero always holds one card to copy. <code>--site KEY</code> walks one place, <code>--gold N</code> sets the hero’s gold (default 100000; try a small sum to see what the hero cannot afford), <code>--json</code> prints the steps for your own scripts.</p></li>
 
+<p>A walk’s hero can be told what to carry and what to do: <code>--gold</code>, <code>--food</code>, <code>--cards "A,B"</code>, <code>--amulets red=2</code>, <code>--color</code>, <code>--day</code>, <code>--flag</code>, <code>--counter wins=3</code>; <code>--press a,b,c</code> presses exactly those buttons of one <code>--site</code> (<code>leave</code> steps out and in again, <code>clear</code> clears the open dungeon); <code>--land</code> walks one land, <code>--both</code> sends one hero over the mainland and then an island; <code>--win</code> and <code>--lose</code> end every duel that way (a walk fights none); <code>--roll N</code> takes every roll’s N-th outcome. A roll is printed whole, each outcome with its chance and its gold, and the average. At its end a walk lists what it never reached — a pane never shown, a button never pressed — with what stood in the way and the option that opens it. Only a real error makes it fail.</p></li>
+
+<li><h3 id="tool-warnings">Read the warnings</h3>
+<p><code>validate</code> refuses what the game refuses, in the game’s words. Besides that it warns of what loads but is not finished or would surprise a player, and a warning never refuses: the tool’s stand-in sentences, license, description and pictures still in place; a flag, counter, text, picture, foe or dungeon nothing uses; a placeholder where it is not filled; <code>{price}</code> or <code>{uses_left}</code> in a free action’s label; a pane too long to fit (it does not scroll); a pane that can never be shown; a button that gives gold without end; a roll that pays more than it costs. When a line holds a sentence where a text key belongs, or a card’s name is mistyped, it says what to write instead.</p></li>
+
 <li><h3 id="tool-art">Look at the art</h3>
 <p><code>art</code> measures the pictures and gives advice. It never refuses a plugin. The Guild:</p>
 <pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py art expanded_adventure/Conjuration_Wizard_Guild
@@ -435,8 +750,8 @@
 </div>
 <footer class="pager">
 <a class="prev" href="refuge.html"><span>Previous</span>The Refuge walkthrough</a>
-<a class="next" href="reference.html"><span>Next</span>Reference</a>
-<p>Shandalar · the adventure plugin authors’ guide, for plugin API 2. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
+<a class="next" href="cheatsheet.html"><span>Next</span>Places cheat sheet</a>
+<p>Shandalar · the adventure plugin authors’ guide, for plugin API 3. This guide ships with the game in <code>expanded_adventure/GUIDE/</code>.</p>
 </footer>
 </body>
 </html>

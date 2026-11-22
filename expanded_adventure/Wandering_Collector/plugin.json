@@ -1,0 +1,18 @@
+{
+	"plugin_format": 1,
+	"api_version": 3,
+	"kind": "sites",
+	"id": "wandering_collector",
+	"name": "The Wandering Collector",
+	"version": "1.0.0",
+	"minimum_game_version": "0.70.6",
+	"authors": [
+		"Shandalar Godot"
+	],
+	"license": "GPL-3.0 (the game's own license; see LICENSE.txt)",
+	"description": "A collector's camp by the road: she pays 150 gold for each Ornithopter you hand over, three in all, and then gives a parting gift.",
+	"requires": {
+		"card_packs": []
+	},
+	"learning_note": "A study of barter: one place that sees a card in the hero's bag, takes it as the price, and pays for it, with a counter of trades and a gift when the set is whole. Original fiction, not official Magic canon."
+}

@@ -341,6 +341,13 @@ dl.limits { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr
 dl.limits dt { color: var(--muted); }
 dl.limits dd { margin: 0; font-weight: 600; }
 p.generated { font-size: 0.84rem; color: var(--muted); }
+/* The cheat sheet: an example in each row may wrap, and a word of API 3
+   wears a small mark. */
+table.cheat td code.ex { white-space: normal; overflow-wrap: anywhere; font-weight: 400; }
+.api {
+  display: inline-block; font: 600 0.68rem/1.4 var(--font-mono); border-radius: 999px;
+  padding: 0.02rem 0.42rem; white-space: nowrap; background: var(--gold-soft); color: var(--gold);
+}
 /* At phone width a field table stacks: one card a field, each cell under
    its column's name (the cells carry data-label). */
 @media (max-width: 560px) {

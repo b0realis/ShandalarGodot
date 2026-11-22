@@ -55,8 +55,11 @@ func test_a_big_bolt_a_free_spell_and_a_huge_cost_are_flagged() -> void:
 	var free := _spec({"cost": "{0}", "types": ["sorcery"], "abilities": [{"kind": "spell",
 		"effects": [{"effect": "draw", "amount": 3}]}]})
 	var rows := CardBalance.advice(free)
-	assert_eq(_level(rows, "Mana cost"), CardBalance.HIGH)
+	# 2026-11-22: costing nothing is rare, not wrong in itself (a Mox, an
+	# Ornithopter were scolded for it) — what the card does for nothing is.
+	assert_eq(_level(rows, "Mana cost"), CardBalance.OK)
 	assert_eq(_level(rows, "Cards drawn"), CardBalance.VERY_HIGH)
+	assert_eq(rows[0]["level"], CardBalance.VERY_HIGH)
 	var vast := _spec({"cost": "{16}", "power": 5, "toughness": 5})
 	assert_eq(_level(CardBalance.advice(vast), "Mana cost"), CardBalance.VERY_HIGH)
 
@@ -64,14 +67,20 @@ func test_a_big_bolt_a_free_spell_and_a_huge_cost_are_flagged() -> void:
 func test_too_much_mana_and_a_busy_line_are_flagged() -> void:
 	var elf := _spec({"cost": "{G}", "power": 1, "toughness": 1, "abilities": [
 		{"kind": "mana", "color": "green", "amount": 3}]})
-	assert_eq(_level(CardBalance.advice(elf), "Mana"), CardBalance.HIGH, "beyond 9 in 10 of the game's")
+	# 2026-11-22: on a shelf of a handful of cards (Sol Ring, Mana Vault) no
+	# share is told any more; the rule of thumb, counted in the pool, tells it.
+	assert_true(_thumbs(CardBalance.advice(elf)).any(func(row: Dictionary) -> bool:
+		return String(row["text"]).contains("makes 3 mana a turn")), "a one-mana elf for three: %s" % str(CardBalance.advice(elf)))
+	assert_ne(CardBalance.advice(elf)[0]["level"], CardBalance.OK)
 	assert_eq(_level(CardBalance.advice(_spec({"cost": "{1}{G}", "power": 1, "toughness": 1, "abilities": [
 		{"kind": "mana", "color": "green", "amount": 1}]})), "Mana"), CardBalance.OK, "a mana elf")
+	# 2026-11-22: "usual" is what almost all (97 in 100) of the game's cards
+	# keep to, no longer 9 in 10 — so five things, not four.
 	var busy := _spec({"cost": "{B}", "types": ["sorcery"], "abilities": [{"kind": "spell", "effects": [
-		{"effect": "draw", "amount": 1}, {"effect": "gain_life", "amount": 1},
+		{"effect": "draw", "amount": 1}, {"effect": "drain", "amount": 1, "target": "opponent"},
 		{"effect": "discard", "amount": 1, "target": "opponent"}, {"effect": "mill", "amount": 1, "target": "player"}]}]})
 	var level := _level(CardBalance.advice(busy), "Effects")
-	assert_true(level in [CardBalance.HIGH, CardBalance.VERY_HIGH], "four things for one mana: %s" % level)
+	assert_true(level in [CardBalance.HIGH, CardBalance.VERY_HIGH], "five things for one mana: %s" % level)
 
 
 func _thumbs(rows: Array[Dictionary]) -> Array[Dictionary]:
@@ -91,7 +100,13 @@ func test_the_rules_of_thumb_catch_evident_errors_and_leave_fair_cards_be() -> v
 	var fireball := _thumbs(CardBalance.advice(_spec({"cost": "{R}", "types": ["instant"], "abilities": [
 		{"kind": "spell", "effects": [{"effect": "damage", "amount": 6, "target": "any"}]}]})))
 	assert_eq(fireball.size(), 1)
-	assert_string_contains(String(fireball[0]["text"]), "Goblin Grenade")
+	# 2026-11-22: the cards past a line are counted in the pool in use, not
+	# quoted from all ten packs (Goblin Grenade is in none of the default
+	# pool's sets).
+	if CardRegistry.all_names().has("Goblin Grenade"):
+		assert_string_contains(String(fireball[0]["text"]), "Goblin Grenade")
+	else:
+		assert_string_contains(String(fireball[0]["text"]), "None of the game's %d cards is past that line" % int(CardBalance.corpus()["all"]))
 	var tower := _thumbs(CardBalance.advice(_spec({"cost": "", "types": ["land"], "abilities": [
 		{"kind": "mana", "color": "colorless", "amount": 3}]})))
 	assert_eq(tower[0]["level"], CardBalance.VERY_HIGH, "a land tapping for 3")
@@ -192,7 +207,9 @@ func test_an_effect_rare_in_the_card_s_color_is_told_plainly() -> void:
 	var rows := _advice_with(bolt, _doctor("damage", "R", ["W"]))
 	var hints := rows.filter(func(row: Dictionary) -> bool: return row["topic"] == CardBalance.PIE_TOPIC)
 	assert_eq(hints.size(), 1, str(rows))
-	assert_eq(hints[0]["level"], CardBalance.LOW)
+	# 2026-11-22: a color hint's verdict word is "Rare in color", not "Low".
+	assert_eq(hints[0]["level"], CardBalance.RARE)
+	assert_eq(hints[0]["rare"], "few")
 	assert_string_contains(String(hints[0]["text"]), "Few white cards deal direct damage (2% of them; 30% of red cards)")
 	assert_string_contains(String(rows[0]["text"]), "rare in its color")
 	assert_eq(rows[0]["level"], CardBalance.OK, "a color hint leaves the summary's level be")
@@ -218,11 +235,16 @@ func test_color_hints_are_low_or_high_by_the_corpus_numbers() -> void:
 	for col in ["G", "W", "U", "B", "R"]:
 		var rows: Array[Dictionary] = []
 		CardBalance._pie_row(rows, c, home, [col] as Array[String], "effects", "cards", "damage", "deal direct damage")
-		levels[col] = String(rows[0]["level"]) if not rows.is_empty() else ""
-	assert_eq(levels, {"G": CardBalance.HIGH, "W": CardBalance.LOW, "U": "", "B": CardBalance.HIGH, "R": ""},
+		# 2026-11-22: every hint is of level RARE; `rare` keeps how rare.
+		levels[col] = String(rows[0]["rare"]) if not rows.is_empty() else ""
+		if not rows.is_empty():
+			assert_eq(rows[0]["level"], CardBalance.RARE)
+	assert_eq(levels, {"G": "none", "W": "few", "U": "", "B": "none", "R": ""},
 		"none and 0.1% are almost none, 1.5% few, 3% and the home color nothing")
 	var rows: Array[Dictionary] = []
-	CardBalance._pie_row(rows, c, {"color": "R", "share": 0.2, "count": CardBalance.PIE_EVIDENCE - 1},
+	# 2026-11-22: the line under which nothing is told is PIE_EVIDENCE_FEW
+	# (the default pool never reached 20 cards for any effect).
+	CardBalance._pie_row(rows, c, {"color": "R", "share": 0.2, "count": CardBalance.PIE_EVIDENCE_FEW - 1},
 		["G"] as Array[String], "effects", "cards", "damage", "deal direct damage")
 	assert_true(rows.is_empty(), "too few cards prove nothing")
 
@@ -263,7 +285,11 @@ func test_counters_it_enters_with_count_in_its_size() -> void:
 
 
 func test_an_upkeep_cost_is_a_drawback_like_echo() -> void:
-	assert_eq(CardBalance._drawbacks({}, {"upkeep_cost": "{G}{G}"}), 1)
+	# 2026-11-22: drawbacks are read from the rules text (so the game's own
+	# cards get the same credit) and scaled by what they cost.
+	var paying := CardData.new("Test Payer", "{2}{G}", Mtg.CardType.CREATURE).pt(4, 4) \
+		.oracle("At the beginning of your upkeep, sacrifice Test Payer unless you pay {G}{G}.")
+	assert_eq(CardBalance._drawbacks_in(paying, CardBalance._rules_of(paying)), 1)
 	var echo := _thumbs(CardBalance.advice(_spec({"cost": "{2}{G}", "power": 4, "toughness": 4,
 		"rules": {"echo": "{2}{G}"}})))
 	var upkeep := _thumbs(CardBalance.advice(_spec({"cost": "{2}{G}", "power": 4, "toughness": 4,
@@ -282,7 +308,9 @@ func test_the_card_s_name_and_reminder_text_are_not_what_it_does() -> void:
 		.oracle("Gain control of all permanents you own.\nCycling {2} ({2}, Discard this card: Draw a card.)")
 	assert_false(CardBalance._pie_effects(CardBalance._rules_of(brand)).has("draw"), "a reminder draws no card")
 	assert_eq(CardBalance._rules_of(brand), "Gain control of all permanents you own.\nCycling {2}")
-	var exile := CardData.new("Exile", "{2}{W}", Mtg.CardType.INSTANT).oracle("Exile target attacking creature.")
+	# 2026-11-22: "target attacking creature" is a narrow answer the color
+	# hints no longer count as exiling; the name is what is tested here.
+	var exile := CardData.new("Exile", "{2}{W}", Mtg.CardType.INSTANT).oracle("Exile target creature.")
 	assert_true(CardBalance._pie_effects(CardBalance._rules_of(exile)).has("exile"), "a verb for a name is kept")
 	var dual := CardBalance.advice(_spec({"name": "Forest Isle", "cost": "", "types": ["land"],
 		"subtypes": ["forest", "island"]}))
@@ -323,7 +351,7 @@ func test_every_row_but_the_summary_carries_the_card_s_own_number_apart() -> voi
 	var size := rows.filter(func(r: Dictionary) -> bool: return String(r["topic"]) == "Size")
 	assert_eq(String(size[0]["yours"]), "9/9 (18)")
 	var thumb := rows.filter(func(r: Dictionary) -> bool:
-		return String(r["topic"]) == CardBalance.THUMB_TOPIC and String(r["text"]).begins_with("power + toughness"))
+		return String(r["topic"]) == CardBalance.THUMB_TOPIC and String(r["text"]).begins_with("Power + toughness"))  # 2026-11-22: a capital first
 	assert_string_contains(CardBalance.game_words(thumb[0]), "(here ")
 	assert_false(CardBalance.game_words(thumb[0]).contains("; yours"))
 
