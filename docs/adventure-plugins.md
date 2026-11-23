@@ -504,7 +504,7 @@ beginning with the plugin's id), `dungeons` (≤ 8, by key: `name`, `color`
 or `random`, `size`, `rules`, 1–6 `cards` of the base game or a required
 pack, `distance` from the place in tiles) and `sites` (by key, 1–8):
 `name`, `where` (`mainland`, `islands`), `picture`, `sprite`, `gap`, and
-1–8 `panes` — each with `when`, `title`, `subtitle`, `picture`, up to 16
+1–16 `panes` (since 0.70.9; 8 before) — each with `when`, `title`, `subtitle`, `picture`, up to 16
 `lines` and up to 8 `actions`. An action has an `id` (its uses are counted
 by it, the same id the same action in every pane), `do`, a `label`,
 `when`, `prices`, `effects`, `result` (the lines after it is done) and,
@@ -899,6 +899,28 @@ open on a land at a time; an action whose dungeon cannot be raised (no
 slot, no tile) pays nothing, and since 0.70.6 neither does a priced
 action whose dungeon is still open (`site.dungeon_open`).
 
+**What its tile is held to** (`DataSites._dungeon_tile`; the owner,
+0.70.9: *"make sure the newly placed dungeon does not overlap with other
+landmarks!!"*). Never: water, or land the hero cannot walk to from the
+place (`RegionGeography.component`); a village, town, city or castle
+(the page's SITE bit); a road; a dungeon of the land, 1997's — known to
+the hero or not — or one raised before (the DUNGEON bit); a place of any
+sites plugin and an island's anchorage, harbor or castle, shown or hidden
+(`DungeonDoors.kept_points`); Arzakon's portal; the hero's own tile; and,
+since 0.70.9, a lair (it carries no bit, and its pane is asked before a
+dungeon's). Since 0.70.9 it also **keeps its air** (`_airy`): 1997's
+distance of 4 (`WorldGenerator.distance`, `DUNGEON_GAP` — the gap 1997's
+generator keeps for a dungeon) from every town, city, castle and dungeon,
+and no village, place, anchorage, lair or portal on a tile beside it. The
+air is a preference, the rest a rule: a crowded tile is taken only when
+the distance asked for holds no airy one. Where every candidate is airy
+the draw is the one it was before. Not held to: a roaming creature (it
+moves on), and nothing of this binds `DungeonDoors.move` — a raised
+dungeon that the hero leaves moves as 1997's do, to any free land tile of
+the land (no lair check, no air, no landmass check).
+Tests: `tests/unit/test_c1123_hut_chain.gd`, ten seeds with all six
+bundled places on.
+
 Since 0.70.5 a raised slot says whose it is: `spawn` writes
 `WorldClues.RAISED` (`"raised": "<plugin>:<dungeon key>"`) into the slot,
 and it is saved with it. `DataSites.dungeon_index` believes the plugin's
@@ -1078,7 +1100,36 @@ place changes nothing: a campaign without it is the vanilla campaign.
 The two of 0.70.4 declare API 2. `Old_Adventurers_Hut/` (id `old_hut`): on
 the mainland; 1000 gold, once, raise *The Forgotten Vault* (large, its
 color drawn, 8–22 tiles away) holding Old Man of the Sea, Planar Gate and
-Mirror Universe; three panes by the vault's state.
+Mirror Universe. Since its 1.1.0 (0.70.9; the owner: *"the old adventurer
+offers a new dungeon after you beat the current offered by him. They can
+be all around the map"*) it sells **five dungeons one after another**,
+1000 gold each, each offered only once the one before is cleared:
+
+| Dungeon (key) | Action | Tiles from the hut | Treasure |
+|---|---|---|---|
+| *The Forgotten Vault* (`forgotten_vault`) | `secret` | 8–22 | Old Man of the Sea, Planar Gate, Mirror Universe |
+| *The Drowned Library* (`drowned_library`) | `secret2` | 14–36 | Library of Alexandria, Candelabra of Tawnos, Transmute Artifact |
+| *The Sunken Forge* (`sunken_forge`) | `secret3` | 20–48 | Mishra's Workshop, Su-Chi, Triskelion |
+| *The Hall of Echoes* (`hall_of_echoes`) | `secret4` | 26–58 | Fork, Wheel of Fortune, Mana Flare |
+| *The Planeswalker's Rest* (`planeswalkers_rest`) | `secret5` | 32–64 | The Abyss, Moat, Nether Void |
+
+Twelve panes, a chain: pane 0 once the last dungeon is cleared; pane 1
+while the vault is open; pane 2 the first offer, while the vault was never
+raised; then for each later dungeon a waiting pane (it is open) and an
+offer pane (the one before cleared, its own never raised); a last pane
+without `when`, which the checker asks for and a campaign played straight
+never shows. The vault's key and the action `secret` are 1.0.0's, so a
+save that cleared the vault lands on the second offer and one with the
+vault open on its waiting pane (`tests/unit/test_c1123_hut_chain.gd`).
+**The distances are bounded by the land, not by the schema alone:** a
+land's tiles lie in a square of about sixty, and the farthest tile a
+dungeon could take lay 42 to 56 tiles from the hut on seven seeds
+measured — a `min` beyond that is never met, the dungeon is never raised
+and the chain would stop there, so the last `min` is 32 and the schema's
+limits (min ≤ 40, max ≤ 64) stay as they were. Since 0.70.9 a button whose
+dungeon no slot or tile can hold is shown not ready (`DataSites.describe`
+asks `_spawn_problem`, as `do_effects` always did); before, it read ready
+and the press refused with `site.no_room`, nothing paid.
 `Conjuration_Wizard_Guild/` (id `conjuration_guild`): on the mainland and
 every island; a copy for 2000, 4000, 8000 and 12000 gold, then no more.
 

@@ -11017,10 +11017,26 @@ func object_costs_refusal(pid: int, groups: Array, source: CardInstance = null, 
 ## graveyard" (Circling Vultures). The payer chooses through their agent
 ## (the resolution pre-flight holds a human seat, docs/duel-todo.md §1.3).
 ## Returns false, paying nothing, when the groups cannot be paid.
+## True while [method pay_object_costs] chooses what a resolution pays with.
+var _paying_in_resolution := false
+
+
 func pay_object_costs(pid: int, source: CardInstance, groups: Array, x := 0) -> bool:
 	if OBJECT_COSTS.refusal(self, pid, groups, source, x) != "":
 		return false
+	# PAID WHILE SOMETHING RESOLVES ("sacrifice this unless you discard a
+	# card", Masticore), so WHICH object is a question of the resolution:
+	# the seat is held open for it like any other ([method _preflight_probe]
+	# passes a cost's questions by — those belong to an action being
+	# announced, and here there is none). Until 0.70.9 it was stamped a
+	# cost's, never shown, and the first card in hand went (a player's
+	# report, 2026-11-23: "The game forces a random card instead of being
+	# able to choose one").
+	# Masticore bug was fixed by the help of Chris! Thank You!
+	var outer := _paying_in_resolution
+	_paying_in_resolution = true
 	var picks := OBJECT_COSTS.choose(self, pid, source, groups, {}, x)
+	_paying_in_resolution = outer
 	OBJECT_COSTS.pay(self, pid, picks)
 	return true
 
@@ -11835,7 +11851,8 @@ func _hold_entry_payment(pid: int, inst: CardInstance) -> bool:
 func _ask_cost_card(pid: int, source: CardInstance,
 		candidates: Array[CardInstance], prompt: String) -> CardInstance:
 	var outer := _cost_source
-	_cost_source = source.data.card_name
+	if not _paying_in_resolution:
+		_cost_source = source.data.card_name
 	var picked := agents[pid].choose_card(self, pid, candidates, prompt)
 	_cost_source = outer
 	if picked == null or not candidates.has(picked):

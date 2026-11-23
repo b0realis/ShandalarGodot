@@ -398,6 +398,7 @@ func _ready() -> void:
 	_c2_fsettings_tell_problem()
 	# --- end campaign 2026-10-12 f-settings ---
 	_tell_missing_files()
+	_tell_no_skin()
 
 
 ## THE SCREENS THE BUTTONS OPEN COMPILE IN THE BACKGROUND TOO (2026-09-30):
@@ -1418,6 +1419,45 @@ func _c2_fsettings_tell_problem() -> void:
 	if problem != "":
 		UiChrome.explain_popup(self, "Options", problem, 560.0)
 # --- end campaign 2026-10-12 f-settings ---
+
+
+## THE GAME WITHOUT ITS 1997 SKIN SAYS SO, ONCE A START (the owner,
+## 2026-11-23: "a warning (window with ok) if you run the game with no
+## skin that for the unmistakable look you need to generate a classic skin
+## and use it"). The game plays whole in its own plain panels, so this is
+## advice and has a way to be silenced for good. Not while a browser is
+## still fetching its skin, and not in the test suite, which runs with no
+## skin by design ([member skin_warning], `tests/support/pin_calendar.gd`).
+const NO_SKIN_TITLE := "No 1997 skin"
+const NO_SKIN_WORDS := "The game is running without a 1997 skin, so it draws plain panels of its own. " \
+	+ "For the unmistakable look of the original, make the classic skin from your own copy of the 1997 game " \
+	+ "and wear it: Options, then Build from a 1997 install... under the skin, or the supplied tools " \
+	+ "(see setup.txt). Everything plays the same without it."
+const NO_SKIN_SETTING := "no_skin_warning_off"
+static var skin_warning := true
+static var _no_skin_told := false
+func _tell_no_skin() -> void:
+	if not skin_warning or _no_skin_told or has_skin() or SkinPack.busy() \
+			or bool(Settings.get_value(NO_SKIN_SETTING, false)):
+		return
+	_no_skin_told = true
+	var popup := UiChrome.action_popup(self, NO_SKIN_TITLE, NO_SKIN_WORDS, [
+		{"label": "OK", "name": "OK", "cancel": true},
+		{"label": "Don't show again", "name": "NoSkinNever",
+			"callable": func() -> void: Settings.set_value(NO_SKIN_SETTING, true)},
+	], 600.0)
+	popup.name = "NoSkinNotice"
+	# Plain letters: nothing drawn a second time behind them.
+	for label in popup.find_children("*", "Label", true, false):
+		(label as Label).add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
+		(label as Label).add_theme_constant_override("shadow_offset_x", 0)
+		(label as Label).add_theme_constant_override("shadow_offset_y", 0)
+		(label as Label).add_theme_constant_override("outline_size", 0)
+
+
+## Whether a 1997 skin dresses the game now ([method GameSkin.is_worn]).
+static func has_skin() -> bool:
+	return GameSkin.is_worn()
 
 
 ## A BUILD MISSING THE CREATURES' DECKS IS SAID HERE, ONCE A START (issue

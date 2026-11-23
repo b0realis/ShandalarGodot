@@ -18973,6 +18973,88 @@ before the title stands asserts the no-hold path and returns.
 Gate: 548 scripts, **8,252/8,252 tests, 368,135 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0.
 
+## 2026-11-23 — Version 0.70.9
+
+Version 0.70.9 (Android version code 70009). Its notes are
+`docs/releases/0.70.9.md`. LAN stays protocol 32; 0.70.9 plays only
+0.70.9.
+
+- **Get Card Packs** (owner: a purple button; "using godot only the game
+  would download the card art and generate card packs and put it in its
+  own folder automatically … choose which card pack from the popup window
+  and do ok. Then a progress bar"; first asked for at the end of the main
+  menu, then moved into Options with the menu left as it was).
+  `game/pack_builder/`: the recipes of the base pictures and Packs 1–10
+  read from the same trusted JSON the Python builders read
+  (`PackRecipes`), Python's JSON bytes (`PackJson`), an https-only
+  transport bound to Scryfall's hosts (`PackTransport`), a resumable,
+  checked cache in `user://cardpack_build/` (`PackFetch`), a zip writer
+  of its own (the engine's packer adds folder entries, which a pack's
+  contract refuses) that builds in `<card folder>/building/` and asks the
+  game's own check before the pack is put in place (`PackWriter`,
+  `PackBuild`), and the window (`PackBuilderWindow`). A pack built here
+  passes the game's check and the Python tool's `verify`; with the same
+  pictures it is the owner's zip byte for byte. Nothing of the player or
+  the machine is in any request.
+- **Build from a 1997 install** (owner: "a skin tool under skins that
+  would scrape a 1997 install for a skin we use directly within a game").
+  `game/skin_builder/`: the importer's tables written out from the Python
+  ones and held equal by `tools/test_skin_recipes_mirror.py`
+  (`SkinRecipes`), the .pic / palette / mask / BMP and sprite decoders
+  (`SkinPicCodec`, `SkinSprCodec`), the texts (`SkinText`), the walk of
+  the folders (`SkinSourceIndex`), the check (`SkinInstallCheck`), the
+  job on its thread (`SkinBuildJob`) and the window
+  (`SkinBuilderWindow`). On the 1997 install it gives the Python tool's
+  skin: 613 files, pictures pixel for pixel, the rest byte for byte, in
+  about a quarter of the time. The two movies need a decoder the game
+  does not have and are left out, as with `--no-videos`.
+- **The hut's chain** (owner: "the old adventurer offers a new dungeon
+  after you beat the current offered by him. They can be all around the
+  map"). `expanded_adventure/Old_Adventurers_Hut/` 1.1.0: five dungeons,
+  each offer pane waiting (`when`) for the one before to be cleared and
+  its own never raised, a waiting pane for each, the last pane without a
+  `when`; data only, no new word of the API. Twelve panes: the shared
+  rules (`game/adventure/plugins/schema_v1.json`) now allow a place 16
+  (8), so the plugin names 0.70.9 as its `minimum_game_version`. "All
+  around the map" is the distances, min 8 to 32 and max 22 to 64: a
+  mainland's tiles lie within some 60 by 60, and on seven worlds measured
+  the farthest tile a dungeon could take from the hut was 42 to 56 away,
+  so a `min` past 40 can leave a dungeon no tile at all (the first draft's
+  50 and 70 did; `distance` keeps its limits of 40 and 64). A 1.0.0 adventure with the Vault cleared
+  lands on the second offer. Test: `tests/unit/test_c1123_hut_chain.gd`.
+- **Options' skin section tidied** (owner: "a lot of explanation text for
+  skin: lets put that in question mark button … tidy this up nice";
+  "Choose skin button emphasize gold"): the folder lines and the note
+  moved into the window the "?" beside **Skin:** opens
+  (`OptionsScreen.show_skin_places`, `skin_places_words`; the labels are
+  kept, filled as before, in the hidden `SkinPlaces`); the rows name a
+  place by its last part (`short_places`), the whole line their tooltip;
+  the skin's Choose... is gold (`dress_gold`).
+- **Two tests that leaned on their neighbours**, found by the gate when
+  the new files changed the deal: `test_adventure_plugins_registry` left
+  Pack 2 on (it puts the packs back now) and `test_c21_X3_warmup` read a
+  cache an earlier script had filled (it clears it first).
+- **The skin from a CD image** (owner: "Can skin be built also from 1997
+  Shandalar CD or its iso image?" — "Yes choose iso add it."):
+  `SkinIsoImage` reads .iso and raw .bin/.cue images in place, nothing
+  unpacked; **Choose CD image...** beside **Choose folder...**. Images
+  mastered from the 1997 install (Joliet .iso; raw Mode 1 .bin and its
+  .cue) give the folder build's 613 files, all identical. A disc without
+  long names gives a few files fewer (two names past 31 characters; on
+  8.3 names about a fifth), and what a disc keeps inside its installer is
+  not read — the check says so and asks for the installed folder too. No
+  retail disc was at hand: what the 1997 CD itself gives is not measured.
+- **No skin, said once a start**: `MainScreen._tell_no_skin`,
+  `GameSkin.is_worn()` (a landmark picture that reads, not a folder that
+  exists), the setting `no_skin_warning_off`; the suite switches it off
+  in `tests/support/pin_calendar.gd`.
+- **Masticore's discard is the player's** (a player's report): what a
+  resolution pays "unless" with was stamped a cost's question, which the
+  hold for a resolution passes by, so the first candidate went.
+  `MtgGame.pay_object_costs` asks it as the resolution's own question;
+  seven cards (Masticore, Body Snatcher and the "sacrifice … unless"
+  upkeeps) now ask which. Test: `tests/cards/test_pack_10_B5_upkeep.gd`.
+
 ## 2026-11-22 — Version 0.70.8
 
 Version 0.70.8 (Android version code 70008). Its notes are

@@ -225,7 +225,9 @@ into Save As, with the new name already filled in.
 897 cards. The art is not in the 1997 install in any usable form, and
 it is not shipped with the game either — the pictures are Scryfall's,
 on a licence of their own, so what ships is the script that fetches
-them, in tools/. From this folder:
+them, in tools/. The game can do it for you: Options, then Get Card
+Packs..., tick "1997 card pictures" (and any numbered pack) and press OK.
+Or by hand, from this folder:
 
     python3 tools/fetch_card_art.py --out cardart/
     python3 tools/mtg_assets.py --from-cardart cardart/ --out cardart.zip
@@ -250,7 +252,12 @@ only the illustration is missing.
 ---------------------------------------------------------------------
 
 If you own the original and would rather import it yourself than use
-the original_skin.zip download:
+the original_skin.zip download, the game can do it: Options, then Build
+from a 1997 install... under the skin, and choose the folder the 1997
+game was installed to, its CD, or a CD image (.iso, or .bin with its
+.cue). What a disc keeps packed inside its installer cannot be read: add
+the installed folder too. It makes the same skin as the tool
+below, without the two movies. Or with the tool:
 
     python3 tools/mtg_assets.py                          explains what it needs
     python3 tools/mtg_assets.py --check   /path/to/game  looks, reports, writes nothing

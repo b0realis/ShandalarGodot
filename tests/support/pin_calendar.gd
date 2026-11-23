@@ -14,3 +14,12 @@ func run() -> void:
 	# timer could fire after 0.18 s and a test racing a wall-clock guard
 	# lost (test_c13_G1_board, once in a gate).
 	OS.delta_smoothing = false
+	# The suite runs with no 1997 skin where CI runs it: the title's
+	# notice of that stays out of every other test's way (the test of the
+	# notice switches it on for itself).
+	MainScreen.skin_warning = false
+	# NO DOWNLOADS IN TESTS, EVER (the owner, 2026-11-23): the card pack
+	# builder's real transport refuses to open anything in the suite; its
+	# tests use a stand-in, and one that reached for the real one by
+	# mistake fails at once instead of asking Scryfall.
+	PackTransport.network_allowed = false

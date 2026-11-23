@@ -512,7 +512,9 @@ static func _elder(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 
 ## "Unless you discard a card" — an "unless" payment (CR 118.12): not a
 ## discard an effect causes, so Library of Leng has no say, and a discard
-## watcher (Megrim) still sees it. The hint keeps the Masticore.
+## watcher (Megrim) still sees it. The hint keeps the Masticore. WHICH card
+## goes is the player's to choose ([method MtgGame.pay_object_costs]).
+## Masticore bug was fixed by the help of Chris! Thank You!
 static func _masticore(g: MtgGame, s: CardInstance, _e: GameEvent) -> void:
 	var pid := M.pid_of(g, s)
 	if not F._same_trigger_source(g, s) or s.controller_id != pid: return

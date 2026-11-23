@@ -17,7 +17,14 @@ const SECOND := "user://plugin_registry_tests/second"
 var _calls: Array = []
 
 
+## The packs that were on before a test, put back after it: one test here
+## switches Pack 2 on, and left on it changed the pool of whatever ran
+## next in the same process (tests/unit/test_decks_1997.gd, 2026-11-23).
+var _packs_on: Array = []
+
+
 func before_each() -> void:
+	_packs_on = CardPacks.available_ids().filter(func(id: String) -> bool: return CardPacks.is_enabled(id))
 	_calls.clear()
 	DirAccess.make_dir_recursive_absolute(FIRST)
 	DirAccess.make_dir_recursive_absolute(SECOND)
@@ -28,6 +35,9 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	for id: String in CardPacks.available_ids():
+		if CardPacks.is_enabled(id) != (id in _packs_on):
+			CardPacks.set_enabled(id, id in _packs_on)
 	ZIPS.remove("user://plugin_registry_tests")
 	Settings.clear_value(GamePaths.KEY_EXPANDED_ADVENTURE)
 	AdventurePlugins.folders_override = [] as Array[String]

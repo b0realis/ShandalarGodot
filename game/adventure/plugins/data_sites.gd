@@ -43,6 +43,10 @@ const COLORS: Array[String] = ["black", "blue", "green", "red", "white"]
 const MOST_AMULETS := 99
 ## The default button of each kind of action (`label` replaces it).
 const LABELS := {"talk": "site.talk", "duel": "site.duel", "buy_card": "site.buy", "sell_card": "site.sell"}
+## 1997's least distance ([method WorldGenerator.distance]) between a
+## dungeon it places and every town, city and earlier slot: a raised
+## dungeon keeps the same ([method _airy]).
+const DUNGEON_GAP := 4
 
 var id := ""
 ## The scan whose data this reads ([member AdventurePlugins.revision]).
@@ -554,8 +558,13 @@ func describe(player: AdventurePlayer, site_key: String, pane_id := "") -> Dicti
 				if used_up(player, site_key, action):
 					continue
 				var words := values(player, site_key, action)
+				# Ready only when the press would be taken: [method do_effects]
+				# also refuses a dungeon no slot or tile can hold.
+				var ready := refusal(player, site_key, action) == ""
+				if ready and String(action["do"]) in ["effects", "talk"]:
+					ready = _spawn_problem(player, action, site_key) == ""
 				actions.append([id + AdventureSites.ACT + site_key + ":" + name,
-					say(label_key(action), words), refusal(player, site_key, action) == ""])
+					say(label_key(action), words), ready])
 	return {"expansion": id, "kind": AdventureSites.PANE_KIND, "site": site_key, "slot": -1,
 		"pane": String(pane.get("id", "")),
 		"name": say(String(pane["title"]), filled) if pane.has("title") else String(place.get("name", site_key)),
@@ -1246,12 +1255,62 @@ func _here(player: AdventurePlayer, site_key := "") -> Vector2i:
 	return player.tile()
 
 
+## The landmarks a raised dungeon keeps its air from ([method _airy]), read
+## once for a land's tiles: `slots`, every castle and dungeon of the land
+## (1997's, known or not, and each raised before), and `towns`, its towns
+## and cities — 1997's own gap of [constant DUNGEON_GAP] for a dungeon it
+## places; `near`, the villages, every place and anchorage the land keeps,
+## the lairs and Arzakon's portal, which it does not stand beside.
+func _dungeon_air(player: AdventurePlayer, kept: Dictionary) -> Dictionary:
+	var world := player.world
+	var slots: Array[Vector2i] = []
+	for slot: Variant in world.encounters:
+		if slot is Dictionary and (slot as Dictionary).has("x") and (slot as Dictionary).has("y"):
+			slots.append(Vector2i(int(slot["x"]), int(slot["y"])))
+	var towns: Array[Vector2i] = []
+	var near: Array[Vector2i] = []
+	for site: Dictionary in world.sites:
+		var kind := int(site.get("type", 0))
+		var at := Vector2i(int(site.get("x", 0)), int(site.get("y", 0)))
+		if kind == ShandalarWorld.TOWN or kind == ShandalarWorld.CITY:
+			towns.append(at)
+		elif kind > 0:
+			near.append(at)
+	for tile: Vector2i in kept:
+		near.append(tile)
+	var portal := FinalBattle.portal_tile_of(player)
+	if portal.x >= 0:
+		near.append(portal)
+	return {"slots": slots, "towns": towns, "near": near}
+
+
+## Whether [param tile] has a dungeon's air of [param air] ([method
+## _dungeon_air]): 1997's distance ([method WorldGenerator.distance]) of
+## [constant DUNGEON_GAP] or more from every town, city, castle and
+## dungeon, and no other landmark on a tile beside it.
+static func _airy(tile: Vector2i, air: Dictionary) -> bool:
+	for group in ["slots", "towns"]:
+		for at: Vector2i in air[group]:
+			if WorldGenerator.distance(at.x - tile.x, at.y - tile.y) < DUNGEON_GAP:
+				return false
+	for at: Vector2i in air["near"]:
+		if absi(at.x - tile.x) <= 1 and absi(at.y - tile.y) <= 1:
+			return false
+	return true
+
+
 ## The tile dungeon [param key] would rise on: land of the place's own
 ## land, one a moved dungeon could take ([method DungeonDoors.takes_dungeon])
-## and away from every place ([method AdventureSites.points]), its distance
-## from the place within the dungeon's `distance` (else the nearest such
-## tile past `min`), drawn on the plugin's dice ([method
+## and away from every place ([method AdventureSites.points]) and every
+## lair, its distance from the place within the dungeon's `distance` (else
+## the nearest such tile past `min`), drawn on the plugin's dice ([method
 ## AdventureSites.dice_for]) for this land, key and raising. (−1, −1) for none.
+##
+## It keeps its air too ([method _airy], 0.70.9; the owner: *"make sure the
+## newly placed dungeon does not overlap with other landmarks!!"*): a tile
+## crowded by a landmark is taken only when the distance asked for holds no
+## airy one. Where every tile that could be drawn is airy the draw is the
+## one it always was.
 func _dungeon_tile(player: AdventurePlayer, key: String, site_key := "") -> Vector2i:
 	var world := player.world
 	var info := dungeon(key)
@@ -1265,18 +1324,35 @@ func _dungeon_tile(player: AdventurePlayer, key: String, site_key := "") -> Vect
 	var kept := DungeonDoors.kept_points(world)
 	for point: Variant in AdventureSites.points(world):
 		kept[Vector2i(int(point[0]), int(point[1]))] = true
+	# A lair stands on its tile until it is explored, and its pane is asked
+	# before a dungeon's: never under one (as no place is, [method
+	# AdventureSites.blocked_tiles]).
+	for creature: Variant in player.monsters:
+		if creature is Dictionary and String(creature.get("kind", "")) == "lair" \
+				and AdventurePlayer._is_number(creature.get("x")) and AdventurePlayer._is_number(creature.get("y")):
+			kept[Vector2i(int(creature["x"]) / 32, int(creature["y"]) / 32)] = true
+	var air := _dungeon_air(player, kept)
 	var inside: Array[Vector2i] = []
 	var beyond: Array[Vector2i] = []
+	var crowded_inside: Array[Vector2i] = []
+	var crowded_beyond: Array[Vector2i] = []
 	for tile in RegionGeography.component(world, here):
 		if kept.has(tile) or not DungeonDoors.takes_dungeon(world, tile, player.tile(), portal, kept):
 			continue
 		var far := tile.distance_to(here)
 		if far < least:
 			continue
+		var airy := _airy(tile, air)
 		if far <= most:
-			inside.append(tile)
+			(inside if airy else crowded_inside).append(tile)
 		else:
-			beyond.append(tile)
+			(beyond if airy else crowded_beyond).append(tile)
+	# No airy tile at the distance asked for: a crowded one there, before
+	# an airy one farther off (the distance is the plugin's word).
+	if inside.is_empty():
+		inside = crowded_inside
+	if beyond.is_empty():
+		beyond = crowded_beyond
 	if inside.is_empty() and not beyond.is_empty():
 		beyond.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.distance_squared_to(here) < b.distance_squared_to(here))
 		inside = beyond.slice(0, 8)

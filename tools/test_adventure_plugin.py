@@ -51,6 +51,8 @@ PROTOTYPE = ROOT / "expanded_adventure" / "Fallen_Empires_Refuge_prototype"
 ## missing from a checkout while they are painted, so the tests that play
 ## them lay small stand-ins of the same names over a copy.
 SHIPPED_SITES = {"Old_Adventurers_Hut": "old_hut", "Conjuration_Wizard_Guild": "conjuration_guild"}
+# The hut's five dungeons, in the order the old man sells them.
+HUT_CHAIN = ["forgotten_vault", "drowned_library", "sunken_forge", "hall_of_echoes", "planeswalkers_rest"]
 
 
 def run_tool(*args: str, cwd: Path | None = None, tool: Path = SCRIPT) -> subprocess.CompletedProcess:
@@ -591,6 +593,17 @@ class SitesTest(unittest.TestCase):
             secret = ap._site_actions(hut["sites"]["sites"]["hut"])["secret"]
             self.assertEqual((secret["do"], secret["prices"]), ("effects", [1000]))
             self.assertIn({"spawn_dungeon": "forgotten_vault"}, secret["effects"])
+            # Since 1.1.0 he sells five secrets, one after another, each for 1000 gold.
+            readme = " ".join((ROOT / "expanded_adventure" / "Old_Adventurers_Hut" / "README.txt").read_text(encoding="utf-8").split())
+            self.assertEqual(list(hut["sites"]["dungeons"]), HUT_CHAIN)
+            for number, key in enumerate(HUT_CHAIN, 1):
+                dungeon = hut["sites"]["dungeons"][key]
+                self.assertIn(dungeon["name"].removeprefix("The "), readme)
+                for card in dungeon["cards"]:
+                    self.assertIn(card, readme)
+                action = ap._site_actions(hut["sites"]["sites"]["hut"])["secret" if number == 1 else "secret%d" % number]
+                self.assertEqual((action["do"], action["prices"], action["effects"][0]),
+                                 ("effects", [1000], {"spawn_dungeon": key}))
             guild = ap.judge(str(shipped_sites_copy("Conjuration_Wizard_Guild", Path(work))), ap.find_game())["data"]
             tower = guild["sites"]["sites"]["tower"]
             self.assertEqual(tower["where"], ["mainland", "islands"])
@@ -603,10 +616,16 @@ class SitesTest(unittest.TestCase):
             result = run_tool("info", str(copy))
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("kind:                 sites\n", result.stdout)
-            self.assertIn("1 place, 1 dungeon, 0 flags, 1 picture", result.stdout)
-            self.assertIn("place hut:            Old Adventurer's Hut, on mainland, gap 3; 3 panes; actions leave, secret",
-                          result.stdout)
-            self.assertIn("The Forgotten Vault, holding Old Man of the Sea, Planar Gate, Mirror Universe", result.stdout)
+            self.assertIn("1 place, 5 dungeons, 0 flags, 1 picture", result.stdout)
+            self.assertIn("place hut:            Old Adventurer's Hut, on mainland, gap 3; 12 panes; "
+                          "actions leave, secret, secret2, secret3, secret4, secret5\n", result.stdout)
+            for line in ("dungeon forgotten_vault: The Forgotten Vault, holding Old Man of the Sea, Planar Gate, Mirror Universe",
+                         "dungeon drowned_library: The Drowned Library, holding Library of Alexandria, Candelabra of Tawnos, "
+                         "Transmute Artifact",
+                         "dungeon sunken_forge: The Sunken Forge, holding Mishra's Workshop, Su-Chi, Triskelion",
+                         "dungeon hall_of_echoes: The Hall of Echoes, holding Fork, Wheel of Fortune, Mana Flare",
+                         "dungeon planeswalkers_rest: The Planeswalker's Rest, holding The Abyss, Moat, Nether Void"):
+                self.assertIn("  " + line + "\n", result.stdout)
             facts = json.loads(run_tool("info", str(copy), "--json").stdout)
             self.assertEqual(facts["plugin_kind"], "sites")
             descriptor = facts["content"]["descriptor"]
@@ -800,8 +819,10 @@ class PlaceToolsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         run = json.loads(result.stdout)["sites"][0]
         kinds = [step["kind"] for step in run["steps"]]
-        self.assertEqual(kinds, ["pane", "pane", "press", "pane", "clear", "pane"])
-        poor, rich, press, waiting, _, cleared = run["steps"]
+        # No gold, gold, then five times: pay, the waiting pane, the dungeon cleared, the pane after it.
+        self.assertEqual(kinds, ["pane", "pane"] + ["press", "pane", "clear", "pane"] * 5)
+        poor, rich, press, waiting, _, second_offer = run["steps"][:6]
+        cleared = run["steps"][-1]
         self.assertEqual((poor["note"], poor["pane"]), ("with no gold", 2))
         self.assertEqual(poor["buttons"][0], {"id": "secret", "do": "effects", "ready": False,
                                               "why": "You need 1000 gold for this; you carry 0.",
@@ -812,15 +833,82 @@ class PlaceToolsTest(unittest.TestCase):
         self.assertEqual(press["journal"][0], "The old man in the woods told you where The Forgotten Vault lies.")
         self.assertEqual(press["lines"][1], "The way to The Forgotten Vault is marked on your map.")
         self.assertEqual(press["buttons"], ["Return", "Leave"])
-        self.assertEqual((waiting["pane"], cleared["pane"]), (1, 0))
+        self.assertEqual(waiting["pane"], 1)
         self.assertIn("You know the way to The Forgotten Vault", waiting["lines"][0])
-        self.assertEqual([b["id"] for b in cleared["buttons"]], ["leave"], "sold once")
+        self.assertEqual([b["id"] for b in waiting["buttons"]], ["leave"], "nothing is sold while a dungeon stands open")
+        # The chain: each cleared dungeon brings the next offer, which names the one just cleared.
+        self.assertEqual(second_offer["pane"], 4)
+        self.assertIn("You came back from The Forgotten Vault alive", second_offer["lines"][0])
+        self.assertEqual([(b["id"], b["ready"]) for b in second_offer["buttons"]], [("secret2", True), ("leave", True)])
+        self.assertEqual([step["pane"] for step in run["steps"] if step["kind"] == "pane"],
+                         [2, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 0])
+        presses = [step for step in run["steps"] if step["kind"] == "press"]
+        self.assertEqual([p["raised"] for p in presses], [[key] for key in HUT_CHAIN])
+        self.assertEqual([p["paid"] for p in presses], [1000] * 5)
+        self.assertEqual([p["state"]["gold"] for p in presses], [99000, 98000, 97000, 96000, 95000])
+        self.assertEqual(presses[4]["journal"], [
+            "The old man in the woods told you where The Planeswalker's Rest lies.",
+            "Paid the old man in the woods 1000 gold for the way to The Planeswalker's Rest."])
+        self.assertIn("The Drowned Library. It may be a long road", presses[1]["lines"][0])
+        self.assertEqual(cleared["pane"], 0)
+        self.assertIn("So you have found them all", cleared["lines"][0])
+        self.assertEqual([b["id"] for b in cleared["buttons"]], ["leave"], "each secret is sold once")
+        self.assertEqual(cleared["state"]["dungeons"], {key: "cleared" for key in HUT_CHAIN})
+        self.assertEqual(cleared["state"]["gold"], 95000, "5000 gold in all")
         text = run_tool("walk", str(ROOT / "expanded_adventure" / "Old_Adventurers_Hut"))
         self.assertEqual(text.returncode, 0)
         self.assertIn("( ) Pay 1000 gold for the secret   not ready: You need 1000 gold for this; you carry 0.", text.stdout)
         self.assertIn('Press "Pay 1000 gold for the secret": 1000 gold paid, 99000 left; secret used 1 time', text.stdout)
+        self.assertIn('Press "Pay 1000 gold for the secret": 1000 gold paid, 95000 left; secret5 used 1 time', text.stdout)
         self.assertIn("The hero clears The Forgotten Vault (forgotten_vault): cleared", text.stdout)
-        self.assertIn("End: 99000 gold; uses hut.secret 1; flags none; dungeons forgotten_vault cleared.", text.stdout)
+        self.assertIn("End: 95000 gold; uses hut.secret 1, hut.secret2 1, hut.secret3 1, hut.secret4 1, hut.secret5 1; "
+                      "flags none; dungeons forgotten_vault cleared, drowned_library cleared, sunken_forge cleared, "
+                      "hall_of_echoes cleared, planeswalkers_rest cleared.", text.stdout)
+
+    def test_a_hero_who_cleared_only_the_first_vault_is_offered_the_second(self):
+        """The state a save of the hut's 1.0.0 holds: the secret bought once
+        and the vault cleared. `--press` plays exactly that and no more."""
+        hut = str(ROOT / "expanded_adventure" / "Old_Adventurers_Hut")
+        result = run_tool("walk", hut, "--site", "hut", "--press", "secret,clear", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        last = [step for step in json.loads(result.stdout)["sites"][0]["steps"] if step["kind"] == "pane"][-1]
+        self.assertEqual(last["pane"], 4)
+        self.assertEqual([b["id"] for b in last["buttons"]], ["secret2", "leave"])
+        self.assertEqual(last["state"]["dungeons"], {"forgotten_vault": "cleared"})
+
+    def test_a_place_may_have_16_panes_and_a_dungeon_lies_64_tiles_away_at_most(self):
+        """Since 0.70.9 a place may have 16 panes (8 before). A dungeon's
+        distance keeps its limits, min 40 and max 64: a land's tiles lie in
+        a square of some sixty, so nothing farther could ever be raised."""
+        with tempfile.TemporaryDirectory() as work:
+            folder = shipped_sites_copy("Old_Adventurers_Hut", Path(work))
+            path = folder / "sites.json"
+            shipped = json.loads(path.read_text(encoding="utf-8"))
+
+            def judged(panes: int, least: int, most: int) -> dict:
+                sites = json.loads(json.dumps(shipped))
+                hut = sites["sites"]["hut"]
+                hut["panes"] = hut["panes"] + [json.loads(json.dumps(hut["panes"][-1])) for _ in range(panes - 12)]
+                sites["dungeons"]["planeswalkers_rest"]["distance"] = {"min": least, "max": most}
+                path.write_text(json.dumps(sites), encoding="utf-8")
+                return ap.judge(str(folder), ap.find_game())
+
+            self.assertEqual(len(shipped["sites"]["hut"]["panes"]), 12)
+            for dungeon in shipped["dungeons"].values():
+                self.assertLessEqual(dungeon["distance"]["min"], 40)
+                self.assertLessEqual(dungeon["distance"]["max"], 64)
+            for panes, least, most in ((16, 40, 64), (16, 2, 4), (13, 40, 40)):
+                report = judged(panes, least, most)
+                self.assertTrue(report["valid"], report["problems"])
+            for panes, least, most, wanted in (
+                    (17, 32, 64, "sites.json.sites.hut.panes: 17 entries; 1 to 16 are allowed."),
+                    (16, 32, 65, "sites.json.dungeons.planeswalkers_rest.distance.max: 65 is outside 4..64."),
+                    (16, 41, 64, "sites.json.dungeons.planeswalkers_rest.distance.min: 41 is outside 2..40."),
+                    (16, 40, 30, None)):
+                report = judged(panes, least, most)
+                self.assertFalse(report["valid"], (panes, least, most))
+                if wanted:
+                    self.assertEqual(report["problems"], [wanted])
 
     def test_walk_copies_four_cards_at_the_guild_and_then_never(self):
         guild = str(ROOT / "expanded_adventure" / "Conjuration_Wizard_Guild")

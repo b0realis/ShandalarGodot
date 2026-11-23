@@ -22,6 +22,16 @@ once; without it every download fails with `CERTIFICATE_VERIFY_FAILED`.
 New to command windows? [Getting Started](https://b0realis.github.io/ShandalarGodot/)
 walks from the download to the first duel, every set up to the Urza block included.
 
+## The short way: in the game
+
+Options has **Get Card Packs...** (purple, beside **Card Packs...**). Its
+window lists the 1997 card pictures and Packs 1 to 10; tick what you want
+and press OK. The game downloads the pictures from Scryfall, builds each
+ZIP, checks it as it checks any pack and puts it in the card folder. What
+was downloaded is kept in `user://cardpack_build/`, so a build that was
+stopped goes on where it was. The ZIPs are the ones the commands below
+make. Not in the browser version.
+
 ## Base card pictures: cardart.zip
 
 ```sh

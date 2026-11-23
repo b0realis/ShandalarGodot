@@ -191,11 +191,15 @@ func test_a_raised_dungeon_stands_where_it_stood_before_the_review() -> void:
 	var least := float(info["distance"]["min"])
 	var most := float(info["distance"]["max"])
 	var inside: Array[Vector2i] = []
+	# Since 0.70.9 of those tiles only the ones with a dungeon's air (1997's
+	# gap of 4 from towns, cities and slots; beside no other landmark:
+	# test_c1123_hut_chain.gd) — the same tiles in the same order still.
+	var air := sites._dungeon_air(player, DungeonDoors.kept_points(player.world))
 	for tile in RegionGeography.component(player.world, hut):
 		if not DungeonDoors.takes_dungeon(player.world, tile, player.tile()):
 			continue
 		var far := tile.distance_to(hut)
-		if far >= least and far <= most:
+		if far >= least and far <= most and DataSites._airy(tile, air):
 			inside.append(tile)
 	assert_false(inside.is_empty())
 	var dice := AdventureSites.dice_for(player.world, int(sites.file().get("salt", 0)), "old_hut:%s:%s:0" % [DataSites.land(player), VAULT])

@@ -107,8 +107,8 @@
   <span class="j-k">"kind"</span><span class="j-p">:</span> <span class="j-s">"sites"</span><span class="j-p">,</span>
   <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"old_hut"</span><span class="j-p">,</span>
   <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"An Old Adventurer's Hut"</span><span class="j-p">,</span>
-  <span class="j-k">"version"</span><span class="j-p">:</span> <span class="j-s">"1.0.0"</span><span class="j-p">,</span>
-  <span class="j-k">"minimum_game_version"</span><span class="j-p">:</span> <span class="j-s">"0.70.4"</span>
+  <span class="j-k">"version"</span><span class="j-p">:</span> <span class="j-s">"1.1.0"</span><span class="j-p">,</span>
+  <span class="j-k">"minimum_game_version"</span><span class="j-p">:</span> <span class="j-s">"0.70.9"</span>
 <span class="j-p">}</span></code></pre></figure>
 <p>A wrong manifest is named in one of these sentences:</p>
 <ul>
@@ -145,7 +145,7 @@
 <tr><td><code>picture</code></td><td class="wrap">Required: the pane’s picture, a picture key of <code>sites.json</code> or a skin picture.</td></tr>
 <tr><td><code>sprite</code></td><td class="wrap">Required: how it stands on the map, <code>{"file": "art/…png", "width": 104}</code>, its width 16 to 512 world pixels (a tile is 128 wide). It stands on its tile as a marker’s sprite does: the picture’s transparent margins trimmed, the middle of its bottom edge on the tile (<a href="art-music.html#sprites">Map sprites</a>).</td></tr>
 <tr><td><code>gap</code></td><td class="wrap">1 to 8 tiles, default 3: how far it keeps from towns, castles, dungeons and other places.</td></tr>
-<tr><td><code>panes</code></td><td class="wrap">Required, 1 to 8 (<a href="#panes">Panes</a>).</td></tr>
+<tr><td><code>panes</code></td><td class="wrap">Required, 1 to 16 (8 before 0.70.9; <a href="#panes">Panes</a>).</td></tr>
 </tbody></table></div>
 
 <h2 id="where">Where places stand</h2>
@@ -206,7 +206,7 @@
 <tr><td><code>cards</code></td><td class="wrap">API 3, <code>buy_card</code> and <code>sell_card</code>: at most 32 cards, each with its price in gold.</td></tr>
 <tr><td><code>stock</code></td><td class="wrap">API 3, <code>buy_card</code> and <code>sell_card</code>: how many of each card are traded in a campaign, 1 to 1000. Without it: without end.</td></tr>
 </tbody></table></div>
-<p>A button the hero cannot use now is shown grayed: they lack its price, or, for a copy, hold no card that may be copied or have no room in the bag. Should a press still fail, nothing is paid and the pane says why (<code>site.no_gold</code>, <code>site.bag_full</code>, <code>site.no_cards</code>, <code>site.no_room</code>).</p>
+<p>A button the hero cannot use now is shown grayed: they lack its price, or, for a copy, hold no card that may be copied or have no room in the bag, or the land has no room for the dungeon it would raise. Should a press still fail, nothing is paid and the pane says why (<code>site.no_gold</code>, <code>site.bag_full</code>, <code>site.no_cards</code>, <code>site.no_room</code>).</p>
 <div class="note"><strong>One id, one action</strong><p>The same action may stand in several panes, written the same in each, field for field. Two different actions with one id refuse the plugin, and so do two <code>leave</code> buttons with one id that differ in any field, a label say: <code>sites.json: sites.shrine.panes[1].actions[1].id: leave names another action of this site; an id is one action (the same action may stand in several panes).</code> Copy a button word for word into every pane, or give it another id.</p></div>
 
 <h2 id="prices">Prices, and how an action is used up</h2>
@@ -301,7 +301,7 @@
 <ul class="chips" data-schema="dungeon_colors"><li><code>black</code></li><li><code>blue</code></li><li><code>green</code></li><li><code>red</code></li><li><code>white</code></li><li><code>random</code></li></ul>
 <ul class="chips" data-schema="dungeon_sizes"><li><code>small</code></li><li><code>large</code></li></ul>
 <ul class="chips" data-schema="dungeon_rules"><li><code>no_color</code></li><li><code>no_artifacts</code></li><li><code>no_instants</code></li><li><code>life_carries</code></li><li><code>life_adds</code></li></ul>
-<p><b>How one is raised.</b> It rises on the land the hero stands on, on a land tile of the place’s own land where a dungeon may stand, at least <code>min</code> and at most <code>max</code> tiles from the hero. When no tile is within that distance, it takes one of the nearest tiles past <code>min</code>. The tile is drawn on the plugin’s dice. Its color, size, rules, cards and name are the recipe’s, and <b>everything about it is known</b>: its place on the map, its creatures and its rules, as if the hero had heard every clue.</p>
+<p><b>How one is raised.</b> It rises on the land the hero stands on, on a land tile of the place’s own land where a dungeon may stand, at least <code>min</code> and at most <code>max</code> tiles from the hero. When no tile is within that distance, it takes one of the nearest tiles past <code>min</code>. It never stands on a town, a castle, another dungeon, a road, a lair, a place, an anchorage, Arzakon’s portal or the hero’s own tile, and where it can it keeps its air: some tiles from every town, city, castle and dungeon, and not beside anything else. The tile is drawn on the plugin’s dice. Its color, size, rules, cards and name are the recipe’s, and <b>everything about it is known</b>: its place on the map, its creatures and its rules, as if the hero had heard every clue.</p>
 <p><b>Then it is an ordinary dungeon.</b> The hero enters it, fights its creatures and takes its cards as in any dungeon. It is drawn on the map and listed with the others, and it moves when left, as 1997’s dungeons do. It belongs to the land, not to the plugin: if the plugin goes missing, the dungeon stays.</p>
 <ul>
 <li>One dungeon of a key is open on a land at a time. Once it is cleared, a new <code>spawn_dungeon</code> of that key raises a new one, on a new draw. To sell a dungeon once, give its action one price, as the Hut does.</li>
@@ -646,8 +646,8 @@
 <p>Both are in the game folder’s <code>expanded_adventure/</code>, need no card pack, and are original fiction, not official Magic canon.</p>
 
 <h3 id="hut">An Old Adventurer’s Hut</h3>
-<p>A hut in the mainland’s woods. The very old man inside was a planeswalker once, from another world. For 1000 gold, once, he tells the hero where a dungeon lies that nobody else knows of. The plugin holds one place, one dungeon, three panes and one service. Its dungeon first:</p>
-<figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/dungeons"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>/dungeons</span></figcaption><pre class="code"><code><span class="j-p">{</span>
+<p>A hut in the mainland’s woods. The very old man inside was a planeswalker once, from another world. For 1000 gold he tells the hero where a dungeon lies that nobody else knows of, and once that one is cleared he knows of another: five in all, sold one after another. The plugin holds one place, five dungeons, twelve panes and five services. The first and the last of its dungeons:</p>
+<figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/dungeons" data-keys="forgotten_vault,planeswalkers_rest"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>/dungeons → forgotten_vault, planeswalkers_rest</span></figcaption><pre class="code"><code><span class="j-p">{</span>
   <span class="j-k">"forgotten_vault"</span><span class="j-p">:</span> <span class="j-p">{</span>
     <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"The Forgotten Vault"</span><span class="j-p">,</span>
     <span class="j-k">"color"</span><span class="j-p">:</span> <span class="j-s">"random"</span><span class="j-p">,</span>
@@ -655,9 +655,17 @@
     <span class="j-k">"rules"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">]</span><span class="j-p">,</span>
     <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"Old Man of the Sea"</span><span class="j-p">, </span><span class="j-s">"Planar Gate"</span><span class="j-p">, </span><span class="j-s">"Mirror Universe"</span><span class="j-p">]</span><span class="j-p">,</span>
     <span class="j-k">"distance"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"min"</span><span class="j-p">:</span> <span class="j-n">8</span><span class="j-p">, </span><span class="j-k">"max"</span><span class="j-p">:</span> <span class="j-n">22</span><span class="j-p">}</span>
+  <span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-k">"planeswalkers_rest"</span><span class="j-p">:</span> <span class="j-p">{</span>
+    <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"The Planeswalker's Rest"</span><span class="j-p">,</span>
+    <span class="j-k">"color"</span><span class="j-p">:</span> <span class="j-s">"random"</span><span class="j-p">,</span>
+    <span class="j-k">"size"</span><span class="j-p">:</span> <span class="j-s">"large"</span><span class="j-p">,</span>
+    <span class="j-k">"rules"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"cards"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"The Abyss"</span><span class="j-p">, </span><span class="j-s">"Moat"</span><span class="j-p">, </span><span class="j-s">"Nether Void"</span><span class="j-p">]</span><span class="j-p">,</span>
+    <span class="j-k">"distance"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"min"</span><span class="j-p">:</span> <span class="j-n">32</span><span class="j-p">, </span><span class="j-k">"max"</span><span class="j-p">:</span> <span class="j-n">64</span><span class="j-p">}</span>
   <span class="j-p">}</span>
 <span class="j-p">}</span></code></pre></figure>
-<p><i>The Forgotten Vault</i> is large, its color drawn when it rises, 8 to 22 tiles from the hut, and its treasure is three cards. The place stands on the mainland alone:</p>
+<p><i>The Forgotten Vault</i> is large, its color drawn when it rises, 8 to 22 tiles from the hut, and its treasure is three cards. Each later dungeon lies farther out, and <i>The Planeswalker’s Rest</i>, 32 to 64 tiles away, may rise anywhere on the land. A <code>min</code> much over 30 is a risk: a land’s tiles lie in a square of some sixty, and a dungeon no tile can hold is never raised. The place stands on the mainland alone:</p>
 <figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/sites/hut" data-keys="name,where,picture,sprite,gap"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>→ name, where, picture, sprite, gap</span></figcaption><pre class="code"><code><span class="j-p">{</span>
   <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Old Adventurer's Hut"</span><span class="j-p">,</span>
   <span class="j-k">"where"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"mainland"</span><span class="j-p">]</span><span class="j-p">,</span>
@@ -665,7 +673,7 @@
   <span class="j-k">"sprite"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"file"</span><span class="j-p">:</span> <span class="j-s">"art/old_hut_map.png"</span><span class="j-p">, </span><span class="j-k">"width"</span><span class="j-p">:</span> <span class="j-n">104</span><span class="j-p">}</span><span class="j-p">,</span>
   <span class="j-k">"gap"</span><span class="j-p">:</span> <span class="j-n">3</span>
 <span class="j-p">}</span></code></pre></figure>
-<p>Its three panes are chosen by the vault’s state on this land, the special ones first. While the vault is <code>cleared</code>, the pane says: <q data-plugin="Old_Adventurers_Hut" data-text="hut.cleared">"So you found my old treasures," the old man smiles. "Keep them well. I have nothing left to sell, only peace, and that I keep for myself."</q> While it is <code>open</code>: <q data-plugin="Old_Adventurers_Hut" data-text="hut.waiting">The old man looks up from the fire. "You know the way to {dungeon}. Go, before its guardians grow bolder."</q> Before it is raised, the last pane, with no <code>when</code>, tells his story and makes his offer:</p>
+<p>Its panes are a <b>chain</b>, chosen by the dungeons’ states on this land; the first pane whose <code>when</code> holds is shown. The very first holds once the last dungeon is <code>cleared</code>: <q data-plugin="Old_Adventurers_Hut" data-text="hut.cleared">"So you have found them all," the old man smiles. "Every place I ever hid a thing. Keep my old treasures well. I have nothing left to sell, only peace, and that I keep for myself."</q> Then, for each dungeon, come a waiting pane and an offer pane. The waiting pane holds while that dungeon is <code>open</code>, and sells nothing: <q data-plugin="Old_Adventurers_Hut" data-text="hut.waiting">The old man looks up from the fire. "You know the way to {dungeon}. Go, before its guardians grow bolder."</q> The first offer holds while the vault was never raised (<code>none</code>). It tells his story and sells the first secret:</p>
 <figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/sites/hut/panes/2/actions/0"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>/sites/hut/panes/2/actions/0</span></figcaption><pre class="code"><code><span class="j-p">{</span>
   <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"secret"</span><span class="j-p">,</span>
   <span class="j-k">"do"</span><span class="j-p">:</span> <span class="j-s">"effects"</span><span class="j-p">,</span>
@@ -678,7 +686,13 @@
   <span class="j-p">]</span><span class="j-p">,</span>
   <span class="j-k">"result"</span><span class="j-p">:</span> <span class="j-p">[</span><span class="j-s">"hut.told"</span><span class="j-p">, </span><span class="j-s">"hut.marked"</span><span class="j-p">]</span>
 <span class="j-p">}</span></code></pre></figure>
-<p>One price, so the secret is sold once. The press pays 1000 gold, raises the vault, writes a clue and a journal line, and shows the two <code>result</code> lines. <code>spawn_dungeon</code> comes first, so the clue can name the vault: <q data-plugin="Old_Adventurers_Hut" data-text="hut.clue">The old man in the woods told you where {dungeon} lies.</q> The button’s label is <q data-plugin="Old_Adventurers_Hut" data-text="hut.pay">Pay {price} gold for the secret</q>. Every pane’s <code>leave</code> is written the same, as one action.</p>
+<p>One price, so this secret is sold once. The press pays 1000 gold, raises the vault, writes a clue and a journal line, and shows the two <code>result</code> lines. <code>spawn_dungeon</code> comes first, so the clue can name the vault: <q data-plugin="Old_Adventurers_Hut" data-text="hut.clue">The old man in the woods told you where {dungeon} lies.</q> The button’s label is <q data-plugin="Old_Adventurers_Hut" data-text="hut.pay">Pay {price} gold for the secret</q>. Every pane’s <code>leave</code> is written the same, as one action.</p>
+<p>Each later offer is one more link of the chain. It <b>waits for the dungeon before it to be cleared</b>, and steps aside once its own is raised. The second offer’s <code>when</code>:</p>
+<figure class="quote" data-plugin="Old_Adventurers_Hut" data-file="sites.json" data-pointer="/sites/hut/panes/4/when"><figcaption class="src"><b>Old_Adventurers_Hut/sites.json</b><span>/sites/hut/panes/4/when</span></figcaption><pre class="code"><code><span class="j-p">[</span>
+  <span class="j-p">{</span><span class="j-k">"dungeon"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"dungeon"</span><span class="j-p">:</span> <span class="j-s">"forgotten_vault"</span><span class="j-p">, </span><span class="j-k">"state"</span><span class="j-p">:</span> <span class="j-s">"cleared"</span><span class="j-p">}</span><span class="j-p">}</span><span class="j-p">,</span>
+  <span class="j-p">{</span><span class="j-k">"dungeon"</span><span class="j-p">:</span> <span class="j-p">{</span><span class="j-k">"dungeon"</span><span class="j-p">:</span> <span class="j-s">"drowned_library"</span><span class="j-p">, </span><span class="j-k">"state"</span><span class="j-p">:</span> <span class="j-s">"none"</span><span class="j-p">}</span><span class="j-p">}</span>
+<span class="j-p">]</span></code></pre></figure>
+<p>Its button is written like the first, with an id of its own (<code>secret2</code>, so its use is counted by itself) and <code>drowned_library</code> to raise. Its first line names the dungeon just cleared: <q data-plugin="Old_Adventurers_Hut" data-text="hut.back">The old man looks up from the fire and almost smiles. "You came back from {dungeon} alive, then. Few would. Sit."</q> The third, fourth and fifth offers repeat the pattern, each naming the dungeon before it. To add a sixth dungeon, add its recipe, a waiting pane and an offer pane, and move the very first pane’s <code>when</code> to the new last dungeon. The <b>last pane has no <code>when</code></b>, as every place’s last pane must: it is shown when nothing else holds, which in a campaign played straight never happens.</p>
 
 <h3 id="guild">Conjuration Wizard Guild</h3>
 <p>A wizards’ tower whose conjurers copy a card the hero carries, for 2000, 4000, 8000 and 12000 gold, and then never again. Its tower stands on the mainland and on every island:</p>
@@ -713,7 +727,7 @@
 
 <li><h3 id="tool-add-dungeon">Add a dungeon</h3>
 <pre class="code"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-dungeon my_places --id cellar --name "The Dry Cellar" --cards "Lightning Bolt,Llanowar Elves" --size large --place tower --price 250</code></pre>
-<p><code>add-dungeon</code> adds the recipe: <code>--cards</code> (1 to 6, joined by commas), <code>--color</code>, <code>--size</code>, <code>--rules</code>, <code>--min</code> and <code>--max</code>. With <code>--place</code> it also gives that place a button that raises the dungeon for <code>--price</code> gold (default 1000), and the Hut’s three panes: two new panes before the place’s others, for the dungeon cleared and open, with their words. At a place that already has a service both stay: the two new panes carry the place’s other buttons, and the dungeon’s button stands in every pane of the place’s own. <code>--action</code> names the button; name an effects action the place already has and <code>spawn_dungeon</code> is put first in its effects instead. The card names are checked as <code>validate</code> checks them, and an edit that would refuse the plugin changes nothing.</p></li>
+<p><code>add-dungeon</code> adds the recipe: <code>--cards</code> (1 to 6, joined by commas), <code>--color</code>, <code>--size</code>, <code>--rules</code>, <code>--min</code> and <code>--max</code>. With <code>--place</code> it also gives that place a button that raises the dungeon for <code>--price</code> gold (default 1000), and three panes as the Hut has for its first vault: two new panes before the place’s others, for the dungeon cleared and open, with their words. At a place that already has a service both stay: the two new panes carry the place’s other buttons, and the dungeon’s button stands in every pane of the place’s own. <code>--action</code> names the button; name an effects action the place already has and <code>spawn_dungeon</code> is put first in its effects instead. The card names are checked as <code>validate</code> checks them, and an edit that would refuse the plugin changes nothing.</p></li>
 
 <li><h3 id="tool-recipe">Or start from a recipe</h3>
 <pre class="code wrap"><code><span class="prompt">$ </span>python3 tools/adventure_plugin.py add-place my_places --id camp --name "The Collector's Camp" --recipe collector --card "Ornithopter"</code></pre>
@@ -748,9 +762,20 @@
 <span class="out">       The old man looks up from the fire. "You know the way to The Forgotten Vault. Go, before its guardians grow bolder."</span>
 <span class="out">       (x) Leave</span>
 <span class="out">  5. The hero clears The Forgotten Vault (forgotten_vault): cleared</span>
-<span class="out">  6. The pane (pane 0 of sites.json; 99000 gold)</span>
-<span class="out">     [Old Adventurer's Hut | A hut in the woods]  picture old_hut_hut</span></code></pre>
-<p>The walk follows the game’s own rules for panes, conditions, prices and effects. A place that stands on the mainland and on the islands is walked once for each. It has no world: a dungeon always finds room, and the hero always holds one card to copy. <code>--site KEY</code> walks one place, <code>--gold N</code> sets the hero’s gold (default 100000; try a small sum to see what the hero cannot afford), <code>--json</code> prints the steps for your own scripts.</p></li>
+<span class="out">  6. The pane (pane 4 of sites.json; 99000 gold)</span>
+<span class="out">     [Old Adventurer's Hut | A hut in the woods]  picture old_hut_hut</span>
+<span class="out">       The old man looks up from the fire and almost smiles. "You came back from The Forgotten Vault alive, then. Few would. Sit."</span>
+<span class="c">  ...</span>
+<span class="out">  7. Press "Pay 1000 gold for the secret": 1000 gold paid, 98000 left; secret2 used 1 time</span>
+<span class="out">     dungeon raised: drowned_library (open)</span>
+<span class="c">  ...</span>
+<span class="out">  21. The hero clears The Planeswalker's Rest (planeswalkers_rest): cleared</span>
+<span class="out">  22. The pane (pane 0 of sites.json; 95000 gold)</span>
+<span class="c">  ...</span>
+<span class="out">  End: 95000 gold; uses hut.secret 1, hut.secret2 1, hut.secret3 1, hut.secret4 1, hut.secret5 1; flags none; dungeons forgotten_vault cleared, drowned_library cleared, sunken_forge cleared, hall_of_echoes cleared, planeswalkers_rest cleared.</span>
+<span class="c">  ...</span>
+<span class="out">  hut: pane 11 was never shown</span></code></pre>
+<p>The walk plays the whole chain, and names the pane no step showed: the Hut’s last, which is there only so the place always has a pane. The walk follows the game’s own rules for panes, conditions, prices and effects. A place that stands on the mainland and on the islands is walked once for each. It has no world: a dungeon always finds room, and the hero always holds one card to copy. <code>--site KEY</code> walks one place, <code>--gold N</code> sets the hero’s gold (default 100000; try a small sum to see what the hero cannot afford), <code>--json</code> prints the steps for your own scripts.</p></li>
 
 <p>A walk’s hero can be told what to carry and what to do: <code>--gold</code>, <code>--food</code>, <code>--cards "A,B"</code>, <code>--amulets red=2</code>, <code>--color</code>, <code>--day</code>, <code>--flag</code>, <code>--counter wins=3</code>; <code>--press a,b,c</code> presses exactly those buttons of one <code>--site</code> (<code>leave</code> steps out and in again, <code>clear</code> clears the open dungeon); <code>--land</code> walks one land, <code>--both</code> sends one hero over the mainland and then an island; <code>--magics "A,B"</code>, <code>--life-bonus N</code> and <code>--linked</code> say what the hero owns already; <code>--win</code> and <code>--lose</code> end every duel that way (a walk fights none); a teleport prints where the hero is carried; <code>--roll N</code> takes every roll’s N-th outcome. A roll is printed whole, each outcome with its chance and its gold, and the average. At its end a walk lists what it never reached — a pane never shown, a button never pressed — with what stood in the way and the option that opens it. Only a real error makes it fail.</p></li>
 

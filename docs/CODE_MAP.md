@@ -423,6 +423,66 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## 0.70.9 (2026-11-23): card packs and the skin made in the game
+
+Version 0.70.9, Android version code 70009; `docs/releases/0.70.9.md`.
+
+- `game/pack_builder/pack_recipes.gd` (`PackRecipes`): what each of the
+  eleven builds is — title, file name, lookups, pictures, zip entries —
+  from `packaging/card_packs/…` and `cards/data`.
+- `game/pack_builder/pack_json.gd` (`PackJson`): the metadata's bytes as
+  the Python tools write them.
+- `game/pack_builder/pack_transport.gd` (`PackTransport`): https to
+  Scryfall's hosts only; the seam tests replace.
+- `game/pack_builder/pack_fetch.gd` (`PackFetch`): the resumable cache
+  under `user://cardpack_build/<id>/`, pauses and retries.
+- `game/pack_builder/pack_writer.gd` (`PackWriter`): the zip, paced, read
+  back and judged by the game's own check.
+- `game/pack_builder/pack_build.gd` (`PackBuild`),
+  `game/pack_builder/pack_build_host.gd` (`PackBuildHost`): one pack end
+  to end; where it is put and how the game takes it up.
+- `game/pack_builder/pack_builder_window.gd` (`PackBuilderWindow`):
+  `open_on(host)`; opened by Options' `GetCardPacks`.
+- `game/skin_builder/skin_recipes.gd` (`SkinRecipes`): the importer's
+  tables (generated; `tools/test_skin_recipes_mirror.py --write`).
+- `game/skin_builder/pic_codec.gd` (`SkinPicCodec`),
+  `game/skin_builder/spr_codec.gd` (`SkinSprCodec`),
+  `game/skin_builder/skin_text.gd` (`SkinText`): the decoders.
+- `game/skin_builder/iso_image.gd` (`SkinIsoImage`): a CD image read in
+  place — ISO 9660 (.iso) and raw 2352-byte images (.bin with its .cue,
+  .img, .mdf), Joliet names first; a source of the index beside folders.
+  Tests: `tests/unit/test_c1123_skin_iso.gd`,
+  `tests/support/c1123_skin_iso.gd`.
+- `game/skin_builder/skin_source_index.gd` (`SkinSourceIndex`),
+  `game/skin_builder/skin_install_check.gd` (`SkinInstallCheck`),
+  `game/skin_builder/skin_build_job.gd` (`SkinBuildJob`),
+  `game/skin_builder/skin_builder_window.gd` (`SkinBuilderWindow`):
+  the walk, the check, the job and the window; opened by Options'
+  `BuildSkin`.
+- `game/options_screen.gd`: `GetCardPacks`, `SkinPlacesWhy`,
+  `show_skin_places`, `skin_places_words`, `short_places`, `dress_gold`
+  (`GOLD_TINT`, `GOLD_FLAT`).
+- `expanded_adventure/Old_Adventurers_Hut/` 1.1.0: five dungeons in a
+  chain; `game/adventure/plugins/schema_v1.json`: 16 panes a place. Test:
+  `tests/unit/test_c1123_hut_chain.gd`.
+- `game/skin.gd`: `GameSkin.is_worn()`, `WORN_MARKS`. `game/main.gd`:
+  `_tell_no_skin`, `has_skin`, `skin_warning`, `NO_SKIN_SETTING`.
+  `engine/mtg_game.gd`: `pay_object_costs` asks as the resolution
+  (`_paying_in_resolution`).
+- Tests: `tests/unit/test_c1123_pack_recipes.gd`,
+  `tests/unit/test_c1123_pack_build.gd`,
+  `tests/unit/test_c1123_pack_host.gd`,
+  `tests/ui/test_c1123_pack_window.gd`,
+  `tests/support/c1123_pack_fakes.gd`,
+  `tests/fixtures/c1123_pack_digests.json`,
+  `tools/test_c1123_pack_digests.py`,
+  `tests/unit/test_c1123_skin_codecs.gd`,
+  `tests/unit/test_c1123_skin_build.gd`,
+  `tests/unit/test_c1123_skin_worn.gd`,
+  `tests/ui/test_c1123_skin_window.gd`,
+  `tests/support/c1123_skin_fixtures.gd`,
+  `tools/test_skin_recipes_mirror.py`, `tests/ui/test_c1123_title.gd`.
+
 ## 0.70.8 (2026-11-22): a round ring; a card that keeps a card's rules
 
 Version 0.70.8, Android version code 70008; `docs/releases/0.70.8.md`.

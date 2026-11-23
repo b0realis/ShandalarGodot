@@ -32,7 +32,8 @@ it: every file is explained in the guide.
 THE PLACES
 Old_Adventurers_Hut.zip, "An Old Adventurer's Hut": a hut in the mainland's
 woods. For 1000 gold the old man inside tells you where a dungeon lies that
-nobody else knows of. Conjuration_Wizard_Guild.zip, "Conjuration Wizard
+nobody else knows of, and once you have cleared it, where the next one
+lies: five in all, one after another. Conjuration_Wizard_Guild.zip, "Conjuration Wizard
 Guild": a wizards' tower on the mainland and on every island, whose
 conjurers copy a card you carry for 2000 gold, then 4000, 8000 and 12000,
 and then never again. Neither needs a card pack. Each is a finished place,

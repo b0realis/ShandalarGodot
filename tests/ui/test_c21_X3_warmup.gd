@@ -96,6 +96,10 @@ func _kept(warmup: DuelWarmup) -> DuelWarmup:
 
 func test_the_coin_movie_is_warmed_only_for_the_movie() -> void:
 	DuelOptions.set_coin_flip_style(DuelOptions.COIN_VIDEO)
+	# Whatever an earlier script of the same run kept is let go first: with
+	# a duel's coin toss before it in the shard, the sheets were kept
+	# already and "not read here" could not be told (2026-11-23).
+	GameSkin.clear_caches()
 	var movie := _kept(DuelWarmup.warm(_host(), ["green"] as Array[String]))
 	assert_has(movie._pictures, "coin_toss_heads", "the movie: its sheets")
 	assert_has(movie._pictures, "coin_toss_tails")

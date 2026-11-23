@@ -9,7 +9,15 @@
 	"hut.told": "He counts the gold, then draws a map in the ashes of the hearth. \"{dungeon}. I found it long ago, in my old world, when this was only a game. Mind its guardians. The cards I left there are yours, if you can take them.\"",
 	"hut.marked": "The way to {dungeon} is marked on your map.",
 	"hut.waiting": "The old man looks up from the fire. \"You know the way to {dungeon}. Go, before its guardians grow bolder.\"",
-	"hut.cleared": "\"So you found my old treasures,\" the old man smiles. \"Keep them well. I have nothing left to sell, only peace, and that I keep for myself.\"",
+	"hut.cleared": "\"So you have found them all,\" the old man smiles. \"Every place I ever hid a thing. Keep my old treasures well. I have nothing left to sell, only peace, and that I keep for myself.\"",
 	"hut.clue": "The old man in the woods told you where {dungeon} lies.",
-	"hut.log": "Paid the old man in the woods 1000 gold for the way to {dungeon}."
+	"hut.log": "Paid the old man in the woods 1000 gold for the way to {dungeon}.",
+	"hut.back": "The old man looks up from the fire and almost smiles. \"You came back from {dungeon} alive, then. Few would. Sit.\"",
+	"hut.more2": "\"There was a library once, on a shore the sea has since taken. I read there for a whole season, when all of this was only a game to me.\"",
+	"hut.more3": "\"There was a forge the artificers left burning. The water came for that too, in the end, but not for what they made.\"",
+	"hut.more4": "\"There is a hall where every word comes back to you twice. I left it quickly. Not everything I owned left with me.\"",
+	"hut.more5": "\"One place is left, and I kept it for last. It is where I meant to stop walking, before I found this fire instead. It lies far from here.\"",
+	"hut.offer_again": "\"For 1000 gold I will tell you where it lies.\"",
+	"hut.told_again": "He counts the gold and draws again in the ashes. \"{dungeon}. It may be a long road: my secrets lie all over this land. Mind its guardians. What I left there is yours, if you can take it.\"",
+	"hut.dozing": "The old man dozes by his fire and does not stir. Better to let him sleep."
 }

@@ -18,6 +18,66 @@
 				"min": 8,
 				"max": 22
 			}
+		},
+		"drowned_library": {
+			"name": "The Drowned Library",
+			"color": "random",
+			"size": "large",
+			"rules": [],
+			"cards": [
+				"Library of Alexandria",
+				"Candelabra of Tawnos",
+				"Transmute Artifact"
+			],
+			"distance": {
+				"min": 14,
+				"max": 36
+			}
+		},
+		"sunken_forge": {
+			"name": "The Sunken Forge",
+			"color": "random",
+			"size": "large",
+			"rules": [],
+			"cards": [
+				"Mishra's Workshop",
+				"Su-Chi",
+				"Triskelion"
+			],
+			"distance": {
+				"min": 20,
+				"max": 48
+			}
+		},
+		"hall_of_echoes": {
+			"name": "The Hall of Echoes",
+			"color": "random",
+			"size": "large",
+			"rules": [],
+			"cards": [
+				"Fork",
+				"Wheel of Fortune",
+				"Mana Flare"
+			],
+			"distance": {
+				"min": 26,
+				"max": 58
+			}
+		},
+		"planeswalkers_rest": {
+			"name": "The Planeswalker's Rest",
+			"color": "random",
+			"size": "large",
+			"rules": [],
+			"cards": [
+				"The Abyss",
+				"Moat",
+				"Nether Void"
+			],
+			"distance": {
+				"min": 32,
+				"max": 64
+			}
 		}
 	},
 	"sites": {
@@ -37,7 +97,7 @@
 					"when": [
 						{
 							"dungeon": {
-								"dungeon": "forgotten_vault",
+								"dungeon": "planeswalkers_rest",
 								"state": "cleared"
 							}
 						}
@@ -112,6 +172,339 @@
 								"hut.marked"
 							]
 						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					],
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "forgotten_vault",
+								"state": "none"
+							}
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "drowned_library",
+								"state": "open"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.waiting"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "forgotten_vault",
+								"state": "cleared"
+							}
+						},
+						{
+							"dungeon": {
+								"dungeon": "drowned_library",
+								"state": "none"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.back",
+						"hut.more2",
+						"hut.offer_again"
+					],
+					"actions": [
+						{
+							"id": "secret2",
+							"do": "effects",
+							"label": "hut.pay",
+							"prices": [
+								1000
+							],
+							"effects": [
+								{
+									"spawn_dungeon": "drowned_library"
+								},
+								{
+									"log_clue": {
+										"text": "hut.clue"
+									}
+								},
+								{
+									"log_event": {
+										"event": "old_hut",
+										"text": "hut.log"
+									}
+								}
+							],
+							"result": [
+								"hut.told_again",
+								"hut.marked"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "sunken_forge",
+								"state": "open"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.waiting"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "drowned_library",
+								"state": "cleared"
+							}
+						},
+						{
+							"dungeon": {
+								"dungeon": "sunken_forge",
+								"state": "none"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.back",
+						"hut.more3",
+						"hut.offer_again"
+					],
+					"actions": [
+						{
+							"id": "secret3",
+							"do": "effects",
+							"label": "hut.pay",
+							"prices": [
+								1000
+							],
+							"effects": [
+								{
+									"spawn_dungeon": "sunken_forge"
+								},
+								{
+									"log_clue": {
+										"text": "hut.clue"
+									}
+								},
+								{
+									"log_event": {
+										"event": "old_hut",
+										"text": "hut.log"
+									}
+								}
+							],
+							"result": [
+								"hut.told_again",
+								"hut.marked"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "hall_of_echoes",
+								"state": "open"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.waiting"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "sunken_forge",
+								"state": "cleared"
+							}
+						},
+						{
+							"dungeon": {
+								"dungeon": "hall_of_echoes",
+								"state": "none"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.back",
+						"hut.more4",
+						"hut.offer_again"
+					],
+					"actions": [
+						{
+							"id": "secret4",
+							"do": "effects",
+							"label": "hut.pay",
+							"prices": [
+								1000
+							],
+							"effects": [
+								{
+									"spawn_dungeon": "hall_of_echoes"
+								},
+								{
+									"log_clue": {
+										"text": "hut.clue"
+									}
+								},
+								{
+									"log_event": {
+										"event": "old_hut",
+										"text": "hut.log"
+									}
+								}
+							],
+							"result": [
+								"hut.told_again",
+								"hut.marked"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "planeswalkers_rest",
+								"state": "open"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.waiting"
+					],
+					"actions": [
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"when": [
+						{
+							"dungeon": {
+								"dungeon": "hall_of_echoes",
+								"state": "cleared"
+							}
+						},
+						{
+							"dungeon": {
+								"dungeon": "planeswalkers_rest",
+								"state": "none"
+							}
+						}
+					],
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.back",
+						"hut.more5",
+						"hut.offer_again"
+					],
+					"actions": [
+						{
+							"id": "secret5",
+							"do": "effects",
+							"label": "hut.pay",
+							"prices": [
+								1000
+							],
+							"effects": [
+								{
+									"spawn_dungeon": "planeswalkers_rest"
+								},
+								{
+									"log_clue": {
+										"text": "hut.clue"
+									}
+								},
+								{
+									"log_event": {
+										"event": "old_hut",
+										"text": "hut.log"
+									}
+								}
+							],
+							"result": [
+								"hut.told_again",
+								"hut.marked"
+							]
+						},
+						{
+							"id": "leave",
+							"do": "leave",
+							"label": "hut.leave"
+						}
+					]
+				},
+				{
+					"subtitle": "hut.subtitle",
+					"lines": [
+						"hut.dozing"
+					],
+					"actions": [
 						{
 							"id": "leave",
 							"do": "leave",

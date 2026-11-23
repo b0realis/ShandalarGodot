@@ -120,8 +120,13 @@ func test_the_section_has_a_row_per_zip_and_a_chooser_on_each() -> void:
 		assert_not_null(choose, "a chooser for " + kind)
 		if choose != null:
 			assert_eq(choose.text, "Choose...")
+	# The row names the card folder by its last part (0.70.9); the whole
+	# place is its tooltip and what the "?" beside Skin says.
 	assert_string_contains(_label("SkinStatus_cardart").text,
-		GamePaths.shown(PACKS), "the card row names the card folder")
+		GamePaths.shown(PACKS).get_file(), "the card row names the card folder")
+	assert_false(_label("SkinStatus_cardart").text.contains(GamePaths.shown(PACKS)), "shortly")
+	assert_string_contains(_label("SkinStatus_cardart").tooltip_text, GamePaths.shown(PACKS))
+	assert_string_contains(screen.skin_places_words(), GamePaths.shown(PACKS))
 	assert_true(FileAccess.file_exists(PACKS.path_join(SkinPack.CARD_README_NAME)),
 		"which exists from the first look, README and all")
 
@@ -297,3 +302,40 @@ func test_leaving_the_screen_lets_go_of_the_packs_signals() -> void:
 	assert_eq(SkinPack.changed.get_connections().size(), before - 1,
 		"the pack's signal no longer names a freed screen")
 	assert_eq(SkinPack.fetch_progressed.get_connections().size(), progress_before - 1)
+
+
+func test_the_places_are_said_by_the_question_mark_and_not_in_the_list() -> void:
+	var why := screen.find_child("SkinPlacesWhy", true, false) as Button
+	assert_eq(why.text, "?")
+	assert_false((screen.find_child("SkinPlaces", true, false) as Control).visible, "out of the list")
+	for node_name in ["SkinFolder", "AdventurePluginsFolder", "PortraitsFolder", "MusicFolder", "SkinNote"]:
+		var line := _label(node_name)
+		assert_not_null(line, node_name)
+		assert_false(line.is_visible_in_tree(), node_name + " is not a row any more")
+		assert_string_contains(screen.skin_places_words(), line.text)
+	assert_eq(screen.short_places("Skin: a loose folder, /a/b/original — 972 files"),
+		"Skin: a loose folder, original — 972 files")
+	assert_eq(screen.short_places("Card folder: D:\\games\\cardpacks — no card pack; a loose folder, /p/cardart"),
+		"Card folder: cardpacks — no card pack; a loose folder, cardart")
+	assert_eq(screen.short_places("Skin: none — the game draws its own"), "Skin: none — the game draws its own")
+	why.pressed.emit()
+	var window := screen.find_child("SkinPlacesWindow", true, false)
+	assert_not_null(window)
+	var said := "\n".join(window.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text))
+	assert_string_contains(said, "Where the game keeps its files")
+	assert_string_contains(said, "Additional music folder:")
+	assert_string_contains(said, "settings.cfg")
+	for label: Label in window.find_children("*", "Label", true, false):
+		assert_eq(label.get_theme_constant("shadow_offset_x"), 0, "plain letters")
+	(window.find_child("OK", true, false) as Button).pressed.emit()
+
+
+func test_the_skin_s_chooser_is_gold_and_the_card_folder_s_is_not() -> void:
+	var gold := (screen.find_child("Choose_skin", true, false) as Button).get_theme_stylebox("normal")
+	var plain := (screen.find_child("Choose_cardart", true, false) as Button).get_theme_stylebox("normal")
+	if gold is StyleBoxFlat:
+		assert_eq((gold as StyleBoxFlat).bg_color, screen.GOLD_FLAT)
+		assert_ne((plain as StyleBoxFlat).bg_color, screen.GOLD_FLAT)
+	else:
+		assert_eq((gold as StyleBoxTexture).modulate_color, screen.GOLD_TINT)
+		assert_ne((plain as StyleBoxTexture).modulate_color, screen.GOLD_TINT)

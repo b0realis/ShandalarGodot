@@ -1570,6 +1570,28 @@ static func is_present() -> bool:
 	return false
 
 
+# --- builders 2026-11-23: is a skin worn right now? ---
+## The pictures [method is_worn] asks for: the title, the menu ground, the
+## dialog stone and a card frame — a skin of any use has one of them.
+const WORN_MARKS: Array[String] = ["title_background", "menu_background", "panel_stone",
+	"card_frame_white"]
+
+
+## Whether a skin dresses the game right now: one of its landmark pictures
+## ([constant WORN_MARKS]) is found AND reads as a picture. [method
+## is_present] cannot answer this — a skin folder holding nothing but
+## `SKIN.txt` is "present" — and asking for the title alone calls a skin
+## built from a copy that lacks `Title.pic` no skin. The pictures read are
+## kept as [method skin_texture] keeps them, so a second call reads no
+## file; a skin that arrives clears that ([method clear_caches]).
+static func is_worn() -> bool:
+	for key in WORN_MARKS:
+		if skin_texture(key) != null:
+			return true
+	return false
+# --- end builders 2026-11-23 ---
+
+
 ## A search directory (or a file in one) as the filesystem sees it. The
 ## mounted pack stays a `res://` path — its files live inside a zip the
 ## engine reads through `res://`, and globalizing it would name a folder

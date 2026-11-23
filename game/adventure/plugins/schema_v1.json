@@ -327,7 +327,7 @@
 			"picture": {"kind": "picture", "required": true, "doc": "The pane's picture."},
 			"sprite": {"kind": "ref", "type": "sprite", "required": true, "doc": "The map's sprite."},
 			"gap": {"kind": "int", "min": 1, "max": 8, "default": 3, "doc": "Tiles it keeps from towns, castles, dungeons and other places."},
-			"panes": {"kind": "array", "items": {"kind": "ref", "type": "sites_pane"}, "min": 1, "max": 8, "required": true}
+			"panes": {"kind": "array", "items": {"kind": "ref", "type": "sites_pane"}, "min": 1, "max": 16, "required": true}
 		}},
 		"sites_pane": {"kind": "object", "fields": {
 			"when": {"kind": "ref", "type": "sites_conditions", "default": [], "doc": "The first pane without an id whose conditions hold is shown. The last pane without an id has no when."},

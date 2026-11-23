@@ -2593,9 +2593,12 @@ class TestThePartCSounds(unittest.TestCase):
         self.assertLessEqual(imp.NOT_READ, set(imp.MANIFEST),
                              "THE CHECKLIST counts the MANIFEST less NOT_READ")
         self.assertLessEqual(imp.SCREENS_NOT_READ, set(imp.PIC_SCREENS) | set(imp.THEORA_MOVIES))
-        # game/skin.gd's SIZES names every picture place, read or not.
+        # game/skin.gd's SIZES names every picture place, read or not; so do
+        # the in-game builder's tables (game/skin_builder, 0.70.9), which
+        # are this importer's own, written out — a builder, not a screen.
         sources = {path: path.read_text(encoding="utf-8")
-                   for path in (REPO / "game").rglob("*.gd") if path.name != "skin.gd"}
+                   for path in (REPO / "game").rglob("*.gd")
+                   if path.name != "skin.gd" and path.parent.name != "skin_builder"}
         for key in imp.SCREENS_NOT_READ:
             stem = key.rsplit(".", 1)[0] if key.endswith(".wav") else key
             readers = [path.relative_to(REPO).as_posix()

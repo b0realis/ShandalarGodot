@@ -264,6 +264,48 @@ func test_masticore_holds_a_human_seat_on_the_discard() -> void:
 	assert_eq(masticore.zone, Mtg.Zone.GRAVEYARD, "declined: sacrificed")
 
 
+## A player's report, 2026-11-23: "The game forces a random card instead of
+## being able to choose one." WHICH card is the player's too — asked after
+## the yes, and the one named is the one that goes.
+func test_masticore_s_player_chooses_which_card_is_discarded() -> void:
+	for keep_first in [true, false]:
+		before_each()
+		var human := HumanAgent.new()
+		g.agents[0] = human
+		g.interactive_choices = true
+		var masticore := put_battlefield(0, "Masticore")
+		var bolt := give_hand(0, "Lightning Bolt")
+		var island := give_hand(0, "Island")
+		_to_upkeep(0)
+		var guard := 0
+		while not g.stack.is_empty() and g.awaiting_choice == null and guard < 20:
+			g.pass_priority(g.priority_player)
+			guard += 1
+		assert_eq(g.awaiting_choice.kind, PlayerChoice.Kind.YES_NO)
+		assert_ok(g.answer_choice(true))
+		guard = 0
+		while not g.stack.is_empty() and g.awaiting_choice == null and guard < 20:
+			g.pass_priority(g.priority_player)
+			guard += 1
+		assert_not_null(g.awaiting_choice, "which card is asked")
+		if g.awaiting_choice == null:
+			return
+		assert_eq(g.awaiting_choice.kind, PlayerChoice.Kind.CARD)
+		assert_false(g.awaiting_choice.is_cost, "a question of the resolution")
+		assert_eq(g.awaiting_choice.candidates.size(), 2, "the whole hand is offered")
+		assert_eq([bolt.zone, island.zone], [Mtg.Zone.HAND, Mtg.Zone.HAND], "nothing has gone yet")
+		var gone: CardInstance = island if keep_first else bolt
+		var kept: CardInstance = bolt if keep_first else island
+		assert_ok(g.answer_choice(gone.id))
+		guard = 0
+		while not g.stack.is_empty() and g.awaiting_choice == null and guard < 20:
+			g.pass_priority(g.priority_player)
+			guard += 1
+		assert_null(g.awaiting_choice)
+		assert_eq([gone.zone, kept.zone, masticore.zone],
+			[Mtg.Zone.GRAVEYARD, Mtg.Zone.HAND, Mtg.Zone.BATTLEFIELD])
+
+
 # ------------------------------------------ the "when you control no …" clauses --
 
 func test_tethered_griffin_covetous_dragon_and_emperor_crocodile_need_company() -> void:

@@ -256,8 +256,12 @@ func test_the_hut_sells_its_secret_once_and_raises_the_vault() -> void:
 	assert_eq(String(visit["kind"]), "dungeon")
 	assert_eq(String(visit["name"]), "The Forgotten Vault")
 	vault[WorldClues.LEFT_CARDS] = []
+	# Since the hut's 1.1.0 the cleared vault brings his next offer (the
+	# whole chain of five: test_c1123_hut_chain.gd).
 	pane = AdventureExpansions.describe(player, hut)
-	assert_string_contains(String(pane["lines"][0]), "So you found my old treasures")
+	assert_string_contains(String(pane["lines"][0]), "You came back from The Forgotten Vault alive")
+	assert_eq(_button(pane, ":hut:secret"), [], "the vault's secret is never sold twice")
+	assert_eq(String(_button(pane, ":hut:secret2")[1]), "Pay 1000 gold for the secret")
 
 
 # ------------------------------------------------------------- the guild --

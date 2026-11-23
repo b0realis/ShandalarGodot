@@ -499,6 +499,10 @@ class ControlsListener:
 		bound.emit(event)
 
 
+## The window behind Get Card Packs.
+const PACK_BUILDER := "res://game/pack_builder/pack_builder_window.gd"
+
+
 ## Numbered gameplay packs get their own compact management page. Keeping
 ## validation details there leaves this already-long Options list readable.
 func _add_card_packs_section(content: VBoxContainer) -> void:
@@ -509,7 +513,24 @@ func _add_card_packs_section(content: VBoxContainer) -> void:
 		+ "errors, versions, and enabled state."
 	manage.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://game/card_packs_screen.tscn"))
-	content.add_child(manage)
+	# GET CARD PACKS, PURPLE, BESIDE IT (the owner, 2026-11-23: a purple
+	# button; "the game would download the card art and generate card packs
+	# and put it in its own folder automatically … choose which card pack
+	# from the popup window and do ok", and then: "move card packs button
+	# into options"): the window that fetches the card pictures and builds
+	# the packs ([PackBuilderWindow]). Not in a browser, which has no card
+	# folder.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.add_child(manage)
+	if not OS.has_feature("web") and ResourceLoader.exists(PACK_BUILDER):
+		var fetch := UiChrome.menu_button("Get Card Packs...", Vector2(200, 32), 14)
+		fetch.name = "GetCardPacks"
+		fetch.tooltip_text = "Download the card pictures and build the card packs, here in the game."
+		CardArea._dress_purple(fetch)
+		fetch.pressed.connect(func() -> void: load(PACK_BUILDER).open_on(self))
+		row.add_child(fetch)
+	content.add_child(row)
 
 
 ## The `Adventure plugins folder:` row's words: the folder, and how many
@@ -568,12 +589,45 @@ static func adventure_plugins_line(shown: String, count: int) -> String:
 ## read in over a few frames, which the line under the rows reports
 ## ([method SkinPack.transfer_line]).
 func _add_skin_section(content: VBoxContainer) -> void:
-	content.add_child(UiChrome.body_label("Skin:"))
 	var web := OS.has_feature("web")
-	content.add_child(_zip_row("skin", "Pick a skin zip: a skin/ folder inside it "
+	# THE HEAD AND ITS "?" (the owner, 2026-11-23: "in options we have a
+	# lot of explanation text for skin: lets put that in question mark
+	# button besides the skin buttons … tidy this up nice"): the folder
+	# lines and the note that stood under the rows are said in a window the
+	# "?" opens ([method skin_places_words]); the rows that do something
+	# stay.
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	var title := UiChrome.body_label("Skin:")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var why := UiChrome.menu_button("?", Vector2(30, 26), 14)
+	why.name = "SkinPlacesWhy"
+	why.tooltip_text = "Where the skin, the card pictures, the plugins, your portraits and your music are kept."
+	why.pressed.connect(show_skin_places)
+	head.add_child(why)
+	content.add_child(head)
+	# The lines the "?" reads out: kept, filled as before ([method
+	# _on_skin_changed]), not shown in the list.
+	var places := VBoxContainer.new()
+	places.name = "SkinPlaces"
+	places.visible = false
+	var skin_row := _zip_row("skin", "Pick a skin zip: a skin/ folder inside it "
 		+ "with the 1997 art, the 2x skin upscale_skin.py makes of it, or your own "
 		+ "drawn to the same names. It is kept in the skins folder and worn from "
-		+ "the next start. SKIN.txt beside the game lists every file."))
+		+ "the next start. SKIN.txt beside the game lists every file.")
+	# GOLD: the one button that changes the whole look of the game (the
+	# owner, 2026-11-23: "Choose skin button emphasize gold!").
+	dress_gold(skin_row.get_node("Choose_skin") as Button)
+	content.add_child(skin_row)
+	# --- builders 2026-11-23: the skin built here, from the player's 1997 game ---
+	# Under the row's Choose...: the window that reads a 1997 install or
+	# its CD and makes the zip ([SkinBuilderWindow]). Not in a browser or
+	# on a phone, which have no folder to read ([method
+	# SkinBuilderWindow.offered]).
+	if SkinBuilderWindow.offered():
+		content.add_child(SkinBuilderWindow.options_row(self))
+	# --- end builders 2026-11-23 ---
 	# --- campaign 2026-10-12 f-packs: the skin refusal reason line ---
 	content.add_child(_c2_fpacks_refused_line())
 	# --- end campaign 2026-10-12 f-packs ---
@@ -596,7 +650,7 @@ func _add_skin_section(content: VBoxContainer) -> void:
 			_on_skin_changed("skin"))
 		UiChrome.shadowed_button(use_folder)
 		content.add_child(use_folder)
-		content.add_child(_place_label("SkinFolder", "Loose skin files, the way "
+		places.add_child(_place_label("SkinFolder", "Loose skin files, the way "
 			+ "import_original.py beside the game lays them out from your copy of "
 			+ "the 1997 game. Worn when the switch above is on, or when there is "
 			+ "no skin zip."))
@@ -620,11 +674,11 @@ func _add_skin_section(content: VBoxContainer) -> void:
 			+ "plugins window. The expanded_adventure_folder key in settings.cfg moves it.")
 		plugins.text = adventure_plugins_line(GamePaths.shown(GamePaths.expanded_adventure_folder()),
 			AdventurePlugins.all().size())
-		content.add_child(plugins)
-		content.add_child(_place_label("PortraitsFolder", "A PNG, JPG or WEBP "
+		places.add_child(plugins)
+		places.add_child(_place_label("PortraitsFolder", "A PNG, JPG or WEBP "
 			+ "placed here joins the 1997 faces in the portrait chooser; the file "
 			+ "name is the name."))
-		content.add_child(_place_label("MusicFolder", "A WAV, OGG or MP3 placed "
+		places.add_child(_place_label("MusicFolder", "A WAV, OGG or MP3 placed "
 			+ "here plays among the 1997 tunes; the file name is the name."))
 	else:
 		var forget := UiChrome.menu_button("Forget my zips", Vector2(150, 28), 14)
@@ -645,13 +699,85 @@ func _add_skin_section(content: VBoxContainer) -> void:
 	note.name = "SkinNote"
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.modulate.a = 0.65
-	content.add_child(note)
+	places.add_child(note)
+	content.add_child(places)
 	_on_skin_changed("")
 	# Bound methods, not lambdas: a bound method leaves the autoload's
 	# signals with the screen, a lambda would outlive it and write to a
 	# freed label.
 	SkinPack.changed.connect(_on_skin_changed)
 	SkinPack.fetch_progressed.connect(_on_skin_transfer)
+
+
+## [param line] with every place in it named by its last part alone
+## ("…/Shandalar/cardpacks" is "cardpacks"): a row of the list.
+static func short_places(line: String) -> String:
+	var words := line.split(" ")
+	for i in words.size():
+		var word := words[i]
+		var tail := ""
+		while word != "" and word[-1] in [",", ";"]:
+			tail = word[-1] + tail
+			word = word.left(-1)
+		if word.contains("/") or word.contains("\\"):
+			var name := word.replace("\\", "/").trim_suffix("/").get_file()
+			if name != "":
+				words[i] = name + tail
+	return " ".join(words)
+
+
+## What the "?" beside Skin says: each place with what is there now and
+## what it is for (the lines and their long forms, as they stood in the
+## list), then how a place is moved.
+func skin_places_words() -> String:
+	var parts: Array[String] = []
+	for kind in SkinPack.KINDS:
+		var status := find_child("SkinStatus_" + kind, true, false) as Label
+		if status != null and status.tooltip_text != "":
+			parts.append(status.tooltip_text)
+	var places := find_child("SkinPlaces", true, false)
+	if places != null:
+		for child in places.get_children():
+			var label := child as Label
+			if label == null or label.text.strip_edges() == "":
+				continue
+			parts.append(label.text if label.tooltip_text == "" else "%s\n%s" % [label.text, label.tooltip_text])
+	return "\n\n".join(parts)
+
+
+## The window the "?" opens, over this screen; the ring comes back to the
+## "?" when it closes.
+func show_skin_places() -> Control:
+	var popup := UiChrome.explain_popup(self, "Where the game keeps its files", skin_places_words(), 760.0)
+	popup.name = "SkinPlacesWindow"
+	# Plain letters: nothing drawn a second time behind them.
+	for label in popup.find_children("*", "Label", true, false):
+		(label as Label).add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
+		(label as Label).add_theme_constant_override("shadow_offset_x", 0)
+		(label as Label).add_theme_constant_override("shadow_offset_y", 0)
+		(label as Label).add_theme_constant_override("outline_size", 0)
+	return popup
+
+
+## Tint every state of a stone button gold, as [method
+## CardArea._dress_purple] tints one purple: the 1997 stone itself where
+## the skin is worn, a flat face where it is not; hover lifts it, a press
+## sinks it.
+const GOLD_TINT := Color(1.32, 1.08, 0.5)
+const GOLD_FLAT := Color8(214, 170, 62)
+static func dress_gold(button: Button) -> void:
+	var lift := {"normal": 1.0, "hover": 1.12, "pressed": 0.82, "hover_pressed": 0.82, "disabled": 0.7}
+	for state: String in lift:
+		var box := button.get_theme_stylebox(state)
+		if box == null:
+			continue
+		box = box.duplicate()
+		var by: float = lift[state]
+		if box is StyleBoxTexture:
+			(box as StyleBoxTexture).modulate_color = Color(GOLD_TINT.r * by, GOLD_TINT.g * by, GOLD_TINT.b * by)
+		elif box is StyleBoxFlat:
+			(box as StyleBoxFlat).bg_color = Color(GOLD_FLAT.r * by, GOLD_FLAT.g * by, GOLD_FLAT.b * by)
+		button.add_theme_stylebox_override(state, box)
 
 
 ## One zip row: what dresses the game for [param kind], and `Choose...`.
@@ -729,7 +855,12 @@ func _on_skin_changed(_kind: String) -> void:
 	for kind in SkinPack.KINDS:
 		var status := find_child("SkinStatus_" + kind, true, false) as Label
 		if status != null:
-			status.text = SkinPack.status_line(kind, SkinPack.describe(kind))
+			# The row says it short; the whole line, its places written
+			# out, is the tooltip and what the "?" says.
+			var whole := SkinPack.status_line(kind, SkinPack.describe(kind))
+			status.text = short_places(whole)
+			status.tooltip_text = whole
+			status.mouse_filter = Control.MOUSE_FILTER_PASS
 	var folder := find_child("SkinFolder", true, false) as Label
 	if folder != null:
 		var place := GamePaths.skin_folder()
