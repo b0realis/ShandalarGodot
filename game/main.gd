@@ -1429,19 +1429,41 @@ func _c2_fsettings_tell_problem() -> void:
 ## still fetching its skin, and not in the test suite, which runs with no
 ## skin by design ([member skin_warning], `tests/support/pin_calendar.gd`).
 const NO_SKIN_TITLE := "No 1997 skin"
+## Where the skin can be built in the game ([method SkinBuilderWindow.offered]).
 const NO_SKIN_WORDS := "The game is running without a 1997 skin, so it draws plain panels of its own. " \
-	+ "For the unmistakable look of the original, make the classic skin from your own copy of the 1997 game " \
-	+ "and wear it: Options, then Build from a 1997 install... under the skin, or the supplied tools " \
-	+ "(see setup.txt). Everything plays the same without it."
+	+ "For the unmistakable look of the original, build the classic skin from your own copy of the 1997 game: " \
+	+ "Options, then Build from a 1997 install... under Skin. It is worn from the next start. " \
+	+ "Everything plays the same without it."
+## On a phone, a headset or a web page, which cannot read a 1997 install:
+## the skin is built on a computer and its zip chosen here.
+const NO_SKIN_WORDS_ELSEWHERE := "The game is running without a 1997 skin, so it draws plain panels of its own. " \
+	+ "For the unmistakable look of the original, build the classic skin on a computer from your own copy of " \
+	+ "the 1997 game (the game's Options do it there), then pick its zip here: Options, then Choose... beside Skin. " \
+	+ "Everything plays the same without it."
 const NO_SKIN_SETTING := "no_skin_warning_off"
 static var skin_warning := true
 static var _no_skin_told := false
+
+
+## What the notice says on this device.
+static func no_skin_words(builds_here := SkinBuilderWindow.offered()) -> String:
+	return NO_SKIN_WORDS if builds_here else NO_SKIN_WORDS_ELSEWHERE
+
+
 func _tell_no_skin() -> void:
 	if not skin_warning or _no_skin_told or has_skin() or SkinPack.busy() \
 			or bool(Settings.get_value(NO_SKIN_SETTING, false)):
 		return
+	# ONE NOTICE AT A TIME: a settings file that would not read and a build
+	# missing its decks are said first, and each must be seen. This one
+	# waits for the window on top to close, and takes the ring only then.
+	var earlier := UiChrome.open_popup(self)
+	if earlier != null:
+		if not earlier.tree_exited.is_connected(_tell_no_skin_next):
+			earlier.tree_exited.connect(_tell_no_skin_next)
+		return
 	_no_skin_told = true
-	var popup := UiChrome.action_popup(self, NO_SKIN_TITLE, NO_SKIN_WORDS, [
+	var popup := UiChrome.action_popup(self, NO_SKIN_TITLE, no_skin_words(), [
 		{"label": "OK", "name": "OK", "cancel": true},
 		{"label": "Don't show again", "name": "NoSkinNever",
 			"callable": func() -> void: Settings.set_value(NO_SKIN_SETTING, true)},
@@ -1453,6 +1475,13 @@ func _tell_no_skin() -> void:
 		(label as Label).add_theme_constant_override("shadow_offset_x", 0)
 		(label as Label).add_theme_constant_override("shadow_offset_y", 0)
 		(label as Label).add_theme_constant_override("outline_size", 0)
+
+
+## The window before the no-skin notice has closed: its turn now — unless
+## the title itself is leaving.
+func _tell_no_skin_next() -> void:
+	if is_inside_tree() and not is_queued_for_deletion():
+		_tell_no_skin.call_deferred()
 
 
 ## Whether a 1997 skin dresses the game now ([method GameSkin.is_worn]).

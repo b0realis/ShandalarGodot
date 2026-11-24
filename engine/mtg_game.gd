@@ -11851,7 +11851,12 @@ func _hold_entry_payment(pid: int, inst: CardInstance) -> bool:
 func _ask_cost_card(pid: int, source: CardInstance,
 		candidates: Array[CardInstance], prompt: String) -> CardInstance:
 	var outer := _cost_source
-	if not _paying_in_resolution:
+	# A resolution's payment ([member _paying_in_resolution]) is held open
+	# for a seat that wants to be asked. A seat that answers for itself
+	# (the computer) still gets it stamped a cost: that stamp is how it
+	# knows the card named is a price and gives up its LEAST valuable — a
+	# bare "Return a basic land ..." read as a gain, and took its best.
+	if not _paying_in_resolution or not agents[pid].wants_to_be_asked():
 		_cost_source = source.data.card_name
 	var picked := agents[pid].choose_card(self, pid, candidates, prompt)
 	_cost_source = outer

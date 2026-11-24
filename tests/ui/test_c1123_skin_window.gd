@@ -149,6 +149,7 @@ func _open() -> SkinBuilderWindow:
 	window.pack = pack
 	window.make_job = func() -> RefCounted: return job
 	window.scratch_dir = root.path_join("scratch")
+	window.kept_zip = root.path_join("no_such_skin.zip")
 	window._host = host
 	host.add_child(window)
 	await get_tree().process_frame
@@ -471,7 +472,7 @@ func test_a_real_build_from_a_raw_image_s_cue_reaches_the_door() -> void:
 	assert_eq(pack.adopted.size(), 1)
 	assert_true(pack.looks[0]["ok"])
 	assert_eq([pack.looks[0]["kind"], pack.looks[0]["files"]], ["skin", 29])
-	assert_string_contains(window.report_label.text, "The skin is built and put on: 29 files.")
+	assert_string_contains(window.report_label.text, "The skin is built and put on as classic_no-video.zip: 29 files.")
 
 
 ## The window in a screen of [param size], an image and a folder chosen.
@@ -486,6 +487,7 @@ func _in_screen(size: Vector2i) -> SkinBuilderWindow:
 	window.pack = pack
 	window.make_job = func() -> RefCounted: return job
 	window.scratch_dir = root.path_join("scratch")
+	window.kept_zip = root.path_join("no_such_skin.zip")
 	window._host = ground
 	ground.add_child(window)
 	await get_tree().process_frame
@@ -554,7 +556,7 @@ func test_a_build_shows_how_far_it_is_and_ends_with_the_skin_on() -> void:
 	assert_false(FileAccess.file_exists(_zip_path(window)), "the scratch copy is gone")
 	assert_false(DirAccess.dir_exists_absolute(window.scratch_dir), "and its folder with it")
 	var said := window.report_label.text
-	assert_string_contains(said, "The skin is built and put on: 613 files.")
+	assert_string_contains(said, "The skin is built and put on as classic_no-video.zip: 613 files.")
 	assert_string_contains(said, "from the next start")
 	assert_string_contains(said, "Left out: the coin-toss and ending movies")
 	assert_string_contains(said, "Everything else is complete.")
@@ -602,7 +604,7 @@ func test_what_was_skipped_is_named_at_the_end() -> void:
 
 func test_the_summary_s_words() -> void:
 	var plain := SkinBuilderWindow.summary({"files": 613, "left_out": ["coin_toss_heads"]})
-	assert_eq(plain, "The skin is built and put on: 613 files. It dresses the game from the next start.\n"
+	assert_eq(plain, "The skin is built and put on as classic_no-video.zip: 613 files. It dresses the game from the next start.\n"
 		+ SkinBuilderWindow.LEFT_OUT + "\nEverything else is complete.")
 	var no_movies := SkinBuilderWindow.summary({"files": 20})
 	assert_false(no_movies.contains("Left out"), "nothing was left out when the movies were never there")
@@ -689,7 +691,7 @@ func test_a_zip_the_game_will_not_take_is_kept_and_named() -> void:
 		await _settle(window)
 		assert_eq(pack.adopted.size(), 1, refusal)
 		assert_string_contains(window.report_label.text, "The skin was built, but the game could not take it.")
-		assert_string_contains(window.report_label.text, "original_skin.zip")
+		assert_string_contains(window.report_label.text, "classic_no-video.zip")
 		assert_string_contains(window.report_label.text, "Choose... in Options")
 		assert_true(FileAccess.file_exists(_zip_path(window)), "kept for the player to choose by hand")
 		assert_false(window.close_button.disabled)
@@ -720,7 +722,7 @@ func test_a_real_build_of_a_made_up_install_reaches_the_door() -> void:
 	assert_true(pack.looks[0]["ok"], "what is handed over is a skin zip the game takes")
 	assert_eq(pack.looks[0]["kind"], "skin")
 	assert_eq(pack.looks[0]["files"], 29)
-	assert_string_contains(window.report_label.text, "The skin is built and put on: 29 files.")
+	assert_string_contains(window.report_label.text, "The skin is built and put on as classic_no-video.zip: 29 files.")
 	assert_string_contains(window.report_label.text, "Left out: the coin-toss and ending movies")
 	assert_false(FileAccess.file_exists(_zip_path(window)))
 	assert_false(FileAccess.file_exists(_zip_path(window) + SkinBuildJob.PART_TAIL))

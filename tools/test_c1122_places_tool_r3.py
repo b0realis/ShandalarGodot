@@ -209,7 +209,7 @@ class Wizard(Work):
         self.assertTrue(result["valid"], result["problems"])
         manifest, sites = result["manifest"], result["data"]["sites"]
         self.assertEqual((manifest["id"], manifest["name"], manifest["authors"], manifest["api_version"],
-                          manifest["minimum_game_version"] >= ap.SITES_WORDS_GAME), ("roadside_things", "Roadside Things", ["Ann"], 3, True))
+                          ap.compare_versions(manifest["minimum_game_version"], ap.SITES_WORDS_GAME) >= 0), ("roadside_things", "Roadside Things", ["Ann"], 3, True))
         self.assertEqual(list(sites["sites"]), ["bone_cup"], "the skeleton's shrine is gone")
         bet = ap._site_actions(sites["sites"]["bone_cup"])["bet"]
         self.assertEqual((bet["prices"], sites["sites"]["bone_cup"]["where"]), ([20, 20, 20], ["islands"]))

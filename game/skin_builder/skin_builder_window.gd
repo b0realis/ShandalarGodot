@@ -75,7 +75,26 @@ const WINDOW_SIZE := Vector2(660, 430)
 const ROOM_NEEDED := 300 << 20
 ## The most skipped files named one by one at the end.
 const SKIPPED_SHOWN := 6
-const SCRATCH_NAME := "original_skin.zip"
+## The built zip's own name (the owner, 2026-11-24: *"maybe the in-game
+## skin should say: classic_no-video"*): it says what it is, and under a
+## name of its own it never takes the place of `original_skin.zip`, the
+## complete skin the Python tool makes — both stay in the skins folder,
+## and Choose... in Options switches between them.
+const SCRATCH_NAME := "classic_no-video.zip"
+## A source with an installer on it and nothing of the game beside it.
+const INSTALLER_MARKS: Array[String] = ["setup.exe", "autorun.inf", "_setup.dll", "_inst32i.ex_",
+	"setup.ins", "_setup.lib", "data.z", "data1.cab"]
+const PACKED_DISC := "%s holds an installer but none of the 1997 game's own files: they are packed inside the installer, which the game cannot unpack. Install the 1997 game and choose the folder it was installed to."
+## THE PLAYER'S FULLER ZIP IS NOT WRITTEN OVER (bug pass 2026-11-24). The
+## zip built here goes in under the skins folder's default name, and a
+## zip of that name already there was replaced without a word — the
+## complete skin the Python tool makes, with the movies this build has to
+## leave out, say. When the zip that is there holds files this build does
+## not, the build goes in under [const ASIDE_NAME] instead and the player
+## is told ([const KEPT]); a zip that holds nothing more is replaced as
+## before.
+const ASIDE_NAME := "original_skin_built.zip"
+const KEPT := "The skin zip you had, %s, holds %d file%s this one does not, so it was kept: this skin is %s. Choose... in Options puts the earlier one back."
 
 ## The session's memory: where the folder box opens, and the folders
 ## chosen. Written nowhere.
@@ -93,6 +112,9 @@ var pack: Object = null
 var make_job: Callable = func() -> RefCounted: return SkinBuildJob.new()
 ## Microseconds a frame spent walking a folder's names.
 var walk_usec := 4000
+## The zip a build would be written over ([const ASIDE_NAME]): "" for the
+## skins folder's own ([method SkinPack.home_for]); a test names its own.
+var kept_zip := ""
 
 var sources: Array[String] = []
 var index: SkinSourceIndex = null
@@ -123,6 +145,11 @@ var _wearing := false
 var _waiting_to_wear := false
 var _arrived := false
 var _picker: FileDialog = null
+## The check of what was walked, on a thread of its own: it reads the
+## first bytes of some three hundred files, which a CD in a drive answers
+## in a tenth of a second each — half a minute with the window frozen.
+var _survey: Thread = null
+var _kept_line := ""
 
 
 ## Whether this machine can build a skin at all: not a browser (no
@@ -289,7 +316,7 @@ static func _fence(ring: Array) -> void:
 
 ## Whether a walk, a build or the wearing is under way.
 func busy() -> bool:
-	return _walk != null or _job != null or _wearing or _waiting_to_wear
+	return _walk != null or _survey != null or _job != null or _wearing or _waiting_to_wear
 
 
 ## The folder box: the system's own, for a folder.
@@ -341,7 +368,9 @@ func choose_image() -> void:
 static func start_dir() -> String:
 	if _last_dir != "" and DirAccess.dir_exists_absolute(_last_dir):
 		return _last_dir
-	var home := OS.get_environment("USERPROFILE" if OS.has_feature("windows") else "HOME")
+	# (The player's own home: a portable game on macOS runs with HOME
+	# pointed into its portable folder.)
+	var home := GamePaths._home_dir()
 	return home if home != "" else OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
 
 
@@ -365,7 +394,7 @@ func add_source(path: String) -> void:
 
 ## Forget every folder chosen.
 func clear() -> void:
-	if _job != null or _wearing or _waiting_to_wear:
+	if _job != null or _survey != null or _wearing or _waiting_to_wear:
 		return
 	if _walk != null:
 		_walk.cancel()
@@ -396,7 +425,7 @@ func _walk_over() -> void:
 		_probing = ""
 		if not walked.sources.has(probed) or not SkinInstallCheck.is_copy(walked, probed):
 			_say(refusal(GamePaths.shown(probed), walked.is_image(probed),
-				String(walked.problems.get(probed, ""))))
+				String(walked.problems.get(probed, "")), holds_installer(walked, probed)))
 			if index != null:
 				report_label.text += "\n\n" + "\n".join(PackedStringArray(report.get("lines", [])))
 			_refresh()
@@ -413,17 +442,39 @@ func _walk_over() -> void:
 			sources.erase(gone)
 		_last_sources = sources.duplicate()
 	index = walked
-	report = SkinInstallCheck.survey(index)
+	report = {}
+	_survey = Thread.new()
+	if _survey.start(SkinInstallCheck.survey.bind(walked)) != OK:
+		_survey = null
+		_surveyed(SkinInstallCheck.survey(walked))
+		return
+	_refresh()
+
+
+## The check is back: what the sources are, in the player's words.
+func _surveyed(found: Dictionary) -> void:
+	report = found
 	_say("\n".join(PackedStringArray(report["lines"])))
 	_refresh()
 
 
+## Whether [param source] carries an installer's own files.
+static func holds_installer(walked: SkinSourceIndex, source: String) -> bool:
+	for mark in INSTALLER_MARKS:
+		if walked.has_name(mark, source):
+			return true
+	return false
+
+
 ## Why a source was not taken: a file that would not open as a CD image
-## ([param problem] says why), an image with nothing of the game in it, or
-## a folder with nothing of it.
-static func refusal(shown: String, image: bool, problem: String) -> String:
+## ([param problem] says why), a disc with only an installer on it
+## ([param installer]), an image with nothing of the game in it, or a
+## folder with nothing of it.
+static func refusal(shown: String, image: bool, problem: String, installer := false) -> String:
 	if problem != "":
 		return UNREADABLE_IMAGE % [shown, problem]
+	if installer:
+		return PACKED_DISC % shown
 	return (NOT_AN_IMAGE if image else NOT_A_COPY) % shown
 
 
@@ -446,6 +497,8 @@ func build() -> void:
 	outcome = {}
 	_arrived = false
 	_job = make_job.call()
+	if "planned" in _job:
+		_job.set(&"planned", report.get("plan", {}))
 	if not _job.call(&"open", index, _dest):
 		_build_over()
 		return
@@ -477,6 +530,12 @@ func _process(_delta: float) -> void:
 	if _walk != null:
 		if not _walk.step(walk_usec):
 			_walk_over()
+		return
+	if _survey != null:
+		if not _survey.is_alive():
+			var found: Dictionary = _survey.wait_to_finish()
+			_survey = null
+			_surveyed(found)
 		return
 	if _job != null:
 		if _stepping:
@@ -535,6 +594,7 @@ func _wear() -> void:
 	_say(WEARING)
 	_wearing = true
 	_arrived = false
+	_keep_the_fuller_zip()
 	if not pack.call(&"adopt", _dest):
 		_worn(false)
 		return
@@ -543,6 +603,45 @@ func _wear() -> void:
 	if _arrived or not (pack.has_method(&"busy") and pack.call(&"busy")):
 		_worn(_arrived)
 	_refresh()
+
+
+## [const ASIDE_NAME]: the zip just built takes that name when the one it
+## would be written over holds files it does not.
+func _keep_the_fuller_zip() -> void:
+	_kept_line = ""
+	if not outcome.has("written"):
+		return
+	var home := kept_zip if kept_zip != "" else SkinPack.home_for("skin", _dest)
+	var more := files_only_in(home, outcome["written"])
+	if more <= 0:
+		return
+	var aside := _dest.get_base_dir().path_join(ASIDE_NAME)
+	if FileAccess.file_exists(aside):
+		DirAccess.remove_absolute(aside)
+	if DirAccess.rename_absolute(_dest, aside) != OK:
+		return
+	_dest = aside
+	_kept_line = KEPT % [home.get_file(), more, "" if more == 1 else "s", ASIDE_NAME]
+
+
+## How many files the skin zip at [param zip_path] holds that are not
+## among [param written] (a build's names, without their `skin/`); 0 when
+## there is no such zip or it will not open.
+static func files_only_in(zip_path: String, written: Array) -> int:
+	if not FileAccess.file_exists(zip_path):
+		return 0
+	var reader := ZIPReader.new()
+	if reader.open(zip_path) != OK:
+		return 0
+	var have := {}
+	for name in written:
+		have[SkinBuildJob.PREFIX + String(name)] = true
+	var more := 0
+	for name in reader.get_files():
+		if not name.ends_with("/") and not have.has(name):
+			more += 1
+	reader.close()
+	return more
 
 
 func _on_pack_changed(kind: String) -> void:
@@ -557,18 +656,20 @@ func _worn(took: bool) -> void:
 	_wearing = false
 	if took:
 		_remove_scratch()
-		_say(summary(outcome, GamePaths.use_skin_folder()))
+		_say(summary(outcome, GamePaths.use_skin_folder(), _kept_line))
 	else:
 		_say(NOT_WORN % GamePaths.shown(_dest))
 	_refresh()
 
 
 ## What the player is told once the skin is in.
-static func summary(result: Dictionary, folder_switch := false) -> String:
-	var lines: Array[String] = ["The skin is built and put on: %d files. It dresses the game from the next start."
-		% int(result.get("files", 0))]
+static func summary(result: Dictionary, folder_switch := false, kept := "") -> String:
+	var lines: Array[String] = ["The skin is built and put on as %s: %d files. It dresses the game from the next start."
+		% [SCRATCH_NAME, int(result.get("files", 0))]]
 	if folder_switch:
 		lines.append(FOLDER_SWITCH)
+	if kept != "":
+		lines.append(kept)
 	var rest := "Everything else is complete."
 	var skipped: Array = result.get("skipped", [])
 	if not skipped.is_empty():
@@ -633,7 +734,8 @@ func _refresh() -> void:
 		folders_label.text = "\n".join(shown)
 	choose_button.disabled = busy()
 	image_button.disabled = busy()
-	clear_button.disabled = building or wearing or (sources.is_empty() and _walk == null)
+	clear_button.disabled = building or wearing or _survey != null \
+		or (sources.is_empty() and _walk == null)
 	build_button.disabled = busy() or index == null or not bool(report.get("buildable", false))
 	stop_button.disabled = not building
 	close_button.disabled = building or wearing
@@ -676,6 +778,9 @@ func _exit_tree() -> void:
 	if _walk != null:
 		_walk.cancel()
 		_walk = null
+	if _survey != null:
+		_survey.wait_to_finish()
+		_survey = null
 	if _job != null:
 		# The game closing, or the screen changed under the window: the
 		# build ends with nothing kept.

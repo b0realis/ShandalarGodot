@@ -612,10 +612,10 @@ func _add_skin_section(content: VBoxContainer) -> void:
 	var places := VBoxContainer.new()
 	places.name = "SkinPlaces"
 	places.visible = false
-	var skin_row := _zip_row("skin", "Pick a skin zip: a skin/ folder inside it "
-		+ "with the 1997 art, the 2x skin upscale_skin.py makes of it, or your own "
-		+ "drawn to the same names. It is kept in the skins folder and worn from "
-		+ "the next start. SKIN.txt beside the game lists every file.")
+	var skin_row := _zip_row("skin", "Pick a skin zip: the one Build from a 1997 "
+		+ "install... makes on a computer, a 2x upscale of it, or your own drawn to "
+		+ "the same names (a skin/ folder inside it). It is kept in the skins folder "
+		+ "and worn from the next start. SKIN.txt beside the game lists every file.")
 	# GOLD: the one button that changes the whole look of the game (the
 	# owner, 2026-11-23: "Choose skin button emphasize gold!").
 	dress_gold(skin_row.get_node("Choose_skin") as Button)
@@ -650,10 +650,9 @@ func _add_skin_section(content: VBoxContainer) -> void:
 			_on_skin_changed("skin"))
 		UiChrome.shadowed_button(use_folder)
 		content.add_child(use_folder)
-		places.add_child(_place_label("SkinFolder", "Loose skin files, the way "
-			+ "import_original.py beside the game lays them out from your copy of "
-			+ "the 1997 game. Worn when the switch above is on, or when there is "
-			+ "no skin zip."))
+		places.add_child(_place_label("SkinFolder", "Loose skin files, laid out "
+			+ "as a skin zip's skin/ folder is. Worn when Use the skin folder "
+			+ "instead of the zip is on, or when there is no skin zip."))
 		var hint := UiChrome.body_label("", 12)
 		hint.name = "SkinHint"
 		hint.visible = false
@@ -711,7 +710,17 @@ func _add_skin_section(content: VBoxContainer) -> void:
 
 ## [param line] with every place in it named by its last part alone
 ## ("…/Shandalar/cardpacks" is "cardpacks"): a row of the list.
-static func short_places(line: String) -> String:
+##
+## [param places] are the places the line is known to name, each taken out
+## whole first: a place with a space in it ("…/Application Support/…", a
+## Windows user's two names) is no row of words to cut at the spaces — it
+## read "Card folder: Application cardpacks".
+static func short_places(line: String, places: Array = []) -> String:
+	for place: Variant in places:
+		var whole := String(place)
+		var last := whole.replace("\\", "/").trim_suffix("/").get_file()
+		if last != "" and last != whole:
+			line = line.replace(whole, last)
 	var words := line.split(" ")
 	for i in words.size():
 		var word := words[i]
@@ -750,6 +759,7 @@ func skin_places_words() -> String:
 func show_skin_places() -> Control:
 	var popup := UiChrome.explain_popup(self, "Where the game keeps its files", skin_places_words(), 760.0)
 	popup.name = "SkinPlacesWindow"
+	_fit_places_window(popup)
 	# Plain letters: nothing drawn a second time behind them.
 	for label in popup.find_children("*", "Label", true, false):
 		(label as Label).add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
@@ -757,6 +767,44 @@ func show_skin_places() -> Control:
 		(label as Label).add_theme_constant_override("shadow_offset_y", 0)
 		(label as Label).add_theme_constant_override("outline_size", 0)
 	return popup
+
+
+## THE "?" WINDOW NEVER GROWS PAST THE SCREEN: with every card pack built
+## the card folder's line alone names eleven zips, and the window's OK
+## went off the bottom of a 720-line screen. Its words then scroll — by the
+## wheel, a finger, or Up and Down on the OK button.
+const PLACES_WINDOW_SPARE := 190.0
+func _fit_places_window(popup: Control) -> void:
+	var labels := popup.find_children("*", "Label", true, false)
+	if labels.size() < 2:
+		return
+	var words := labels[1] as Label
+	# Asked of the label itself, wrapped at the width it will have: it
+	# knows its own font, line spacing and breaks.
+	var width := words.custom_minimum_size.x
+	words.size = Vector2(width, 0.0)
+	var tall := words.get_minimum_size().y
+	var room := maxf(160.0, get_viewport_rect().size.y - PLACES_WINDOW_SPARE)
+	if tall <= room:
+		return
+	var column := words.get_parent()
+	var at := words.get_index()
+	var scroll := ScrollContainer.new()
+	scroll.name = "SkinPlacesScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(width + 16.0, room)
+	column.remove_child(words)
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(words)
+	column.add_child(scroll)
+	column.move_child(scroll, at)
+	var ok := popup.find_child("OK", true, false) as Button
+	if ok != null:
+		ok.gui_input.connect(func(event: InputEvent) -> void:
+			for step: Array in [["ui_down", 1.0], ["ui_up", -1.0]]:
+				if event.is_action_pressed(String(step[0]), true):
+					scroll.scroll_vertical += int(float(step[1]) * 60.0)
+					ok.accept_event())
 
 
 ## Tint every state of a stone button gold, as [method
@@ -857,8 +905,9 @@ func _on_skin_changed(_kind: String) -> void:
 		if status != null:
 			# The row says it short; the whole line, its places written
 			# out, is the tooltip and what the "?" says.
-			var whole := SkinPack.status_line(kind, SkinPack.describe(kind))
-			status.text = short_places(whole)
+			var about := SkinPack.describe(kind)
+			var whole := SkinPack.status_line(kind, about)
+			status.text = short_places(whole, [about.get("folder", ""), about.get("name", "")])
 			status.tooltip_text = whole
 			status.mouse_filter = Control.MOUSE_FILTER_PASS
 	var folder := find_child("SkinFolder", true, false) as Label

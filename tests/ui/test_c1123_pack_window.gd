@@ -264,8 +264,11 @@ func test_stop_keeps_the_downloads_and_says_what_was_not_done() -> void:
 
 
 func test_a_failure_is_said_with_its_reason_and_the_next_pack_still_runs() -> void:
-	_teach(["pack-4"])
-	_host.net.scripted["\"set\":\"fem\""] = [Fakes.answer(429)]
+	# A card Scryfall lacks fails its own pack and no other.
+	_teach(["pack-2", "pack-4"])
+	var job: Dictionary = (PackRecipes.recipe("pack-2")["jobs"] as Array)[0]
+	_host.net.absent[job["key"]] = true
+	_host.net.scripted[String(job["lookups"][1])] = [Fakes.answer(404)]
 	var window := await _open()
 	_check(window, "pack-2").button_pressed = true
 	_check(window, "pack-4").button_pressed = true
@@ -273,8 +276,82 @@ func test_a_failure_is_said_with_its_reason_and_the_next_pack_still_runs() -> vo
 	await _until_done(window)
 	var summary := _text(window, "Summary")
 	assert_string_contains(summary, "Installed: Pack 4: Homelands. Turn it on in Options > Card Packs.")
-	assert_string_contains(summary, "Not finished: Pack 2: Fallen Empires. Scryfall is busy")
+	assert_string_contains(summary, "Not finished: Pack 2: Fallen Empires. 1 card could not be fetched (%s: Scryfall has no such card)" % String(job["name"]))
 	assert_eq(_host.settled, [["pack-4"]])
+
+
+func test_a_dead_network_ends_the_job_and_the_rest_are_not_begun() -> void:
+	# Bug pass 2026-11-24: every pack after it used to be begun too — each
+	# one its own half minute of "no answer, asking again".
+	_host.net.scripted["scryfall"] = [Fakes.answer(0, PackedByteArray(), {}, "connect")]
+	var window := await _open()
+	for id: String in ["pack-2", "pack-4", "pack-5"]:
+		_check(window, id).button_pressed = true
+	_button(window, "OK").pressed.emit()
+	await _until_done(window)
+	assert_eq(window.mode, "choose")
+	assert_eq(_text(window, "Summary"), "Not finished: Pack 2: Fallen Empires. The pictures could not be fetched (the connection failed). Check the internet connection and try again.\nNot started: Pack 4: Homelands, Pack 5: Alliances.")
+	assert_eq(_host.net.log.size(), 1 + PackFetch.RETRIES, "only the first pack asked")
+	assert_eq(_host.settled, [[]])
+
+
+func test_a_busy_server_is_not_asked_by_the_packs_after_it() -> void:
+	_host.net.scripted["api.scryfall.com"] = [Fakes.answer(429)]
+	var window := await _open()
+	_check(window, "pack-2").button_pressed = true
+	_check(window, "pack-4").button_pressed = true
+	_button(window, "OK").pressed.emit()
+	await _until_done(window)
+	var summary := _text(window, "Summary")
+	assert_string_contains(summary, "Not finished: Pack 2: Fallen Empires. Scryfall is busy")
+	assert_string_contains(summary, "Not started: Pack 4: Homelands.")
+	assert_eq(_host.net.log.size(), 1 + PackFetch.RETRIES)
+
+
+func test_a_summary_of_many_failures_stays_on_the_screen() -> void:
+	# Bug pass 2026-11-24: eleven failed packs were eleven long lines and
+	# the window grew past the screen, its buttons with it.
+	for size: Vector2 in [Vector2(1280, 800), Vector2(1280, 720)]:
+		_stage.size = size
+		var window := await _open()
+		var panel := window.find_child("Panel", true, false) as Control
+		var box := window.find_child("SummaryBox", true, false) as Control
+		var summary := window.find_child("Summary", true, false) as Label
+		assert_false(box.visible, "no summary yet: no room taken")
+		# A short one is shown whole.
+		summary.text = "Installed: Pack 2: Fallen Empires. Turn it on in Options > Card Packs. No restart is needed."
+		summary.visible = true
+		await wait_process_frames(3)
+		assert_true(box.visible)
+		assert_gt(summary.size.y, 10.0)
+		assert_almost_eq(box.size.y, summary.size.y, 1.0, "as tall as its lines")
+		assert_almost_eq(summary.size.x, box.size.x, 1.0, "and as wide as the window's text")
+		# Eleven failures: three in full, the rest named, and a bound.
+		window._queue = PackRecipes.ids()
+		window._outcomes.clear()
+		for id: String in PackRecipes.ids():
+			window._outcomes.append({"id": id, "title": String(PackRecipes.about(id)["title"]), "ok": false,
+				"kind": "refused", "text": "The game's own check refused the finished pack: its artwork does not match the manifest and three more words to make it long."})
+		summary.text = window.summary()
+		await wait_process_frames(3)
+		assert_eq(summary.text.count("Not finished: "), 3)
+		assert_string_contains(summary.text, "Not finished either: Pack 3: Ice Age, Pack 4: Homelands,")
+		assert_true(summary.text.ends_with("Pack 10: The Urza Block."), summary.text)
+		gut.p("on %s the panel is %s, the summary %s in a box of %s" % [size, panel.size, summary.size, box.size])
+		assert_lte(box.size.y, PackBuilderWindow.SUMMARY_MOST + 1.0)
+		assert_true(Rect2(Vector2.ZERO, size).encloses(panel.get_global_rect()), "the window fits %s" % size)
+		assert_true(Rect2(Vector2.ZERO, size).encloses(_button(window, "Close").get_global_rect()))
+		# Longer than any summary the window writes: it scrolls in its box.
+		summary.text = "\n".join(PackedStringArray(range(24).map(func(n: int) -> String: return "Line %d of a summary." % n)))
+		await wait_process_frames(3)
+		assert_almost_eq(box.size.y, PackBuilderWindow.SUMMARY_MOST, 1.0, "no taller than its bound")
+		assert_gt(summary.size.y, box.size.y, "the rest is scrolled to")
+		assert_true(Rect2(Vector2.ZERO, size).encloses(panel.get_global_rect()), "and the window still fits %s" % size)
+		summary.visible = false
+		await wait_process_frames(2)
+		assert_false(box.visible, "hidden with its label")
+		window.queue_free()
+		await wait_process_frames(2)
 
 
 func test_the_1997_pictures_say_when_they_are_worn_and_are_worn_on_close() -> void:

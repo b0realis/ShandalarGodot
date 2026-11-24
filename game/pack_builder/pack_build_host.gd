@@ -62,6 +62,45 @@ func free_bytes() -> int:
 	return least
 
 
+## Why a pack cannot be built where the packs are built — the work folder
+## in the card folder or the cache will not take a file — or "". Tried with
+## a file of a few bytes that goes again at once (named as a build's own
+## part, so [method clear_work] takes it should the game end under it); the
+## work folder goes again too when that leaves it empty.
+func unwritable() -> String:
+	var work := folder().path_join(BUILDING)
+	for place: String in [work, cache_root()]:
+		var ok := _can_be_made(place)
+		if ok:
+			DirAccess.make_dir_recursive_absolute(place)
+			var probe := place.path_join("probe.zip.part")
+			var file := FileAccess.open(probe, FileAccess.WRITE)
+			ok = file != null and file.store_string("probe")
+			if file != null:
+				file.close()
+			DirAccess.remove_absolute(probe)
+		if not ok:
+			DirAccess.remove_absolute(work)
+			return "The game cannot write in %s. Check that the folder is there and may be written to." % GamePaths.shown(
+				folder() if place == work else place)
+	DirAccess.remove_absolute(work)
+	return ""
+
+
+## False when a file lies where [param place] or a folder above it should
+## be: asked first, so the engine is not made to try and complain.
+static func _can_be_made(place: String) -> bool:
+	var at := place
+	while not DirAccess.dir_exists_absolute(at):
+		if FileAccess.file_exists(at):
+			return false
+		var above := at.get_base_dir()
+		if above == at or above == "":
+			break
+		at = above
+	return true
+
+
 ## How [param id] stands: `{state, note}` with state
 ##   "installed"  in the card folder and in use — not built again
 ##   "elsewhere"  in use from another place (beside the game, a checkout)

@@ -257,7 +257,10 @@ from a 1997 install... under the skin, and choose the folder the 1997
 game was installed to, its CD, or a CD image (.iso, or .bin with its
 .cue). What a disc keeps packed inside its installer cannot be read: add
 the installed folder too. It makes the same skin as the tool
-below, without the two movies. Or with the tool:
+below, without the two movies, and keeps it in your skins folder as
+classic_no-video.zip — under a name of its own, so an original_skin.zip
+you already have (the complete skin, with the movies) stays beside it
+and Choose... in Options switches between the two. Or with the tool:
 
     python3 tools/mtg_assets.py                          explains what it needs
     python3 tools/mtg_assets.py --check   /path/to/game  looks, reports, writes nothing

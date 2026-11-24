@@ -56,6 +56,10 @@ const MAX_DATA_FILE := 64 << 20
 ## And for a sound or a movie carried along (the longest 1997 tune is
 ## under 20 MB).
 const MAX_COPY_FILE := 256 << 20
+## A list in letters (`Info.csv`, `Hints.txt`, a `.tr` palette) larger
+## than this is not opened: the largest in a 1997 install is 105 KB, and
+## letters are held four bytes each while they are read.
+const MAX_TEXT_FILE := 8 << 20
 ## The most rows read out of a program's card table.
 const MAX_CARD_ROWS := 20_000
 
@@ -65,6 +69,11 @@ var dest := ""
 var max_art_file := MAX_ART_FILE
 var max_data_file := MAX_DATA_FILE
 var max_copy_file := MAX_COPY_FILE
+var max_text_file := MAX_TEXT_FILE
+## The plan [method SkinInstallCheck.survey] already made of this very
+## index, when the window has one: [method open] then reads no file a
+## second time (a CD in a drive answers each in a tenth of a second).
+var planned: Dictionary = {}
 
 var _tasks: Array = []
 var _at := 0
@@ -219,12 +228,13 @@ func open(from: SkinSourceIndex, to: String) -> bool:
 	index = from
 	dest = to
 	_part = to + PART_TAIL
-	var planned := plan(from)
-	_tasks = planned["tasks"]
-	_missing = planned["missing"]
-	_refused_png = planned["refused_png"]
-	_refused_program = planned["refused_program"]
-	_left_out = planned["left_out"]
+	# (A copy: the job strikes names off these lists as it goes.)
+	var made: Dictionary = plan(from) if planned.is_empty() else planned.duplicate(true)
+	_tasks = made["tasks"]
+	_missing.assign(made["missing"])
+	_refused_png = made["refused_png"]
+	_refused_program = made["refused_program"]
+	_left_out.assign(made["left_out"])
 	_at = 0
 	_set_shared(0, "")
 	# (The sheets laid from cells are planned whatever is there.)
@@ -443,7 +453,7 @@ func _palette(names: Array) -> PackedByteArray:
 		var cache_key := ("tr:" if name.to_lower().ends_with(".tr") else "pic:") + path
 		if not _palettes.has(cache_key):
 			var palette := PackedByteArray()
-			var read := _read(path, max_art_file)
+			var read := _read(path, max_text_file if cache_key.begins_with("tr:") else max_art_file)
 			if String(read["error"]) == "":
 				palette = SkinPicCodec.read_tr_palette(read["bytes"]) \
 					if cache_key.begins_with("tr:") else SkinPicCodec.read_palette(read["bytes"])
@@ -835,7 +845,7 @@ func _card_names() -> Dictionary:
 		_names_by_id = {}
 		var info := index.find("info.csv")
 		if info != "":
-			var read := _read(info, max_data_file)
+			var read := _read(info, max_text_file)
 			if String(read["error"]) == "":
 				var text := SkinText.decode(read["bytes"])
 				_names_by_id = csv_by_id(text, 1)
@@ -859,7 +869,7 @@ func _card_values(program: String) -> void:
 	var rarities := {}
 	var concise := index.find("concise.csv")
 	if concise != "":
-		var listed := _read(concise, max_data_file)
+		var listed := _read(concise, max_text_file)
 		if String(listed["error"]) == "":
 			for line in SkinText.lines(SkinText.decode(listed["bytes"])):
 				var bits := SkinText.words(line)
@@ -911,7 +921,7 @@ static func _is_number(word: String) -> bool:
 
 func _hints(source: String) -> void:
 	var name: String = SkinRecipes.HINTS_KEY + ".json"
-	var read := _read(source, max_data_file)
+	var read := _read(source, max_text_file)
 	if String(read["error"]) != "":
 		_skip(name, source, String(read["error"]))
 		return
@@ -955,7 +965,7 @@ static func wise_words(text: String) -> Dictionary:
 
 func _wise_words(source: String) -> void:
 	var name: String = SkinRecipes.WISE_WORDS_KEY + ".json"
-	var read := _read(source, max_data_file)
+	var read := _read(source, max_text_file)
 	if String(read["error"]) != "":
 		_skip(name, source, String(read["error"]))
 		return

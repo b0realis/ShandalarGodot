@@ -13,8 +13,8 @@ rules known to you. Its treasure is his old cards.
 
 Clear it and come back: he knows of another, and tells you for 1000 gold
 more. He has five secrets in all, sold one after another, each only once
-the dungeon before it is cleared, and each lying farther from his hut
-than the last:
+the dungeon before it is cleared, and each free to lie farther from his
+hut than the last:
 
   The Forgotten Vault      Old Man of the Sea, Planar Gate, Mirror Universe
   The Drowned Library      Library of Alexandria, Candelabra of Tawnos,

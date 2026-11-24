@@ -143,6 +143,9 @@ static func about(id: String) -> Dictionary:
 ## Where the packs' trusted files are read from: this build's own copy.
 ## A test points it at a folder that lacks some, as an export can.
 static var packaging := PACKAGING
+## Files this build is to be read as not carrying, by their `res://` path —
+## a test's way to stand where an export stands. The game leaves it empty.
+static var without: Array[String] = []
 
 
 ## The trusted files [param id]'s recipe is read from, as paths in this
@@ -184,9 +187,24 @@ static func lacking(id: String) -> String:
 	if id != BASE and number_of(id) == 0:
 		return id
 	for path: String in sources(id):
-		if not FileAccess.file_exists(path):
+		if not _there(path) and _own(path) == "":
 			return path.trim_prefix("res://")
 	return ""
+
+
+## Whether this build carries the trusted file [param path].
+static func _there(path: String) -> bool:
+	return not without.has(path) and FileAccess.file_exists(path)
+
+
+## The text of [param path] as the script itself carries it ([constant
+## PACK_ONE_OWN]), or "" — Pack 1's three files, under the game's own
+## packaging folder and nowhere else.
+static func _own(path: String) -> String:
+	var folder := PACKAGING + String(PACKS[1]["dir"]) + "/"
+	if not path.begins_with(folder):
+		return ""
+	return String(PACK_ONE_OWN.get(path.trim_prefix(folder), ""))
 
 
 ## The whole recipe for [param id]; `ok` false with `why` when a trusted
@@ -716,10 +734,9 @@ static func _unique_names(rows: Array) -> Array:
 ## A trusted JSON file of this build, parsed; null when it is not there or
 ## is not JSON.
 static func _read(path: String) -> Variant:
-	if not FileAccess.file_exists(path):
-		return null
+	var text := FileAccess.get_file_as_string(path) if _there(path) else _own(path)
 	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(path)) != OK:
+	if text == "" or json.parse(text) != OK:
 		return null
 	return json.data
 
@@ -727,16 +744,15 @@ static func _read(path: String) -> Variant:
 ## A trusted text file's bytes as Python reads and writes them: every line
 ## end a single newline.
 static func _file_bytes(path: String) -> PackedByteArray:
-	if not FileAccess.file_exists(path):
-		return PackedByteArray()
-	var text := FileAccess.get_file_as_bytes(path).get_string_from_utf8()
+	var text := FileAccess.get_file_as_bytes(path).get_string_from_utf8() if _there(path) \
+		else _own(path)
 	return text.replace("\r\n", "\n").replace("\r", "\n").to_utf8_buffer()
 
 
 ## The `.json` files of a folder of this build, in name order.
 static func _json_files_in(folder: String) -> Array:
 	var out: Array = []
-	var dir := DirAccess.open(folder)
+	var dir := DirAccess.open(folder.trim_suffix("/"))
 	if dir == null:
 		return out
 	dir.list_dir_begin()
@@ -747,3 +763,138 @@ static func _json_files_in(folder: String) -> Array:
 		entry = dir.get_next()
 	dir.list_dir_end()
 	return PackJson.sorted(out)
+
+
+# ------------------------------------------------- Pack 1's own copy --
+
+## PACK 1'S THREE TRUSTED FILES, CARRIED IN THE SCRIPT. Their folder,
+## `packaging/card_packs/pack_1_dotp_complete/`, holds a `.gdignore` (the
+## Python tool once kept its downloads there), and an export passes over
+## such a folder whatever its filters say: no exported game has ever held
+## these files, so no exported game could build Pack 1. The files are small
+## and settled; here they are, line for line, and they are read only where
+## the build does not carry the file itself ([method _own]). A checkout
+## reads the files, and `test_c1123_pack_export.gd` holds these to them
+## byte for byte, so a change to one that forgets the other fails there.
+const PACK_ONE_MANIFEST := "{\n" \
+	+ "  \"pack_format\": 1,\n" \
+	+ "  \"id\": \"pack-1\",\n" \
+	+ "  \"number\": 1,\n" \
+	+ "  \"name\": \"DotP Complete\",\n" \
+	+ "  \"file_name\": \"Pack-1-DotP-complete.zip\",\n" \
+	+ "  \"version\": \"1.0.0\",\n" \
+	+ "  \"minimum_game_version\": \"0.20.0\",\n" \
+	+ "  \"set_order\": [\"2ed\", \"arn\", \"atq\", \"leg\", \"drk\", \"4ed\", \"past\", \"phpr\"],\n" \
+	+ "  \"description\": \"Adds the 373 named set entries missing from the default pool: 369 cross-set reprints and four new rules identities, completing all eight Duels of the Planeswalkers card-group checklists.\",\n" \
+	+ "  \"rules_note\": \"Chaos Orb, Falling Star, Shahrazad, and Word of Command use clearly marked digital adaptations because their tabletop procedures cannot be reproduced faithfully in this duel interface. Reprints share one name-based rules identity and the same copy accounting.\"\n" \
+	+ "}\n"
+
+const PACK_ONE_MISSING := "[\n" \
+	+ "  {\n" \
+	+ "    \"name\": \"Chaos Orb\",\n" \
+	+ "    \"mana_cost\": \"{2}\",\n" \
+	+ "    \"type_line\": \"Artifact\",\n" \
+	+ "    \"oracle_text\": \"{1}, {T}: If this artifact is on the battlefield, flip it onto the battlefield from a height of at least one foot. If this artifact turns over completely at least once during the flip, destroy all nontoken permanents it touches. Then destroy this artifact.\",\n" \
+	+ "    \"power\": null,\n" \
+	+ "    \"toughness\": null,\n" \
+	+ "    \"keywords\": [],\n" \
+	+ "    \"colors\": [],\n" \
+	+ "    \"rarity\": \"rare\",\n" \
+	+ "    \"collector_number\": \"236\",\n" \
+	+ "    \"artist\": \"Mark Tedin\",\n" \
+	+ "    \"set\": \"2ed\"\n" \
+	+ "  },\n" \
+	+ "  {\n" \
+	+ "    \"name\": \"Word of Command\",\n" \
+	+ "    \"mana_cost\": \"{B}{B}\",\n" \
+	+ "    \"type_line\": \"Instant\",\n" \
+	+ "    \"oracle_text\": \"Look at target opponent's hand and choose a card from it. You control that player until Word of Command finishes resolving. The player plays that card if able. While doing so, the player can activate mana abilities only if they're from lands that player controls and only if mana they produce is spent to activate other mana abilities of lands the player controls and/or to play that card. If the chosen card is cast as a spell, you control the player while that spell is resolving.\",\n" \
+	+ "    \"power\": null,\n" \
+	+ "    \"toughness\": null,\n" \
+	+ "    \"keywords\": [],\n" \
+	+ "    \"colors\": [\"B\"],\n" \
+	+ "    \"rarity\": \"rare\",\n" \
+	+ "    \"collector_number\": \"137\",\n" \
+	+ "    \"artist\": \"Jesper Myrfors\",\n" \
+	+ "    \"set\": \"2ed\"\n" \
+	+ "  },\n" \
+	+ "  {\n" \
+	+ "    \"name\": \"Shahrazad\",\n" \
+	+ "    \"mana_cost\": \"{W}{W}\",\n" \
+	+ "    \"type_line\": \"Sorcery\",\n" \
+	+ "    \"oracle_text\": \"Players play a Magic subgame, using their libraries as their decks. Each player who doesn't win the subgame loses half their life, rounded up.\",\n" \
+	+ "    \"power\": null,\n" \
+	+ "    \"toughness\": null,\n" \
+	+ "    \"keywords\": [],\n" \
+	+ "    \"colors\": [\"W\"],\n" \
+	+ "    \"rarity\": \"rare\",\n" \
+	+ "    \"collector_number\": \"10\",\n" \
+	+ "    \"artist\": \"Kaja Foglio\",\n" \
+	+ "    \"set\": \"arn\"\n" \
+	+ "  },\n" \
+	+ "  {\n" \
+	+ "    \"name\": \"Falling Star\",\n" \
+	+ "    \"mana_cost\": \"{2}{R}\",\n" \
+	+ "    \"type_line\": \"Sorcery\",\n" \
+	+ "    \"oracle_text\": \"Flip Falling Star onto the playing area from a height of at least one foot. Falling Star deals 3 damage to each creature it lands on. Tap all creatures dealt damage by Falling Star. If Falling Star doesn't turn completely over at least once during the flip, it has no effect.\",\n" \
+	+ "    \"power\": null,\n" \
+	+ "    \"toughness\": null,\n" \
+	+ "    \"keywords\": [],\n" \
+	+ "    \"colors\": [\"R\"],\n" \
+	+ "    \"rarity\": \"rare\",\n" \
+	+ "    \"collector_number\": \"145\",\n" \
+	+ "    \"artist\": \"Douglas Shuler\",\n" \
+	+ "    \"set\": \"leg\"\n" \
+	+ "  }\n" \
+	+ "]\n"
+
+const PACK_ONE_README := "PACK 1 — DOTP COMPLETE\n" \
+	+ "\n" \
+	+ "Pack-1-DotP-complete.zip completes the eight card groups represented by\n" \
+	+ "ShandalarGodot's set badges. It carries the full published checklist for\n" \
+	+ "each group, including cards reprinted in more than one set.\n" \
+	+ "\n" \
+	+ "Pack 1 itself adds 373 named set entries: 369 cross-set reprints plus four\n" \
+	+ "new rules identities. The enabled pool therefore reports 1,270 set entries\n" \
+	+ "across the eight checklists, representing 901 unique rules identities. Reprints\n" \
+	+ "still share one deck entry and the same name-based copy count. The pack catalog\n" \
+	+ "also records all 1,305 published collector slots; the remaining 35 slots are\n" \
+	+ "alternate-art printings of the same name inside the same set.\n" \
+	+ "\n" \
+	+ "Four distinct cards are absent from the default 897-card pool because\n" \
+	+ "their printed procedures require dexterity, a subgame, or control of\n" \
+	+ "another player. Pack 1 supplies bounded digital adaptations:\n" \
+	+ "\n" \
+	+ "  Chaos Orb       first flips a coin, then may destroy one random permanent.\n" \
+	+ "  Falling Star    flips once for each of one or two chosen creatures.\n" \
+	+ "  Shahrazad       resolves its half-life result with a coin flip.\n" \
+	+ "  Word of Command becomes a targeted nonland discard choice.\n" \
+	+ "\n" \
+	+ "Every adapted card says \"Digital adaptation\" in its displayed rules text.\n" \
+	+ "The exact deviations, reusable engine mechanics, and AI policies are recorded\n" \
+	+ "in docs/pack-1-mechanics.md and docs/simplified-cards.md in the source tree.\n" \
+	+ "The manifest records pack version, minimum game version, SHA-256 hashes for\n" \
+	+ "the metadata, and one deterministic SHA-256 over all artwork. The game refuses\n" \
+	+ "a corrupt or incompatible file and explains why under Options > Card Packs.\n" \
+	+ "The finished ZIP carries an art crop and a full-card scan for every one of\n" \
+	+ "its 373 set entries. Set-specific files live in the pack's own catalog;\n" \
+	+ "the four new identities are also exposed through skin/cardart/ so the game\n" \
+	+ "can display them immediately. The fetch-art command keeps downloads in the\n" \
+	+ "sibling shandalar-packs cache, never in git.\n" \
+	+ "\n" \
+	+ "The finished ZIP is a local gameplay artifact and is not distributed in a\n" \
+	+ "ShandalarGodot release. The source repository distributes this construction\n" \
+	+ "tool and its inputs instead.\n" \
+	+ "\n" \
+	+ "Build or verify this pack with the dedicated tool:\n" \
+	+ "\n" \
+	+ "  python3 tools/pack_1_dotp_complete.py fetch-art\n" \
+	+ "  python3 tools/pack_1_dotp_complete.py\n" \
+	+ "  python3 tools/pack_1_dotp_complete.py verify\n" \
+	+ "\n" \
+	+ "Card names and rules text are Wizards of the Coast material. Set and card\n" \
+	+ "metadata are obtained through Scryfall's public API and remain subject to\n" \
+	+ "their respective owners' terms. No card artwork is committed to the source\n" \
+	+ "repository; the local build command places the fetched images in this ZIP.\n"
+const PACK_ONE_OWN := {"manifest.json": PACK_ONE_MANIFEST,
+	"missing_cards.json": PACK_ONE_MISSING, "README.txt": PACK_ONE_README}

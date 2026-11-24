@@ -22091,6 +22091,41 @@ Gate: 548 scripts, **8,252/8,252 tests, 367,758 asserts**, exit 0 in
 259 s over 6 shards; Python 415, exit 0. CI for 69dfcc7: shard 2 rerun
 green in 5 min 43 s (2,115/2,115, 74,924 asserts).
 
+## 2026-11-24 — Version 0.70.10
+
+Version 0.70.10 (Android version code 70010). Its notes are
+`docs/releases/0.70.10.md`. LAN stays protocol 32; 0.70.10 plays only
+0.70.10. A bug pass over 0.70.9's new features (owner: "the player just
+running the main binary should be able to do everything from within the
+game"), with a Linux export run to prove it.
+
+- **Pack 1 in an export.** `packaging/card_packs/pack_1_dotp_complete/`
+  holds a `.gdignore`, so the exporter left its lists out whatever the
+  include filters said; `PackRecipes.PACK_ONE_OWN` carries the three
+  files and is read only where the build lacks them
+  (`tests/unit/test_c1123_pack_export.gd` pins it byte for byte).
+- **Pack builder:** an outcome `halts` (no connection, certificate,
+  busy server, disk, folder, locked catalogue) and the rest read "Not
+  started"; `PackBuildHost.unwritable()` before any request; the
+  summary in a scrolling box of 190 px.
+- **Skin builder:** the built zip is `classic_no-video.zip`
+  (`SkinBuilderWindow.SCRATCH_NAME`, the owner's name for it), never in
+  the place of `original_skin.zip`; an installer-only disc told apart
+  (`PACKED_DISC`); the install check on a thread, its plan reused by
+  the build; `MAX_TEXT_FILE` 8 MB; the folder box opens in the player's
+  own home in portable mode.
+- **Options and title:** `short_places` keeps a path with spaces whole;
+  the no-skin notice waits for the window above it and names the
+  in-game builder (another text where the builder is not offered); the
+  "?" window scrolls.
+- **Engine:** `_ask_cost_card` keeps the cost stamp for a seat that
+  answers for itself (the computer), so "unless you..." payments in a
+  resolution are still weighed as prices.
+- **Exported build, measured:** Linux 64 export of this tree, both
+  builders driven inside it: all eleven recipes present, every pack
+  built and passed by `CardPacks.inspect` against a stand-in network,
+  the skin from a 1997 install 613 files in about 10 s.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

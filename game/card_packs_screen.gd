@@ -274,7 +274,7 @@ func _ready() -> void:
 	content.add_child(tenth_actions)
 
 	var local_only := UiChrome.body_label(
-		"Packs are not distributed with the game. Build them locally with "
+		"Packs are not distributed with the game. Options > Get Card Packs... builds them here in the game. Or build them yourself with "
 		+ "tools/pack_1_dotp_complete.py, tools/pack_2_fallen_empires.py, "
 		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py, tools/pack_6_portal.py, tools/pack_7_fifth_edition.py, tools/pack_8_mirage_block.py, tools/pack_9_tempest_block.py or tools/pack_10_urza_block.py, "
 		+ "place the exact ZIP here, then Rescan.", 13)

@@ -65,7 +65,9 @@ static func is_copy(index: SkinSourceIndex, source: String) -> bool:
 ## disc seems to keep files in its installer ([constant PACKED]), `found` and
 ## `lacking` the landmark groups, `files` how many of the skin files the
 ## game reads have a 1997 file to come from, `strangers` the folders that
-## hold no landmark at all, `lines` the report in the player's words.
+## hold no landmark at all, `lines` the report in the player's words,
+## `plan` the [method SkinBuildJob.plan] it was counted from (a build of
+## the same index takes it instead of reading every file's head again).
 static func survey(index: SkinSourceIndex) -> Dictionary:
 	var marks := landmarks(index)
 	var found: Array[String] = []
@@ -162,7 +164,7 @@ static func survey(index: SkinSourceIndex) -> Dictionary:
 	if index.cut_short:
 		lines.append("The %s is very large: only its first %d files were looked at."
 			% ["image" if only_images else "folder", index.file_count])
-	return {"kind": kind, "buildable": buildable, "headline": headline,
+	return {"kind": kind, "buildable": buildable, "headline": headline, "plan": planned,
 		"images": index.images.size(), "packed": packed,
 		"found": found, "lacking": lacking, "files": files, "files_wanted": files_wanted,
 		"portraits": portraits, "portraits_wanted": SkinRecipes.PORTRAITS_WANTED,

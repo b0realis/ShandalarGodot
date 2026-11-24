@@ -423,6 +423,21 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## 0.70.10 (2026-11-24): the builders in an exported game
+
+Version 0.70.10, Android version code 70010; `docs/releases/0.70.10.md`.
+
+- `game/pack_builder/pack_recipes.gd`: `PACK_ONE_OWN`, Pack 1's three
+  lists carried in the script (their folder has a `.gdignore`, so no
+  export holds them); `_own` reads the copy only where the file is not
+  there. `pack_build.gd`: an outcome's `halts`. `pack_build_host.gd`:
+  `unwritable()`.
+- `game/skin_builder/skin_builder_window.gd`: `SCRATCH_NAME`
+  `classic_no-video.zip`, `PACKED_DISC`, the check on a thread.
+- Tests: `tests/unit/test_c1123_pack_export.gd`,
+  `tests/ui/test_c1123_skin_window_pass.gd`, `tests/ui/test_c1124_*.gd`,
+  `tests/unit/test_c1124_resolution_payments.gd`.
+
 ## 0.70.9 (2026-11-23): card packs and the skin made in the game
 
 Version 0.70.9, Android version code 70009; `docs/releases/0.70.9.md`.

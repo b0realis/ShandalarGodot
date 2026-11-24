@@ -425,17 +425,20 @@ Click it for quick information, or use Options > Card Packs for Open Folder,
 Rescan, enabled state, version and any validation failure. Enabling adds 373
 named set entries (369 reprints and four digitally adapted cards), so the
 title count changes from 897 cards to 1,270 set entries / 901 unique cards.
-The exact ZIP is not distributed: build it locally from the source repository
-with tools/pack_1_dotp_complete.py. Its manifest and artwork are checksummed.
+The exact ZIP is not distributed: Options > Get Card Packs... builds it (and
+every other pack, and the 1997 card pictures) here in the game. From the
+source repository, tools/pack_1_dotp_complete.py builds it too. Its manifest and artwork are checksummed.
 
 Pack-2-Fallen-Empires.zip independently adds 102 unique Fallen Empires cards
-(187 published printings), with badge 2-FEM. Build it with
-tools/pack_2_fallen_empires.py, then enable it in Options > Card Packs.
+(187 published printings), with badge 2-FEM. Build it with Options > Get
+Card Packs... (or tools/pack_2_fallen_empires.py), then enable it in
+Options > Card Packs.
 Deck Builder > Extras holds its FE filter medallion, separate from the
 original eight sets. Both enabled packs give 1,372 set entries / 1,003
 unique cards. Pack 2's ZIP and downloaded artwork also stay local-only.
 
-To build an ordinary art zip: fetch_card_art.py beside the game downloads the pictures,
+The 1997 card pictures come from Options > Get Card Packs... as well. To
+build an ordinary art zip by hand: fetch_card_art.py beside the game downloads the pictures,
 then mtg_assets.py --from-cardart <folder> --out cardart.zip packs them.
 SKIN.txt beside the game lists every name the game looks for.
 

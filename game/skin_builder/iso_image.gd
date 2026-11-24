@@ -199,7 +199,9 @@ static func image_of_cue(sheet: PackedByteArray, folder: String) -> Dictionary:
 		return {"error": "it is not a .cue sheet", "path": "", "is_cue": false}
 	if name == "" or name == "." or name == ".." or not name.is_valid_filename() \
 			or name.contains("/") or name.contains("\\") or name.contains(":"):
-		return {"error": "its .cue names a file outside its own folder, which the game will not follow",
+		# (Sheets written by old burners name a whole path, `C:\\...`: the
+		# image itself can be chosen, so the player is told that.)
+		return {"error": "its .cue names a file outside its own folder, which the game will not follow; choose the image file itself (.bin or .iso) instead",
 			"path": "", "is_cue": true}
 	var beside := folder.path_join(name)
 	if FileAccess.file_exists(beside):

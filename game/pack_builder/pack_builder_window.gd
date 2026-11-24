@@ -53,6 +53,11 @@ const GENTLE := "Go easy on Scryfall's servers"
 const GENTLE_TIP := "Pause a little between pictures. It applies from the next start of a download."
 const WHY_TITLE := "About the download"
 const WHY_BODY := "Thank you, Scryfall! Every card picture here comes from scryfall.com, which shares its card data and pictures with the whole community for free.\n\nLet's be nice to their servers: with this ticked, the game asks for one thing at a time and pauses a little between pictures, so a full set of packs takes about half an hour.\n\nUnticked, only the pause between pictures is dropped; the game still asks one thing at a time and still waits whenever Scryfall asks it to."
+## Failed packs the summary gives a line of their own, reason and all; any
+## beyond them are named in one line. And the most room the summary takes:
+## past it, it scrolls, so the window never grows off the screen.
+const FAILURES_IN_FULL := 3
+const SUMMARY_MOST := 190.0
 const BAR := Color(0.78, 0.62, 0.30)
 const BAR_GROUND := Color(0.18, 0.15, 0.11)
 const DIM := Color8(74, 66, 60)
@@ -72,6 +77,7 @@ var _line: Label
 var _bar: ProgressBar
 var _overall: Label
 var _summary: Label
+var _summary_box: ScrollContainer
 var _ok: Button
 var _close: Button
 var _stop: Button
@@ -220,9 +226,19 @@ func _ready() -> void:
 	_summary = _label("", 14)
 	_summary.name = "Summary"
 	_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_summary.custom_minimum_size.x = WIDTH - 60.0
+	_summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_summary.visible = false
-	column.add_child(_summary)
+	# In a box as tall as its lines up to [constant SUMMARY_MOST], which
+	# scrolls past that; shown and hidden with the label.
+	_summary_box = ScrollContainer.new()
+	_summary_box.name = "SummaryBox"
+	_summary_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_summary_box.custom_minimum_size.x = WIDTH - 60.0
+	_summary_box.visible = false
+	_summary_box.add_child(_summary)
+	_summary.minimum_size_changed.connect(_fit_summary)
+	_summary.visibility_changed.connect(_fit_summary)
+	column.add_child(_summary_box)
 
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -289,9 +305,12 @@ func _process(_delta: float) -> void:
 	_outcomes.append(_build.outcome)
 	if _build.id == PackRecipes.BASE and bool(_build.outcome.get("ok", false)):
 		_art_built = true
+	# What stopped this pack would stop the next the same way (no
+	# connection, a full disk): the rest are not begun.
+	var halted := bool(_build.outcome.get("halts", false))
 	_build = null
 	_at += 1
-	if _stopped or _at >= _queue.size():
+	if _stopped or halted or _at >= _queue.size():
 		_finish()
 	else:
 		_begin_next()
@@ -588,15 +607,30 @@ func summary() -> String:
 	if art:
 		lines.append("Installed: %s. %s" % [PackRecipes.BASE_TITLE,
 			ART_RESTART if game.art_needs_restart() else ART_NOW])
+	var failed := 0
+	var more := PackedStringArray()
 	for outcome: Dictionary in _outcomes:
-		if not bool(outcome.get("ok", false)):
+		if bool(outcome.get("ok", false)):
+			continue
+		failed += 1
+		if failed <= FAILURES_IN_FULL:
 			lines.append("Not finished: %s. %s" % [String(outcome["title"]), String(outcome["text"])])
+		else:
+			more.append(String(outcome["title"]))
+	if not more.is_empty():
+		lines.append("Not finished either: %s." % ", ".join(more))
 	var waiting := PackedStringArray()
 	for i in range(_outcomes.size(), _queue.size()):
 		waiting.append(String(PackRecipes.about(_queue[i])["title"]))
 	if not waiting.is_empty():
 		lines.append("Not started: %s." % ", ".join(waiting))
 	return "\n".join(lines)
+
+
+## The summary's box as tall as the summary, up to [constant SUMMARY_MOST].
+func _fit_summary() -> void:
+	_summary_box.visible = _summary.visible
+	_summary_box.custom_minimum_size.y = minf(_summary.get_combined_minimum_size().y, SUMMARY_MOST)
 
 
 ## Close the window. While a pack is being built this is Stop first.

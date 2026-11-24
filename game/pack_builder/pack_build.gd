@@ -8,8 +8,14 @@ extends RefCounted
 ##
 ## [member state] is "working" until it is "done", "failed" or "stopped";
 ## [member outcome] then says what came of it, in words the summary shows:
-## `{id, title, ok, kind, text}` with kind "" (installed), "locked" (a LAN
-## table holds the catalogue), "disk", "network", "refused" or "stopped".
+## `{id, title, ok, kind, text, halts}` with kind "" (installed), "locked"
+## (a LAN table holds the catalogue), "disk", "network", "refused" or
+## "stopped". `halts` is true when what stopped this pack would stop the
+## next one the same way — no connection, a refused certificate, a server
+## that stays busy, a folder or a disk that takes no more — so the window
+## does not begin the packs after it: without it, eleven packs chosen with
+## the network down were eleven rounds of waiting and asking again. A card
+## Scryfall lacks or a zip the game's check refuses is this pack's alone.
 ##
 ## WHAT A STOP OR A FAILURE LEAVES: every picture downloaded so far, in the
 ## cache — the same pack chosen again fetches only what is missing — and
@@ -52,7 +58,7 @@ func start(pack_id: String, on: PackBuildHost) -> void:
 	state = "working"
 	var locked := host.refusal()
 	if locked != "":
-		_end("failed", "locked", locked)
+		_end("failed", "locked", locked, true)
 		return
 	_recipe = PackRecipes.recipe(id)
 	if not bool(_recipe.get("ok", false)):
@@ -68,6 +74,11 @@ func start(pack_id: String, on: PackBuildHost) -> void:
 	if free >= 0 and free < need_mb * 1024 * 1024:
 		_end("failed", "disk", "Not enough free disk space: it needs about %d MB and %d MB are free." % [
 			need_mb, free >> 20])
+		return
+	# Said now, not after half an hour of downloading.
+	var closed := host.unwritable()
+	if closed != "":
+		_end("failed", "disk", closed, true)
 		return
 	fetch = PackFetch.new()
 	fetch.transport = host.transport()
@@ -154,7 +165,7 @@ func fraction() -> float:
 func _fetched() -> void:
 	_close_transport()
 	if fetch.state == "failed":
-		_end("failed", "disk" if fetch.problem == "disk" else "network", fetch.problem_text)
+		_end("failed", "disk" if fetch.problem == "disk" else "network", fetch.problem_text, true)
 		return
 	if fetch.state != "done":
 		return
@@ -181,14 +192,14 @@ func _judge(path: String) -> Dictionary:
 func _written() -> void:
 	if writer.state != "done":
 		var kind := writer.problem
-		_end("failed", "network" if kind == "missing" else kind, writer.problem_text)
+		_end("failed", "network" if kind == "missing" else kind, writer.problem_text, kind == "disk")
 		_drop_work_folder()
 		return
 	var refused := host.place(id, writer.path)
 	if refused != "":
 		writer.abandon()
 		_drop_work_folder()
-		_end("failed", "disk", refused)
+		_end("failed", "disk", refused, true)
 		return
 	_drop_work_folder()
 	_list_cache(_cache)
@@ -234,6 +245,7 @@ func _close_transport() -> void:
 		fetch.transport.close()
 
 
-func _end(how: String, kind: String, text: String) -> void:
+func _end(how: String, kind: String, text: String, halts := false) -> void:
 	state = how
-	outcome = {"id": id, "title": title, "ok": how == "done", "kind": kind, "text": text}
+	outcome = {"id": id, "title": title, "ok": how == "done", "kind": kind, "text": text,
+		"halts": halts}
