@@ -34,7 +34,15 @@ extends RefCounted
 ##    land enters, … deals 2 damage to that land's controller" — Ankh of
 ##    Mishra; "Whenever a player taps a land for mana, … deals 1 damage to
 ##    that player" — Manabarbs): no land drop, land fetch or payment that
-##    costs our last life. Its own section, at the end of this file.
+##    costs our last life. Its own section, near the end of this file.
+##  * THE SYMMETRIC PUNISHER (player report 2, 2026-11-26): a permanent
+##    whose toll falls on "that player" — the land that arrives, the land
+##    tapped, the lands left untapped, a count at each upkeep — is cast
+##    only while the next turns of it take more of THEIR life than of
+##    ours. Its own section, after the toll's.
+##  * THE IDLE LANDS (the same report): under "X damage … the number of
+##    untapped lands they controlled at the beginning of this turn" the
+##    lands are tapped before our turn begins. The last section.
 ##
 ## All of it behind [member AiProfile.forecasts_tactics], which every
 ## standard rung ships on: the gate off is the pilot as it was.
@@ -90,6 +98,11 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 		return "its upkeep ends in the whole library"
 	if stops_attacks(data) and not peace_wanted(g, pilot, null):
 		return "our attack is the bigger one"
+	if not data.triggered_abilities.is_empty() \
+			and (text.contains("damage to that") or text.contains("that player loses")):
+		var why := punisher_refusal(g, pilot, inst)
+		if why != "":
+			return why
 	return _arrival_sweep_refusal(g, pilot, inst)
 
 
@@ -213,15 +226,31 @@ static func _swept_worth(g: MtgGame, pilot, who: int, damage: int) -> float:
 # intervening "if" that counts the lands played, a shield that prevents
 # it. With no such line on the table nothing is run and nothing changes.
 #
-# THE RULE ([method AiPlayer._land_toll_refuses]): a drop that costs our
-# last life is never made; one that costs [constant TOLL_SHARE]'s part of
-# our life or more is made only for a land that unlocks a cast this turn;
-# a lighter one is the price of the land and is paid as before.
+# THE RULE ([method AiPlayer._land_toll_refuses], [method drop_refused]):
+#  1. a drop that costs our last life is never made;
+#  2. a land that unlocks a cast this turn is worth any toll short of that;
+#  3. a LIGHT toll (under [constant TOLL_SHARE]'s part of our life) is the
+#     price of the land and is paid — except for a land nothing of ours
+#     will ever use ([method land_is_idle]: the table already makes the
+#     most mana the deck's dearest card asks, and no ability wants more);
+#  4. a HEAVY toll with nothing to cast this turn is paid only while it is
+#     AFFORDABLE ([method toll_affordable]: what is left is out of burn
+#     range, [constant SAFE_LIFE], and above their whole attack) and the
+#     land is going somewhere: it is a step to a card in hand the hand's
+#     lands reach between them ([method builds_to_a_cast]), or — player
+#     report 2 — it is the second main phase and the hand is over its
+#     size, so the cleanup would discard a card anyway.
+# And at the discard itself ([method land_never_safe]) a land whose toll
+# we cannot afford, or that nothing will use, goes before any spell.
 
 ## A toll of life / TOLL_SHARE or more is a heavy one.
 const TOLL_SHARE := 4
 ## The answer for a drop that ends the game against us.
 const TOLL_LETHAL := 1000000
+## The life a paid toll must leave: one more than the era's burn spell.
+const SAFE_LIFE := 4
+## The lands a deck we cannot read is taken to want.
+const LANDS_PLENTY := 6
 
 const _TOLL_PAYERS := "(that land's controller|that player|its controller|you|each player|each opponent)"
 
@@ -424,3 +453,442 @@ static func tap_tolls(g: MtgGame, pid: int, src: Array, tap_plan: Array) -> int:
 			if (entry[0] as TriggeredAbility).matches(g, entry[1], event):
 				total += int(entry[2])
 	return total
+
+
+# ------------------------------------------------ the drop that is paid for --
+
+## The most mana a card of ours asks: the dearest card in hand and in the
+## registered list ([member AiPlayer.deck_study] — the list, never the
+## library). An X spell in hand has no top; a deck we cannot read is taken
+## to want [constant LANDS_PLENTY].
+static func land_ceiling(g: MtgGame, pilot) -> int:
+	var top := 0
+	for card in g.players[pilot.pid].hand:
+		if card.is_land():
+			continue
+		if card.data.cost.has_x:
+			return 1 << 20
+		top = maxi(top, card.data.cost.mana_value())
+	var study: AiDeckStudy = pilot.deck_study
+	if study != null:
+		for mv in range(study.curve.size() - 1, 0, -1):
+			if int(study.curve[mv]) > 0:
+				top = maxi(top, mv)
+				break
+	return top if top > 0 else LANDS_PLENTY
+
+
+## Is one more land of no use to us — the table already makes the most
+## mana any card of ours asks ([method land_ceiling]) and no ability on it
+## wants more?
+static func land_is_idle(g: MtgGame, pilot) -> bool:
+	return int(pilot._mana_reach(g, null)) >= land_ceiling(g, pilot) \
+		and not pilot._has_ability_wanting_mana(g)
+
+
+## Can we afford a toll of [param cost]: is what it leaves out of burn
+## range ([constant SAFE_LIFE]) and above everything they could attack
+## with?
+static func toll_affordable(g: MtgGame, pilot, cost: int) -> bool:
+	var left := int(g.players[pilot.pid].life) - cost
+	return left >= SAFE_LIFE and left > _attack_power(g, g.opponent_of(pilot.pid), null)
+
+
+## Is a land a step to a card in hand: one the table cannot pay for yet,
+## that the lands in hand reach between them, at a toll of [param cost] a
+## land we can afford for every one of those lands?
+static func builds_to_a_cast(g: MtgGame, pilot, cost: int) -> bool:
+	var me = g.players[pilot.pid]
+	var lands := 0
+	for card in me.hand:
+		if card.is_land():
+			lands += 1
+	var reach := int(pilot._mana_reach(g, null))
+	for card in me.hand:
+		if card.is_land() or card.data.cost.has_x:
+			continue
+		var gap: int = card.data.cost.mana_value() - reach
+		if gap >= 1 and gap <= lands and toll_affordable(g, pilot, cost * gap):
+			return true
+	return false
+
+
+## THE RULE's points 2 to 4 (see the section's head): is playing [param
+## land] refused at a toll of [param cost], which is not our last life?
+static func drop_refused(g: MtgGame, pilot, land: CardInstance, cost: int) -> bool:
+	var me = g.players[pilot.pid]
+	if not land.data.enters_tapped \
+			and pilot._land_unlocks_a_cast(g, pilot._mana_sources(g), land):
+		return false
+	if cost * TOLL_SHARE < int(me.life):
+		return land_is_idle(g, pilot)
+	if not toll_affordable(g, pilot, cost) or land_is_idle(g, pilot):
+		return true
+	if builds_to_a_cast(g, pilot, cost):
+		return false
+	# The cleanup would take a card anyway: the land is the better loss.
+	return not (g.current_step() == Mtg.Step.MAIN2 and me.hand.size() > me.max_hand_size)
+
+
+## At a discard: is [param land], in our hand, one we will not play — an
+## arrival toll on the table we cannot afford, or a land nothing of ours
+## will use while it costs life? Such a land goes before any spell
+## ([method AiPlayer.answer_discard]).
+static func land_never_safe(g: MtgGame, pilot, land: CardInstance) -> bool:
+	if not pilot.profile.forecasts_tactics:
+		return false
+	var toll := arrival_tolls(g, pilot.pid, land, false)
+	if toll <= 0:
+		return false
+	return not toll_affordable(g, pilot, toll) or land_is_idle(g, pilot)
+
+
+# ================================================= the symmetric punisher --
+#
+# PLAYER REPORT 2, 2026-11-26: "It still casts its own Ankh of Mishra
+# without counting the cost." A permanent whose trigger charges "that
+# player" — whoever the event is about — is a card that hurts both seats,
+# and it is worth a card only while it hurts THEM more. Four printed
+# shapes are read, none by name, artifacts and enchantments only (a
+# creature brings a body the toll is not the whole of):
+#
+#   arrival  "Whenever a land enters, … deals N damage to that land's
+#            controller"                                  (Ankh of Mishra)
+#   tap      "Whenever a player taps a land for mana, … deals N damage to
+#            that player" — the line's own condition asked of each land
+#            (Manabarbs; "taps an Island", Citadel of Pain's neighbours)
+#   flat     "At the beginning of each player's upkeep, … deals N damage
+#            to that player" / "that player loses N life"  (Copper Tablet)
+#   count    "… each player's upkeep, … damage to that player equal to the
+#            number of <things> they control": Swamps, artifacts, nonbasic
+#            lands (Karma, Ancient Runes, Primal Order), and the untapped
+#            lands of Power Surge.
+#
+# THE ESTIMATE — the toll each seat is expected to pay over the next
+# [constant PUNISH_TURNS] turns of its own, from public things and our own
+# hand and list only:
+#
+#   lands still to play   ours: the lands in hand plus [constant
+#       PUNISH_TURNS] draws at the registered list's land share, no more
+#       than one a turn and no more than we still WANT ([method
+#       land_ceiling] less the mana the table makes — a deck of one- to
+#       three-drops stops at three lands and its own Ankh then costs it
+#       nothing). Theirs: every card in their hand and every draw is a
+#       land [constant LAND_SHARE] of the time, one a turn, up to
+#       [constant LANDS_PLENTY] on the table.
+#   mana still to spend   ours: the mana values in hand plus [constant
+#       UNSEEN_MANA] a draw; theirs: [constant UNSEEN_MANA] a card in hand
+#       and a draw. Lands tapped = that, less what the nonland sources
+#       make, no more than the lands allow; lands left idle = the lands
+#       less that. (With mana burn off our own idle lands cost nothing:
+#       they are tapped before our turn, [method idle_dump].)
+#   counts                as they stand now, every turn.
+#
+# THE VERDICT ([method punisher_refusal]): each toll is taken as a share
+# of the life it is taken from, and that life is first cut by one attack
+# of the other side's creatures — so the beatdown's punisher is the better
+# one. Not cast when it would charge them nothing, or when our share is
+# more than theirs by over [constant PUNISH_MARGIN]; a tie is cast, the
+# card is in the deck to be played.
+
+## The turns of each seat a punisher is priced over.
+const PUNISH_TURNS := 3
+## How much more of our life than of theirs the toll may take.
+const PUNISH_MARGIN := 0.1
+## The share of unseen cards that are lands.
+const LAND_SHARE := 0.4
+## The mana an unseen card asks: a land four times in ten, about two else.
+const UNSEEN_MANA := 1.2
+
+static var _punisher_count: RegEx = null
+static var _punishers: Dictionary = {}   # card name -> [[kind, amount, word, trigger index]]
+
+
+## The punisher lines of [param data], `[kind, amount, counted word,
+## trigger index]` each — kind "arrival", "tap", "flat" or "count". Cached
+## by card name; numbers and words only.
+static func punisher_lines(data: CardData) -> Array:
+	_toll_lock.lock()
+	var known: Variant = _punishers.get(data.card_name)
+	_toll_lock.unlock()
+	if known != null:
+		return known
+	var out: Array = []
+	if not data.is_creature():
+		for index in data.triggered_abilities.size():
+			var trig: TriggeredAbility = data.triggered_abilities[index]
+			if trig.is_mana_trigger or trig.text.is_empty():
+				continue
+			var lower := trig.text.to_lower()
+			var toll := life_toll_of_line(trig.text)
+			var actor: bool = not toll.is_empty() and String(toll["whom"]) == "actor"
+			if trig.listens(Mtg.EventType.ENTERS_BATTLEFIELD):
+				if actor and lower.contains("whenever a land enters"):
+					out.append(["arrival", int(toll["amount"]), "", index])
+			elif trig.listens(Mtg.EventType.TAPPED_FOR_MANA):
+				if actor:
+					out.append(["tap", int(toll["amount"]), "", index])
+			elif trig.listens(Mtg.EventType.UPKEEP_START) \
+					and lower.contains("each player's upkeep"):
+				if actor:
+					out.append(["flat", int(toll["amount"]), "", index])
+				elif lower.contains("damage to that player"):
+					_toll_lock.lock()
+					if _punisher_count == null:
+						_punisher_count = RegEx.create_from_string(
+							"the number of ([a-z ]+?) they control")
+					var found := _punisher_count.search(lower)
+					_toll_lock.unlock()
+					if found != null:
+						out.append(["count", 1, found.get_string(1), index])
+	_toll_lock.lock()
+	_punishers[data.card_name] = out
+	_toll_lock.unlock()
+	return out
+
+
+## Why [param inst], a permanent card in the pilot's hand, is not cast for
+## the toll it would put on both seats — "" for a card with no punisher
+## line, a line this cannot count, or a toll that is theirs more than ours.
+static func punisher_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
+	var lines := punisher_lines(inst.data)
+	if lines.is_empty():
+		return ""
+	var us: int = pilot.pid
+	var them := g.opponent_of(us)
+	var ours := 0.0
+	var theirs := 0.0
+	for line in lines:
+		var trig: TriggeredAbility = inst.data.triggered_abilities[int(line[3])]
+		var mine := _punisher_toll(g, pilot, inst, trig, line, us)
+		var yours := _punisher_toll(g, pilot, inst, trig, line, them)
+		if mine < 0.0 or yours < 0.0:
+			return ""   # a count this does not know: the card as it was
+		ours += mine
+		theirs += yours
+	if theirs <= 0.0:
+		return "its toll would charge them nothing"
+	var our_life := maxf(float(g.players[us].life) - _attack_power(g, them, null), 1.0)
+	var their_life := maxf(float(g.players[them].life) - _attack_power(g, us, null), 1.0)
+	if minf(ours, our_life) / our_life > minf(theirs, their_life) / their_life + PUNISH_MARGIN:
+		return "its toll would take more of our life than of theirs"
+	return ""
+
+
+## What one punisher line is expected to take from [param who] over
+## [constant PUNISH_TURNS] of its turns; negative for a count unknown here.
+static func _punisher_toll(g: MtgGame, pilot, inst: CardInstance, trig: TriggeredAbility,
+		line: Array, who: int) -> float:
+	var amount := float(int(line[1]))
+	var ours: bool = who == pilot.pid
+	var turns := float(PUNISH_TURNS)
+	match String(line[0]):
+		"arrival":
+			return amount * _lands_to_come(g, pilot, who)
+		"flat":
+			if trig.condition.is_valid() and not trig.condition.call(g, inst,
+					GameEvent.new(Mtg.EventType.UPKEEP_START, {"player": who})):
+				return 0.0
+			return amount * turns
+		"tap":
+			var lands := 0
+			for land in g.players[who].battlefield:
+				if not land.is_land() or land.phased_out:
+					continue
+				if not trig.condition.is_valid() or trig.condition.call(g, inst,
+						GameEvent.new(Mtg.EventType.TAPPED_FOR_MANA, {"instance": land,
+						"controller": who, "player": who, "color": 0, "colors": [0]})):
+					lands += 1
+			var asked := _mana_to_spend(g, pilot, inst, who) - _free_mana(g, who) * turns
+			return amount * clampf(asked, 0.0, float(lands) * turns)
+	var word := String(line[2])
+	if word == "untapped lands":
+		# Our own idle lands are tapped away where that is free.
+		if ours and not g.rules.mana_burn and pilot.profile.holds_instants:
+			return 0.0
+		var lands := 0
+		for land in g.players[who].battlefield:
+			if land.is_land() and not land.phased_out:
+				lands += 1
+		return maxf(float(lands) * turns - _mana_to_spend(g, pilot, inst, who), 0.0)
+	var kind := word if Mtg.BASIC_LAND_COLORS.has(word) else word.trim_suffix("s")
+	if word != "artifacts" and word != "nonbasic lands" \
+			and not Mtg.BASIC_LAND_COLORS.has(kind):
+		return -1.0
+	var count := 0
+	for perm in g.players[who].battlefield:
+		if perm.phased_out:
+			continue
+		if word == "artifacts":
+			if perm.is_type(Mtg.CardType.ARTIFACT):
+				count += 1
+		elif not perm.is_land():
+			continue
+		elif word == "nonbasic lands":
+			if not DeckFormat.is_basic(perm.data.card_name):
+				count += 1
+		elif perm.has_subtype(kind):
+			count += 1
+	return float(count) * turns
+
+
+## The lands [param who] is expected to play over the horizon (the
+## section's head, "lands still to play").
+static func _lands_to_come(g: MtgGame, pilot, who: int) -> float:
+	var turns := float(PUNISH_TURNS)
+	var reach := 0
+	for perm in g.players[who].battlefield:
+		if not perm.phased_out:
+			reach += pilot._mana_per_tap(perm.cur_mana_abilities)
+	var player = g.players[who]
+	if who != pilot.pid:
+		return clampf(float(player.hand.size() + PUNISH_TURNS) * LAND_SHARE, 0.0,
+			minf(turns, float(maxi(LANDS_PLENTY - reach, 0))))
+	var held := 0
+	for card in player.hand:
+		if card.is_land():
+			held += 1
+	var share := LAND_SHARE
+	var study: AiDeckStudy = pilot.deck_study
+	if study != null and not player.deck_names.is_empty():
+		share = float(study.land_count) / float(player.deck_names.size())
+	return clampf(float(held) + turns * share, 0.0,
+		minf(turns, float(maxi(land_ceiling(g, pilot) - reach, 0))))
+
+
+## The mana [param who] is expected to want over the horizon ("mana still
+## to spend"); [param skip] is the card being judged, not counted.
+static func _mana_to_spend(g: MtgGame, pilot, skip: CardInstance, who: int) -> float:
+	var player = g.players[who]
+	if who != pilot.pid:
+		return float(player.hand.size() + PUNISH_TURNS) * UNSEEN_MANA
+	var total := float(PUNISH_TURNS) * UNSEEN_MANA
+	for card in player.hand:
+		if card != skip and not card.is_land():
+			total += float(card.data.cost.mana_value())
+	return total
+
+
+## The mana [param who]'s nonland permanents make a turn.
+static func _free_mana(g: MtgGame, who: int) -> float:
+	var made := 0
+	for perm in g.players[who].battlefield:
+		if perm.is_land() or perm.phased_out:
+			continue
+		var best := 0
+		for ability in perm.cur_mana_abilities:
+			var units := 0
+			for pair in ability.produces:
+				units += int(pair[1])
+			best = maxi(best, units)
+		made += best
+	return float(made)
+
+
+# ========================================================= the idle lands --
+#
+# PLAYER REPORT 2, 2026-11-26: "It does not read Power Surge." — "At the
+# beginning of each player's upkeep, this enchantment deals X damage to
+# that player, where X is the number of untapped lands they controlled at
+# the beginning of this turn." The engine counts as the turn BEGINS, before
+# the untap step ([method MtgGame._take_untap_census]), so a land is safe
+# if it was tapped at any time since our last untap: in our own turn or in
+# theirs.
+#
+# THE ARITHMETIC, PER RULE SET. A land tapped for mana nobody spends:
+#   mana burn off ("Modern rules")      the pool empties, nothing is lost:
+#       one damage saved a land. So every land still untapped at THEIR end
+#       step — the last moment, with every instant and ability already
+#       offered the mana — is tapped ([method idle_dump]).
+#   mana burn on ("Modern rules, mana burn on", the default; "1997 — Fifth
+#       Edition")   the mana burns for one life, now, where the surge
+#       would have dealt one damage at our upkeep — the same point, sooner
+#       and unpreventable. Never done. What helps there is SPENDING: a
+#       cast is worth the surge it saves on top of its own worth
+#       ([method idle_relief], added by [method AiPlayer._cast_value]).
+# Nothing is read with no such line on the table.
+
+
+## The damage a land of [param pid]'s left untapped as its turn begins
+## costs it: one for every "number of untapped lands" upkeep line on the
+## table whose condition names [param pid]'s upkeep. 0 with none.
+static func idle_land_toll(g: MtgGame, pid: int) -> int:
+	if not g.has_trigger_listener(Mtg.EventType.UPKEEP_START):
+		return 0
+	var total := 0
+	for inst in g.all_battlefield():
+		if inst.phased_out:
+			continue
+		for trig in inst.cur_triggered_abilities:
+			if not trig.listens(Mtg.EventType.UPKEEP_START) \
+					or not trig.text.contains("number of untapped lands") \
+					or not trig.text.contains("damage to that player"):
+				continue
+			if trig.condition.is_valid() and not trig.condition.call(g, inst,
+					GameEvent.new(Mtg.EventType.UPKEEP_START, {"player": pid})):
+				continue
+			total += 1
+	return total
+
+
+## What casting [param inst] saves us at our next upkeep under such a
+## line, where idle lands cannot simply be tapped away: the lands its cost
+## taps, at the reaper's rate for a point of our life. 0.0 otherwise.
+static func idle_relief(g: MtgGame, pilot, inst: CardInstance) -> float:
+	if not pilot.profile.forecasts_tactics \
+			or not (g.rules.mana_burn or not pilot.profile.holds_instants):
+		return 0.0
+	var pid: int = pilot.pid
+	var toll := idle_land_toll(g, pid)
+	if toll <= 0:
+		return 0.0
+	var open := 0
+	for land in g.players[pid].battlefield:
+		if land.is_land() and not land.tapped and not land.phased_out:
+			open += 1
+	var spent := open if inst.data.cost.has_x else mini(open, inst.data.cost.mana_value())
+	return float(toll * spent) * float(pilot._life_price(g.players[pid].life))
+
+
+## Their end step, mana burn off, such a line on the table: tap every
+## untapped land of ours that taps for nothing — no pain of its own, no
+## toll on the tap, nothing that keeps it from untapping. The line said,
+## or "" when there is nothing to do.
+static func idle_dump(g: MtgGame, pilot) -> String:
+	if not pilot.profile.forecasts_tactics or g.rules.mana_burn:
+		return ""
+	var pid: int = pilot.pid
+	if g.active_player == pid or not g.stack.is_empty() \
+			or idle_land_toll(g, pid) <= 0 or _untap_is_held(g, pid):
+		return ""
+	var src: Array = pilot._mana_sources(g)
+	var tapped := 0
+	for row in src:
+		var land: CardInstance = row[0]
+		if land == null or not land.is_land() or land.tapped:
+			continue
+		if int(row[4]) != 0 or int(row[6]) > 0:
+			continue   # stays tapped, hurts, or is spent by the tap
+		if tap_tolls(g, pid, src, [ManaPlanner.step_of(row)]) > 0:
+			continue
+		if g.tap_for_mana(pid, land, int(row[1]), int(row[2])) == "":
+			tapped += 1
+	if tapped <= 0:
+		return ""
+	return "tapped %d idle land%s" % [tapped, "" if tapped == 1 else "s"]
+
+
+## Could a land tapped now stay tapped past our untap step — a skipped
+## step, or any permanent whose text holds untapping back? Then the lands
+## are left alone.
+static func _untap_is_held(g: MtgGame, pid: int) -> bool:
+	var me = g.players[pid]
+	if me.skips_untap_step or me.skip_untap_steps > 0 or not g.untap_kind_choices.is_empty():
+		return true
+	for inst in g.all_battlefield():
+		var text: String = inst.data.oracle_text
+		if text.contains("untap") and (text.contains("can't untap") \
+				or text.contains("don't untap") or text.contains("doesn't untap") \
+				or text.contains("untap step")):
+			return true
+	return false

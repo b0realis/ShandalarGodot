@@ -918,17 +918,16 @@ func _try_play_land(game: MtgGame) -> bool:
 ## ([constant OWN_GOAL.TOLL_SHARE]) is made only for a land that unlocks a
 ## cast this turn ([method _land_unlocks_a_cast]; a land that enters tapped
 ## unlocks none); a lighter toll is the price of the land and is paid.
+## Player report 2 of the same day added the affordable step to a cast in
+## hand, the drop made rather than a discard at the cleanup, and the land
+## nothing will use ([method OWN_GOAL.drop_refused], the rule in full).
 func _land_toll_refuses(game: MtgGame, land: CardInstance) -> bool:
 	var cost: int = OWN_GOAL.land_drop_cost(game, self, land)
 	if cost <= 0:
 		return false
-	var life := game.players[pid].life
-	if cost >= life:
+	if cost >= game.players[pid].life:
 		return true
-	if cost * OWN_GOAL.TOLL_SHARE < life:
-		return false
-	return land.data.enters_tapped \
-		or not _land_unlocks_a_cast(game, _mana_sources(game), land)
+	return OWN_GOAL.drop_refused(game, self, land, cost)
 
 
 ## THE LAND THAT EATS ANOTHER (Pack 9 bug pass, 2026-10-06, [member
@@ -1256,6 +1255,8 @@ func _try_cast_best(game: MtgGame) -> String:
 			else _plan_spell_choice(game, inst, max_x)   # {} = wait
 		if sized.is_empty():
 			continue
+		if SPELL_TIMING.sized_refusal(game, self, inst, sized) != "":
+			continue   # an X too small, a cast that changes nothing (spell_timing.gd)
 		var mode: int = sized["mode"]
 		intent = _mode_intent(inst.data, mode)
 		var x: int = sized["x"]
@@ -2267,6 +2268,12 @@ func _cast_gate(game: MtgGame, inst: CardInstance) -> String:
 			return why
 	# THE OWN GOAL (campaign 2026-11-26): a card whose own text loses us
 	# the game or our own board in this position (own_goal.gd).
+	var untimely: String = SPELL_TIMING.cast_refusal(game, self, inst)   # no combat for a combat spell
+	if untimely != "":
+		return untimely
+	var fleeting: String = COMBAT_READS.cast_refusal(game, self, inst)   # gone at end of turn, and no attack for it
+	if fleeting != "":
+		return fleeting
 	return OWN_GOAL.cast_refusal(game, self, inst)
 
 
@@ -2882,6 +2889,8 @@ const TEMPEST_SPELLS := preload("res://engine/ai/tempest_spells.gd")
 const URZA_SPELLS := preload("res://engine/ai/urza_spells.gd")
 const CARD_COMBOS := preload("res://engine/ai/card_combos.gd")
 const OWN_GOAL := preload("res://engine/ai/own_goal.gd")
+const SPELL_TIMING := preload("res://engine/ai/spell_timing.gd")
+const COMBAT_READS := preload("res://engine/ai/combat_reads.gd")
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
@@ -5435,6 +5444,9 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 	# no such permanent on the table, which is every board this pilot
 	# played before the knob existed.
 	value += _vise_relief(game, inst)
+	# ...and the lands it taps are lands a Power Surge does not count
+	# (player report 2, 2026-11-26; own_goal.gd, "the idle lands").
+	value += OWN_GOAL.idle_relief(game, self, inst)
 	var intent: EffectIntent = null
 	for t in targets:
 		if t is TargetRef and not t.is_player:
@@ -7104,6 +7116,11 @@ func _respond_action(game: MtgGame) -> String:
 	var urza := URZA_SPELLS.respond(game, self)
 	if urza != "":
 		return urza
+	# THE COMBAT SPELL IN ITS COMBAT (player report 2026-11-26,
+	# spell_timing.gd `respond`): "each attacking creature" once they attack.
+	var timed: String = SPELL_TIMING.respond(game, self)
+	if timed != "":
+		return timed
 	var expansion := _try_activate(game, Moment.RESPONSE)
 	if expansion != "": return expansion
 	if profile.uses_tactical_effects:
@@ -7190,7 +7207,12 @@ func _end_of_their_turn(game: MtgGame) -> String:
 	var diamond := MIRAGE_TACTICS.lion_eye_action(game, self, Moment.SINK)
 	if diamond != "":
 		return diamond
-	return _try_activate(game, Moment.SINK)
+	var sunk := _try_activate(game, Moment.SINK)
+	if sunk != "":
+		return sunk
+	# Lands a Power Surge would count at our untap, tapped for nothing
+	# where that is free (player report 2, 2026-11-26; own_goal.gd).
+	return OWN_GOAL.idle_dump(game, self)
 
 
 # ==================================================== the window caster --
@@ -11780,7 +11802,8 @@ static func _must_attack(inst: CardInstance) -> bool:
 ## [method _must_attack] asks this instead, except the refusal-repair rung
 ## of [method _declare_attacks], which is about what the ENGINE demands.
 func _conscripted(game: MtgGame, inst: CardInstance) -> bool:
-	return _must_attack(inst) or _attacks_or_dies(game, inst)
+	return _must_attack(inst) or _attacks_or_dies(game, inst) \
+		or (profile.forecasts_tactics and COMBAT_READS.sent_regardless(game, self, inst))
 
 
 ## Is [param inst] enchanted by an aura that destroys it if it does not
@@ -12230,6 +12253,12 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		# home to block with a body that would not be there.
 		search.a_free[i] = 0 if (profile.animates_to_attack
 			and _creature_until_end_of_turn(game, inst)) else 1
+		# GONE AT END OF TURN ANYWAY (player report 2026-11-26,
+		# combat_reads.gd): no blocker on their turn, and — sacrificed —
+		# worth nothing to lose.
+		if profile.forecasts_tactics and COMBAT_READS.fleeting(game, inst) != COMBAT_READS.STAYS:
+			search.a_free[i] = 0
+			if COMBAT_READS.worthless_tomorrow(game, inst): search.a_val[i] = 0.0
 		search.a_vigilant[i] = 1 if inst.has_keyword(Mtg.Keyword.VIGILANCE) else 0
 		# Pack 10 E6 (reads_gaze): a trampler whose damage THEY divide
 		# (Defensive Formation) spills nothing — they keep it on the gang.
@@ -12272,6 +12301,8 @@ func _build_combat_model(game: MtgGame, mine: Array[CardInstance],
 		var inst := theirs[j]
 		search.d_pow[j] = maxi(inst.cur_power, 0)
 		search.d_val[j] = AiContextValue.of(game, inst, profile)
+		if profile.forecasts_tactics and COMBAT_READS.worthless_tomorrow(game, inst):
+			search.d_val[j] = 0.0   # killing it gains nothing: it is sacrificed anyway
 		search.d_free[j] = 0 if (inst.tapped or inst.phased_out) else 1
 		search.d_can_attack[j] = 1 if _could_attack_next_turn(game, inst) else 0
 		search.d_trample[j] = 1 if inst.has_keyword(Mtg.Keyword.TRAMPLE) \
@@ -12977,8 +13008,9 @@ func _block_choice(game: MtgGame, attackers: Array[CardInstance],
 	var through := _damage_after_value_blocks(game, attackers, free, shares)
 	var desperate: bool = me.life - through <= profile.chump_threshold
 	var lethal_swing := through >= me.life
-	return _plan_blocks(game, attackers, free, desperate, used, lethal_swing,
-		shares)
+	return COMBAT_READS.hold_the_line(game, self, attackers, free,
+		_plan_blocks(game, attackers, free, desperate, used, lethal_swing, shares),
+		used, shares)   # a trampler's spill, when the swing is lethal
 
 
 ## The block plan the tier ladder makes for these attackers: blocker id ->
@@ -13445,6 +13477,8 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 	if legal.is_empty():
 		return []
 	var attacker_value := Evaluator.permanent_value(attacker, profile)
+	if profile.forecasts_tactics and COMBAT_READS.worthless_tomorrow(game, attacker):
+		attacker_value = 0.0   # sacrificed at end of turn anyway (combat_reads.gd)
 	var tramples := attacker.has_keyword(Mtg.Keyword.TRAMPLE)
 	# THE SIZE IT WILL BE ONCE BLOCKED (Pack 9 bug pass, 2026-10-06,
 	# forecasts_tactics): Spined Sliver's +1/+1 per blocker counts from the
@@ -15927,6 +15961,10 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 		if game.not_for_ante_refusal(inst) != "":
 			return -1.0
 		var piece := CARD_COMBOS.keep_value(game, self, inst) if keeps else 0.0
+		# A land we will not play into the toll on the table goes first
+		# (player report 2, 2026-11-26; own_goal.gd).
+		if p_pid == pid and inst.is_land() and OWN_GOAL.land_never_safe(game, self, inst):
+			return -0.5
 		if keep_lands and inst.is_land():
 			return 5.0   # above any bear, below any angel
 		if reach >= 0:

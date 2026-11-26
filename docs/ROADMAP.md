@@ -22198,6 +22198,45 @@ player's four reports, the owner: "fix all and build a picker".
   keeps from trades (`CardValue.KEPT_BACK_1997`); Embark's "All cards
   offered by traders" lifts it. No change.
 
+## 2026-11-26 — Version 0.70.13
+
+Version 0.70.13 (Android version code 70013). Its notes are
+`docs/releases/0.70.13.md`. LAN stays protocol 32; saves stay v9. A
+player's second report, the computer's play; the owner: "examine all in
+detail and fix", and the three items 0.70.12 left. Every reading is of
+the card's lines or a forecast under the search journal, behind
+`AiProfile.forecasts_tactics`; no card is named.
+
+- **Spell timing (`SpellTiming`):** a spell that acts on attacking or
+  blocking creatures is held outside combat and cast in the combat when
+  the board ends about a card better; a spell over a set of permanents
+  waits until what the sides lose nets about a card; a spell whose
+  forecast changes nothing is held; a scaling X is held below a floor (4
+  for the pilot's own life, 2 otherwise) unless it wins, saves, or the
+  hand is over seven. Hurkyl's Recall at a player with no artifacts did
+  not reproduce (the 2026-11-06 fix holds); at a lone Sol Ring it did.
+- **Combat (`CombatReads`):** a creature gone at the end step attacks
+  whenever it can, is priced at nothing for both seats, and is cast only
+  before combat, with haste, not into a blocker that stops it cold. The
+  block ladder (Apprentice, Magician, and the fallback of the rungs
+  above) soaks a lethal trampler with the bodies that keep the pilot
+  alive. Trample-over, gang blocks and damage assignment were right on
+  the Sorcerer and the Wizard.
+- **Punishers (`OwnGoal`):** a symmetric punisher is cast only when its
+  expected toll over three turns takes no larger share of the pilot's
+  life than of the other side's; under Power Surge spare lands are tapped
+  at the other player's end step where mana burn is off, and a cast is
+  worth more per land it taps where it is on; with more than seven cards
+  an affordable land toll is paid before a card is discarded, and a land
+  never safe to play is discarded first.
+- **Left:** targeted tricks aimed at the wrong side (Great Defender,
+  Blood Lust and others), Simulacrum and Reverse Polarity with no damage
+  taken (an old test expects the cast), a huge X of life at 20, Winter
+  Orb and Stasis-style locks, Storm World, Ivory Tower, Viseling, Iron
+  Maiden; end-step losses scheduled as callables (Waylay, Shallow Grave,
+  Corpse Dance); the ladder's lethal push against a gang block on a
+  trampler.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

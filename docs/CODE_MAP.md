@@ -459,6 +459,27 @@ Version 0.70.11, Android version code 70011; `docs/releases/0.70.11.md`,
 - `decks/community/atog_aggro_arketamineesketamine_2026.deck`.
 - Tests: `tests/**/test_c1127_*.gd`.
 
+## 0.70.13 (2026-11-26) — the computer's play, a player's second report
+
+- `engine/ai/spell_timing.gd` (`SpellTiming`): when a non-permanent spell
+  is worth its card — combat-only spells held until a combat, a forecast
+  of spells over a set of permanents and of spells that would change
+  nothing, a floor under a scaling X; hooks in `ai_player.gd`
+  `_cast_gate`, `_try_cast_best` (`sized_refusal`), `_respond_action`
+  (`respond`).
+- `engine/ai/combat_reads.gd` (`CombatReads`): creatures gone at the end
+  step (`fleeting`; they attack, their death costs nothing, cast only
+  before combat: `cast_refusal`), and `hold_the_line`, the block ladder's
+  soak against a lethal trampler; hooks in `_conscripted`,
+  `_build_combat_model`, `_block_choice`, `_best_block_for`, `_cast_gate`.
+- `engine/ai/own_goal.gd`: `punisher_refusal` and `punisher_lines` (a
+  symmetric punisher cast only when it costs the other side the larger
+  share), `drop_refused`, `land_is_idle`, `toll_affordable`,
+  `builds_to_a_cast`, `land_never_safe`, `idle_land_toll`, `idle_relief`,
+  `idle_dump` (Power Surge); hooks in `_land_toll_refuses`,
+  `answer_discard`, `_end_of_their_turn`, `_cast_value`.
+- Tests: `tests/unit/test_c1127b_*.gd`.
+
 ## 0.70.10 (2026-11-24): the builders in an exported game
 
 Version 0.70.10, Android version code 70010; `docs/releases/0.70.10.md`.
