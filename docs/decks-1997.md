@@ -31,9 +31,9 @@ starter decks in `decks/*.deck` are untouched.
 | `decks/1997/kevin_bane/` | `Kevin Bane's decks` | **8** | same yaml, `player_decks.kevin_bane` [Tier 3] | mtg.wiki `Shandalar_Player_Decks_(Kevin_Bane)`: 8/8 agree; 7 of the 22 play decks also have a `.DCK` screenshot on files.mtg.wiki |
 | `decks/1997/other/` | `Other MicroProse decks` | **9** | same yaml, `player_decks.other` [Tier 3] | mtg.wiki `Shandalar_Player_Decks_(Other)`: 9/9 agree |
 | `decks/tournament/` | `Tournament decks` | **76** | mtg.wiki event pages (Worlds 1994 Top 4 + Other, Worlds 1995 Top 8, Worlds 1996 Standard + Classic, Worlds 1997 Standard + Extended, PT New York 1996 Standard, PT Dallas 1996 Standard, Pro Tour Collector Set, Tommi Hovi) [Tier-web]; Stephen Menendian's *Old School Magic* chapters on vintagemagic.com for PT Dallas 1996 Classic, Origins 1995, Sorcerer's Open 1995 and the four Old School community-event decks [Tier-web] — no local copy exists for any of them | 8 Pro Tour Collector Set decks also in the yaml (`pro_tour_collector_set.decks`): 6/8 agree, 2 differ (see below); Menendian's Dolan 1994, Lestrée 1994 and Weissman 1996 lists agree with the wiki card for card |
-| `decks/community/` | `Community decks` | **64** | mtg.wiki archetype pages (5) [Tier-web]; Menendian chapters 1, 2, 3, 11 (20) [Tier-web]; Abe Sargent's *Kitchen Table* #278/279/280/281/289/296 on StarCityGames, the "Modified" list of each Shandalar enemy deck (39) [Tier-web] | Sargent's "Initial" lists checked against `decks/1997/originals/` card for card; each file's `# base:` names the original it re-tunes |
+| `decks/community/` | `Community decks` | **65** | a player's own list, sent in 2026-11-26 (1) [Tier-community]; mtg.wiki archetype pages (5) [Tier-web]; Menendian chapters 1, 2, 3, 11 (20) [Tier-web]; Abe Sargent's *Kitchen Table* #278/279/280/281/289/296 on StarCityGames, the "Modified" list of each Shandalar enemy deck (39) [Tier-web] | Sargent's "Initial" lists checked against `decks/1997/originals/` card for card; each file's `# base:` names the original it re-tunes |
 | `decks/extended_community/` | `Extended community decks` | **15** | Menendian chapters 2, 3, 5, 6, 7, 9, 11, 12 (14) and mtg.wiki The Deck (Weissman's 2018 Old School version) [Tier-web] | — |
-| | | **312** | | |
+| | | **313** | | |
 
 The 22 "Play Deck" decks (Coyote Tex, Kevin Bane, Other) are player decks
 *Duels of the Planeswalkers* installed in its `Play Deck` folder but never
@@ -321,7 +321,7 @@ each odd size flagged in a `# caveat:` line).
 | `ew2016_menendian.deck` | Stephen Menendian | 2nd | Eternal Central Old School tournament at Eternal Weekend, October 2016 | 2016 | UR Aggro-Control (Old School 93/94) | [Menendian, Old School ch. 8](https://www.vintagemagic.com/blog/old-school-magic-chapter-8-2nd-place-at-eternal-weekend-2016-with-blue-red-aggro-control/) | 1 | Old School 93/94 community event, not a DCI-sanctioned tournament |
 | `ec2015_beckert.deck` | Justin Beckert | as Menendian prints it (he calls the performance "remarkable"; no placing given) | Eternal Central Old School event, 2015 | 2015 | Underworld Dreams / Winds of Change combo (Old School 93/94) | [Menendian, Old School ch. 11](https://www.vintagemagic.com/blog/old-school-magic-chapter-11-the-untold-history-of-combo-in-old-school/) | 0 | Old School 93/94 community event, not a DCI-sanctioned tournament |
 
-## `decks/community/` — Community decks (64)
+## `decks/community/` — Community decks (65)
 
 Period decks that were not event lists: the five archetype lists the
 wiki gives (The Deck 1996, Necro 1996, Sligh "Geeba", Turbo Stasis, Señor
@@ -339,6 +339,9 @@ the s30 name — Azaar, Morgane, Hydra, Kyzz'n, Sea Dragon, Tusk Guardian —
 the header says which shipped original it is). Sargent printed no
 Modified Warlock, so there is none. Where an archetype list is
 unattributed (Necro, Turbo Stasis, Stompy) the designer column says so.
+Since 2026-11-26 the group also takes decks players send in: the first is
+Atog Aggro, a player's own Shandalar deck, shipped as sent (its header's
+`# suggested by` line says who and when).
 
 | File | Deck | Designer | Year | Archetype | Source | Proxies | Notes |
 |---|---|---|---|---|---|---|---|
@@ -406,6 +409,7 @@ unattributed (Necro, Turbo Stasis, Stompy) the designer column says so.
 | `sargent_2009_sedge_beast.deck` | Sedge Beast (Sargent, 2009) | Abe Sargent | 2009 | the Shandalar enemy "Sedge Beast" deck, re-tuned within the Shandalar card pool | [Sargent, Kitchen Table #296](https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/) | 0 | re-tunes `decks/1997/originals/sedge_beast.deck` |
 | `sargent_2009_mind_stealer.deck` | Mind Stealer (Sargent, 2009) | Abe Sargent | 2009 | the Shandalar enemy "Mind Stealer" deck, re-tuned within the Shandalar card pool | [Sargent, Kitchen Table #296](https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/) | 0 | re-tunes `decks/1997/originals/mind_stealer.deck` |
 | `sargent_2009_winged_stallion.deck` | Winged Stallion (Sargent, 2009) | Abe Sargent | 2009 | the Shandalar enemy "Winged Stallion" deck, re-tuned within the Shandalar card pool | [Sargent, Kitchen Table #296](https://articles.starcitygames.com/articles/the-kitchen-table-296-shandalar-allied-multicolor-decks/) | 0 | re-tunes `decks/1997/originals/winged_stallion.deck` |
+| `atog_aggro_arketamineesketamine_2026.deck` | Atog Aggro | ArketamineEsketamine | 2026 | U/R/b Atog aggro-burn | sent in by the player, 2026-11-26 | 1 | a player's own Shandalar deck, as sent; Chaos Orb is a Pack 1 card |
 
 ## `decks/extended_community/` — Extended community decks (15)
 
@@ -656,7 +660,7 @@ Proxy-free (the gauntlet deals these): `wc1994_rosewater.deck`, `wc1994_bulmahn.
 | Woolly Spider | 1 |
 | Zur's Weirding | 1 |
 
-### Community decks: 44 distinct names, 65 deck-mentions, 16 of 64 decks affected
+### Community decks: 44 distinct names, 66 deck-mentions, 17 of 65 decks affected
 
 Proxy-free (the gauntlet deals these): `the_deck_weissman_1994_fall.deck`, `the_deck_weissman_1994_95_winter.deck`, `the_deck_weissman_1996_02.deck`, `the_deck_weissman_1996_summer.deck`, `explosion_wright_1994.deck`, `proto_zoo_edwards.deck`, `twist_of_fire_merritt_1993.deck`, `lich_baxter_1995.deck`, `turn_one_terror_hyra_1995.deck`, `sargent_2009_witch.deck`, `sargent_2009_vampire_lord.deck`, `sargent_2009_undead_knight.deck`, `sargent_2009_nether_fiend.deck`, `sargent_2009_necromancer.deck`, `sargent_2009_azaar.deck`, `sargent_2009_druid.deck`, `sargent_2009_enchantress.deck`, `sargent_2009_forest_dragon.deck`, `sargent_2009_elvish_magi.deck`, `sargent_2009_beast_master.deck`, `sargent_2009_summoner.deck`, `sargent_2009_morgane.deck`, `sargent_2009_sorceress.deck`, `sargent_2009_goblin_warlord.deck`, `sargent_2009_sorcerer.deck`, `sargent_2009_troll_shaman.deck`, `sargent_2009_hydra.deck`, `sargent_2009_war_mage.deck`, `sargent_2009_kyzzn.deck`, `sargent_2009_conjurer.deck`, `sargent_2009_seer.deck`, `sargent_2009_merfolk_shaman.deck`, `sargent_2009_sea_dragon.deck`, `sargent_2009_shapeshifter.deck`, `sargent_2009_thought_invoker.deck`, `sargent_2009_astral_visionary.deck`, `sargent_2009_priestess.deck`, `sargent_2009_cleric.deck`, `sargent_2009_paladin.deck`, `sargent_2009_crusader.deck`, `sargent_2009_arch_angel.deck`, `sargent_2009_high_priest.deck`, `sargent_2009_sainted_one.deck`, `sargent_2009_tusk_guardian.deck`, `sargent_2009_ape_lord.deck`, `sargent_2009_sedge_beast.deck`, `sargent_2009_mind_stealer.deck`, `sargent_2009_winged_stallion.deck`.
 
@@ -664,7 +668,7 @@ Proxy-free (the gauntlet deals these): `the_deck_weissman_1994_fall.deck`, `the_
 |---|---|
 | Zuran Orb | 9 |
 | Pyroblast | 4 |
-| Chaos Orb | 3 |
+| Chaos Orb | 4 |
 | Force of Will | 3 |
 | Hydroblast | 3 |
 | Gorilla Shaman | 2 |

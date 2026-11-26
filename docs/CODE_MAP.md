@@ -10360,7 +10360,7 @@ shandalar/
 │   │                          DeckStore lists both and so both are
 │   │                          loadable in the battle-setup screen. The
 │   │                          five starter decks sit at the top level;
-│   │                          the 312 ported decks below are in one
+│   │                          the 313 ported decks below are in one
 │   │                          subfolder per provenance group
 │   │                          (docs/decks-1997.md), each file declaring
 │   │                          its `# group:` heading
@@ -15759,7 +15759,7 @@ shandalar/
     │                          Ancients, 25 Duels of the Planeswalkers, the
     │                          22 "Play Deck" decks by designer) plus the
     │                          three non-MicroProse groups — 76 tournament
-    │                          lists, 64 community decks, 15 extended
+    │                          lists, 65 community decks, 15 extended
     │                          community lists, a table each with
     │                          pilot/designer, event, year, source and
     │                          proxy count: the source of every

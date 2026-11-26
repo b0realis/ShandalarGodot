@@ -160,6 +160,7 @@ decks/1997/other/witch_slayer.deck
 decks/big_green.deck
 decks/black_red_raiders.deck
 decks/blue_skies.deck
+decks/community/atog_aggro_arketamineesketamine_2026.deck
 decks/community/churning_dolan_1996.deck
 decks/community/explosion_wright_1994.deck
 decks/community/fork_recursion_chalice_1995.deck

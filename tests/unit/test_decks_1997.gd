@@ -43,10 +43,10 @@ const MICROPROSE_TOTAL := 157
 ## three non-MicroProse groups, each its own folder under `decks/`.
 const NON_MICROPROSE := {
 	"tournament": [DeckGroups.TOURNAMENT, 76, "pilot:"],
-	"community": [DeckGroups.COMMUNITY, 64, "designer:"],
+	"community": [DeckGroups.COMMUNITY, 65, "designer:"],
 	"extended_community": [DeckGroups.EXTENDED_COMMUNITY, 15, "designer:"],
 }
-const PORTED_TOTAL := 312
+const PORTED_TOTAL := 313
 ## Decks this project MADE, in `decks/variants/` under
 ## [constant DeckGroups.VARIANTS]. Counted APART from the port and
 ## deliberately: every number above is "what the sources yielded", and a
@@ -78,7 +78,7 @@ const ENEMY_GROUPS := ["originals", "ancients", "duels"]
 ## each file says so in its own header: the three MicroProse decks are the
 ## 1997 AI's, which never obeyed a four-of limit, and the two Menendian
 ## lists are 1993-94 forty-card decks from before the rule existed
-## (`# caveat:` on both). The list exists for the other 312 files —
+## (`# caveat:` on both). The list exists for the other 313 files —
 ## nothing else here may quietly gain a fifth copy, which a `14` typed for
 ## a `4` in a count column is, and which no other test in this project
 ## would see (sizes, names and proxies all still check out).
@@ -203,7 +203,7 @@ const PROXIED := {
 	},
 	"community": {
 		"Adarkar Wastes": 1, "An-Zerrin Ruins": 1, "Arcane Denial": 1,
-		"Bounty of the Hunt": 1, "Chaos Orb": 3, "Dark Banishing": 1,
+		"Bounty of the Hunt": 1, "Chaos Orb": 4, "Dark Banishing": 1,
 		"Despotic Scepter": 1, "Dwarven Lieutenant": 1, "Dwarven Miner": 1,
 		"Dwarven Ruins": 1, "Dwarven Trader": 1, "Force of Will": 3,
 		"Forgotten Lore": 1, "Fyndhorn Elves": 1, "Gorilla Shaman": 2,

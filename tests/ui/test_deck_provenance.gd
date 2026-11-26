@@ -40,7 +40,7 @@ const VICTIM := "res://decks/1997/originals/cleric.deck"
 ## + 7 Portal Second Age); this is the number the fingerprint below
 ## covers, pinned so a deck added later is covered too rather than
 ## silently skipped.
-const SHIPPED_FILES := 330
+const SHIPPED_FILES := 331
 
 var _written: Array[String] = []
 

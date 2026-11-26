@@ -22163,6 +22163,15 @@ player's report, "implement full controller support".
   bounds; portrait bound; `MpnArchive` keeps 500 recordings / 64 MB,
   Delete and Delete all; `PortableMode` cancel and stale-folder sweep.
 
+## 2026-11-26 — A player's deck among the community decks
+
+`decks/community/atog_aggro_arketamineesketamine_2026.deck`, Atog Aggro,
+a player's own Shandalar deck, shipped as sent (its header says who
+suggested it and when). The community group is 65 decks, the ported
+total 313, every `.deck` under `decks/` 331. It holds one Pack 1 card,
+Chaos Orb, so the gauntlet does not deal it without that pack. No
+version change; it goes out with the next one.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.
