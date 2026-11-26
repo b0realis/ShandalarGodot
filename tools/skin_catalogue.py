@@ -336,7 +336,10 @@ FAMILIES: list[tuple[str, str, str]] = [
      "The back of every face-down card: the library, a hidden hand."),
     ("Cards", "card_frame_",
      "The enlarged card's frame, one per colour, plus gold (multicolour), "
-     "artifact and one land frame per colour. Name, cost, text and art "
+     "artifact, one land frame per colour of mana and six land frames by "
+     "set (arn, atq, leg, drk, fem, ice) for a land that makes colourless "
+     "mana, none or any colour; a skin without those six dresses such a "
+     "land in card_frame_land_black. Name, cost, text and art "
      "are drawn on top at fixed anchors, so the layout must match the "
      "1997 frame: art window at the top, text box below."),
 

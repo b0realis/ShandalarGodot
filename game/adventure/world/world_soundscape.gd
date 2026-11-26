@@ -86,7 +86,9 @@ const STAKES_WARMED := 2
 const MEETING_PICTURES: Array[String] = ["preduel_frame", "preduel_panels", "mana_symbols",
 	"card_frame_white", "card_frame_blue", "card_frame_black", "card_frame_red", "card_frame_green",
 	"card_frame_gold", "card_frame_artifact", "card_frame_land_white", "card_frame_land_blue",
-	"card_frame_land_black", "card_frame_land_red", "card_frame_land_green"]
+	"card_frame_land_black", "card_frame_land_red", "card_frame_land_green",
+	"card_frame_land_arn", "card_frame_land_atq", "card_frame_land_leg", "card_frame_land_drk",
+	"card_frame_land_fem", "card_frame_land_ice"]
 const MEETING_SOUNDS: Array[String] = ["music_duel"]
 ## A lair's sounds, warmed as one comes near: its duel's sting and the
 ## sounds of the card it may give ([method card_key]: every kind of card,

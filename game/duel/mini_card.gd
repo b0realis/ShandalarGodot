@@ -2225,21 +2225,86 @@ static func _chosen_frame(d: CardData) -> String:
 	return CommunityCards.frame_of(d.card_name) if d.set_code == CommunityCard.SET_CODE else "auto"
 
 
+## THE SET LAND FRAMES (player report, 2026-11-26: *"Non basic lands like
+## Mishra's Factory, Strip Mine, etc, incorrectly use the Artifact
+## frame"*). The 1997 art has five land frames by the color of the mana
+## and six by EXPANSION (`Cardbk_Antiquitiesland.pic` and its fellows, the
+## same land stone around a text box of the set's own color), and its
+## `Info.csv` names each card's set in those files' words while coloring
+## every land `Grey` [1997]. So a land that makes colorless mana, none, or
+## any color wears the frame of the set that first printed it, under
+## `card_frame_land_<set code>`. The codes that have one:
+const SET_LAND_FRAMES: Array[String] = ["arn", "atq", "leg", "drk", "fem", "ice"]
+## What such a land wears when its set has no frame of its own (Homelands
+## and every later set), or the skin was built before the six were
+## imported: the land stone around the GREY box, the nearest the 1997 art
+## has to a colorless land. Never the artifact frame. `[QoL]`: the 1997
+## game had no such land to dress.
+const NEUTRAL_LAND_FRAME := "card_frame_land_black"
+const LAND_COLOR_NAMES := {Mtg.ManaColor.W: "white", Mtg.ManaColor.U: "blue",
+	Mtg.ManaColor.B: "black", Mtg.ManaColor.R: "red", Mtg.ManaColor.G: "green"}
+
+
+## The expansion whose land frame [param d] would wear — one of [constant
+## SET_LAND_FRAMES] — or "" for a land of any other set. The card NAME's
+## first printing decides ([method CardRegistry.originally_printed_in]:
+## Strip Mine is an Antiquities card kept in cards/sets/4ed/), then the
+## folder its script lives in (a pack's later printing of an Ice Age
+## land), then the set it is shown as.
+static func land_frame_set(d: CardData) -> String:
+	for code in SET_LAND_FRAMES:
+		if CardRegistry.originally_printed_in(d.card_name, code):
+			return code
+	if d.script_set in SET_LAND_FRAMES:
+		return d.script_set
+	return d.set_code if d.set_code in SET_LAND_FRAMES else ""
+
+
+## The colors of mana [param d] can make, in the order its abilities name
+## them (colorless left out), and whether the FIRST thing it makes is a
+## color: `[colors, first_is_color]`.
+static func _land_mana(d: CardData) -> Array:
+	var colors: Array[int] = []
+	var first_is_color := false
+	var first := true
+	for ability: ManaAbility in d.mana_abilities:
+		for pair: Array in ability.produces:
+			var color := int(pair[0])
+			if LAND_COLOR_NAMES.has(color):
+				if first:
+					first_is_color = true
+				if not colors.has(color):
+					colors.append(color)
+			first = false
+	return [colors, first_is_color]
+
+
+## A land's frame key. One or two colors of mana, a color first: that
+## color's land frame, as ever (a dual shows its first). Colorless mana,
+## no mana at all, or every color (City of Brass): the set's own land
+## frame when the skin has it, else the neutral one. Colorless first and a
+## color after it (a pain land, a Karoo): the set's frame when the skin
+## has it, else the color's.
+static func _land_frame_key(d: CardData) -> String:
+	var mana := _land_mana(d)
+	var colors: Array[int] = mana[0]
+	var any_color := colors.size() >= 3
+	if bool(mana[1]) and not any_color:
+		return "card_frame_land_" + LAND_COLOR_NAMES[colors[0]]
+	var origin := land_frame_set(d)
+	if origin != "" and GameSkin.texture("card_frame_land_" + origin) != null:
+		return "card_frame_land_" + origin
+	if not colors.is_empty() and not any_color:
+		return "card_frame_land_" + LAND_COLOR_NAMES[colors[0]]
+	return NEUTRAL_LAND_FRAME
+
+
 static func frame_skin_key(d: CardData) -> String:
 	var chosen := _chosen_frame(d)
 	if chosen in ["white", "blue", "black", "red", "green", "gold", "artifact"]:
 		return "card_frame_" + chosen
 	if chosen == "land" or d.is_land():
-		# Land frames come per produced color in the original; duals show
-		# their first ability's color (a faithful-enough pick).
-		if not d.mana_abilities.is_empty():
-			var color: int = d.mana_abilities[0].produces[0][0]
-			var names := {Mtg.ManaColor.W: "white", Mtg.ManaColor.U: "blue",
-				Mtg.ManaColor.B: "black", Mtg.ManaColor.R: "red",
-				Mtg.ManaColor.G: "green"}
-			if names.has(color):
-				return "card_frame_land_" + names[color]
-		return "card_frame_artifact"
+		return _land_frame_key(d)
 	var mask := d.color_mask()
 	if mask == 0:
 		return "card_frame_artifact"

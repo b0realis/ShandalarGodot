@@ -1289,6 +1289,10 @@ static func land_from_hand_option(g: MtgGame, pilot, s: CardInstance,
 		return {}
 	for card in g.players[pid].hand:
 		if card.data.is_land():
+			# Not into a toll that is our last life (player report
+			# 2026-11-26, own_goal.gd).
+			if pilot.OWN_GOAL.land_put_is_lethal(g, pilot, card):
+				continue
 			return {"value": 3.5, "targets": []}
 	return {}
 

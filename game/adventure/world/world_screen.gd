@@ -149,6 +149,10 @@ const QUICKSLOT_UNREAD := "The Quickslot could not be read."
 ## Leave or Escape in the same frame finds nothing left to close, and no
 ## pane is freed under its own click.
 const CLOSING := CONNECT_DEFERRED | CONNECT_ONE_SHOT
+## A card quest's town: the choice that opens the hero's pick of the card
+## to give ([method open_quest_card]).
+const QUEST_CARD_ACTION := "quest_card"
+const QUEST_CARD_CHOICE := "Give a card for the quest"
 ## The places whose entering pushes the creatures back (1997's sites, flag
 ## 0x10: a village, a town, a city, a castle, as a wizard holds them or
 ## not; a dungeon never). [ours] And an optional land's ports and castle as
@@ -293,6 +297,9 @@ var _trade: CardTradePane
 ## ([CardListPane]) — and the World Magic seller as a town is left
 ## ([WorldMagicPane]).
 var _card_list: CardListPane
+## The card a card quest asks for, chosen by the hero over the town's pane
+## ([QuestCardPane], [method open_quest_card]).
+var _quest_card: QuestCardPane
 var _magic_seller: WorldMagicPane
 var _city_list: CityListPane
 ## The dungeon and castle clues (F4), over the world ([CluesPane]).
@@ -1302,6 +1309,14 @@ func visit(tile: Vector2i, write := true) -> VisitPane:
 		# The creatures near the hero fall back as they enter
 		# (adventure_input.c 838–883).
 		WorldCreatures.push_back(player)
+	# A card quest's town [ours]: the card is the hero's to choose
+	# ([method open_quest_card]) — among the town's choices as long as the
+	# quest runs and the hero holds such a card.
+	var card_town := town >= 0 and String(place["kind"]) in VisitPane.KINDS and Quests.card_wanted_at(player, town)
+	var card_held := card_town and Quests.card_for_quest(player) >= 0
+	if card_held:
+		var actions: Array = place["actions"]
+		actions.insert(maxi(actions.size() - 1, 0), [QUEST_CARD_ACTION, QUEST_CARD_CHOICE, true])
 	_visit = VisitPane.new()
 	_visit.player = player
 	_visit.place = place
@@ -1338,7 +1353,74 @@ func visit(tile: Vector2i, write := true) -> VisitPane:
 			# over the town's pane, free, one to be taken.
 			open_trade(CardTrade.REWARD, town, {"trade": int(arrived["pick"]),
 				"words": " ".join(Array(arrived["lines"]))})
+	if card_held:
+		var choice := _visit.find_child("Choice_" + QUEST_CARD_ACTION, true, false) as Button
+		if choice != null:
+			choice.pressed.connect(open_quest_card.bind(town))
+		if fresh:
+			# Arrived with a card that fits: which one, asked at once.
+			open_quest_card(town)
+	elif card_town and fresh:
+		# Arrived with none: why nothing comes of it.
+		_visit.say([Quests.NO_CARD_WORDS % Quests.spell_name(int(player.quest.get("color", 1)), town)])
 	return _visit
+
+
+## THE CARD A CARD QUEST ASKS FOR, at its town [param slot] [ours; a
+## player's report and the owner, 2026-11-26]: the hero's cards that fit,
+## over the town's pane ([QuestCardPane]). One given, the quest is done as
+## 1997 did it ([method Quests.complete_at] with its name: the amulet, the
+## link, the keeper's words over the town, the journal's line); "Not now"
+## gives none — the town again, the quest under way, its choice still
+## there. Null when no card quest wants a card here or the hero holds none.
+func open_quest_card(slot: int) -> QuestCardPane:
+	if _alive(_quest_card):
+		return _quest_card
+	if player == null or not Quests.card_wanted_at(player, slot) or Quests.card_for_quest(player) < 0:
+		return null
+	_quest_card = QuestCardPane.new()
+	_quest_card.player = player
+	_quest_card.k = WorldHud.BIG if hud.big else 1.0
+	if _alive(_visit):
+		_visit.visible = false
+	add_child(_quest_card)
+	PaneStyle.centre(_quest_card)
+	_quest_card.card_read.connect(read_card)
+	_quest_card.done.connect(_close_quest_card.bind(slot, ""), CLOSING)
+	_quest_card.given.connect(func(card_name: String) -> void: _close_quest_card(slot, card_name), CLOSING)
+	_hold()
+	return _quest_card
+
+
+## The quest's card chosen ([param card_name]; "" for "Not now"): the pane
+## gone, the town's again — with the keeper's words and without the quest's
+## choice when the card was given.
+func _close_quest_card(slot: int, card_name: String) -> void:
+	if _alive(_quest_card):
+		_quest_card.queue_free()
+	_quest_card = null
+	var arrived := Quests.complete_at(player, slot, card_name) if card_name != "" else {}
+	if arrived.is_empty():
+		if _alive(_visit):
+			_visit.visible = true
+			if card_name == "" and _visit is VisitPane and Quests.card_wanted_at(player, slot):
+				_visit.say([Quests.NOT_GIVEN_WORDS % Quests.spell_name(int(player.quest.get("color", 1)), slot)])
+		_sync_rest()
+		return
+	player.log_event("quest", "Completed quest at %s" % WorldNames.site_name(world, slot), {"done": true})
+	# A deck the card was the last spell of: a playable one in use, said
+	# on the panel ([DeckRescue], [method _sync_rest]).
+	DeckRescue.rescue(player)
+	# The town's pane anew: its choices as they now stand.
+	if _alive(_visit):
+		_visit.queue_free()
+	_visit = null
+	var pane := visit(_visit_tile, false) if _visit_tile.x >= 0 else null
+	if pane != null:
+		pane.say(Array(arrived["lines"]))
+	play_sound(String(arrived.get("sound", "")))
+	hud.refresh()
+	_sync_rest()
 
 
 ## THE HERO ARRIVES IN TOWN [param slot] (`VisitTownSlot`, and
@@ -1349,7 +1431,9 @@ func visit(tile: Vector2i, write := true) -> VisitPane:
 ## visited, its cards, the seller's hint. What the quest's completion said,
 ## `{lines, sound}`, or `{}`.
 func _arrive_in_town(slot: int) -> Dictionary:
-	var arrived := Quests.complete_at(player, slot)
+	# A card quest's card is the hero's to choose ([method open_quest_card]):
+	# nothing is taken on arriving.
+	var arrived := {} if Quests.card_wanted_at(player, slot) else Quests.complete_at(player, slot)
 	var name := WorldNames.site_name(world, slot)
 	if arrived.is_empty():
 		player.log_event("visit", "Visited %s" % name)
@@ -1391,6 +1475,7 @@ func shop_cards_to_warm(slot: int) -> Array[String]:
 ## on the world ([method map_in_town]).
 func visiting() -> bool:
 	return (_alive(_visit) and _town_aside != "map") or shopping() or trading() or _alive(_card_list) \
+		or _alive(_quest_card) \
 		or _alive(_magic_seller) or _alive(_city_list) or _alive(_save_slots) or _alive(_unsaved) \
 		or _alive(_quit_ask) or _alive(_clues)
 
@@ -1482,7 +1567,7 @@ func town_on_top() -> bool:
 		return false
 	if not String(_visit.place.get("kind", "")) in VisitPane.KINDS:
 		return false
-	if shopping() or trading() or _alive(_card_list) or _alive(_magic_seller) or _alive(_city_list) \
+	if shopping() or trading() or _alive(_card_list) or _alive(_quest_card) or _alive(_magic_seller) or _alive(_city_list) \
 			or _alive(_save_slots) or _alive(_unsaved) or _alive(_quit_ask) or _alive(_clues):
 		return false
 	if building() or loading() or meeting() or _duel_held or news_shown() or on_board() or _lost:

@@ -439,6 +439,26 @@ Version 0.70.11, Android version code 70011; `docs/releases/0.70.11.md`,
   and the deletes.
 - Tests: `tests/**/test_c1126_*.gd`.
 
+## 0.70.12 (2026-11-26) — a player's four reports
+
+- `game/duel/mini_card.gd`: `frame_skin_key`'s land branch,
+  `SET_LAND_FRAMES`, `NEUTRAL_LAND_FRAME`, `land_frame_set(d)` — a land
+  never wears the artifact frame; six set land frames
+  (`card_frame_land_{arn,atq,leg,drk,fem,ice}`) in
+  `tools/import_original.py`, `game/skin_builder/skin_recipes.gd` and
+  `game/skin.gd`.
+- `engine/ai/own_goal.gd`: the toll on a routine action —
+  `life_toll_of_line`, `arrival_tolls`, `land_drop_cost`,
+  `land_put_is_lethal`, `lands_put_by`, `tap_tolls`; read by
+  `engine/ai/ai_player.gd` (`_land_toll_refuses`, `_pain_kills`,
+  `_lethal_land_put`) and `engine/ai/tempest_tactics.gd`.
+- `game/adventure/world/quest_card_pane.gd` (`QuestCardPane`): the card a
+  card quest is given, chosen by the player; `game/adventure/quests.gd`
+  `cards_for_quest`, `card_wanted_at`, `complete_at(…, give)`;
+  `game/adventure/world/world_screen.gd` `open_quest_card`.
+- `decks/community/atog_aggro_arketamineesketamine_2026.deck`.
+- Tests: `tests/**/test_c1127_*.gd`.
+
 ## 0.70.10 (2026-11-24): the builders in an exported game
 
 Version 0.70.10, Android version code 70010; `docs/releases/0.70.10.md`.

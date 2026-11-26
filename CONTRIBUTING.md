@@ -1,7 +1,7 @@
 # Contributing to Shandalar
 
 The development and contribution guide for ShandalarGodot, a GPL-3.0 remake
-of MicroProse's 1997 *Magic: The Gathering*. Checked against **0.70.11** on
+of MicroProse's 1997 *Magic: The Gathering*. Checked against **0.70.12** on
 **26 November 2026**. The version in `project.godot` is authoritative;
 published downloads can lag behind `main`.
 

@@ -22172,6 +22172,32 @@ total 313, every `.deck` under `decks/` 331. It holds one Pack 1 card,
 Chaos Orb, so the gauntlet does not deal it without that pack. No
 version change; it goes out with the next one.
 
+## 2026-11-26 — Version 0.70.12
+
+Version 0.70.12 (Android version code 70012). Its notes are
+`docs/releases/0.70.12.md`. LAN stays protocol 32; saves stay v9. A
+player's four reports, the owner: "fix all and build a picker".
+
+- **Land frames:** a land that makes colorless mana, none, or three or
+  more colors wears its set's land frame (six new skin pictures,
+  `card_frame_land_{arn,atq,leg,drk,fem,ice}`, by the card's first
+  printing), else the grey land frame; never the artifact frame. A
+  one-color land keeps its color's frame. A skin made before 0.70.12
+  lacks the six pictures and shows the grey land until it is built again.
+- **The computer and Ankh of Mishra:** `OwnGoal`'s toll on a routine
+  action. A land drop or a land fetched that would cost the last life is
+  not made; one that costs a quarter of the life or more only when the
+  land unlocks a cast this turn; a land tapped into a lethal Manabarbs is
+  not tapped. Read from the cards' lines and the real drop, no card named.
+  Left: the computer still casts its own Ankh without counting, and does
+  not read Power Surge.
+- **The card quest:** `QuestCardPane` — at the keeper's town the player
+  chooses the card given, or "Not now"; the town offers "Give a card for
+  the quest" while the quest runs; the offer says a card is given away.
+- **Serendib Efreet in trades:** as 1997 — one of the 22 cards its table
+  keeps from trades (`CardValue.KEPT_BACK_1997`); Embark's "All cards
+  offered by traders" lifts it. No change.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

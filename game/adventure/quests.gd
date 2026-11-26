@@ -76,6 +76,15 @@ extends RefCounted
 ## do (1997 took the first in its sort order, unasked); 1997's blank colour
 ## word for white is mended; the quest pane names a creature quest's reward
 ## ([method reward_line]).]
+## THE CARD IS THE HERO'S TO CHOOSE [ours; a player's report and the owner,
+## 2026-11-26: a Regrowth was taken unasked for one amulet]. On the world
+## nothing is taken on arriving ([method card_wanted_at]): the hero's cards
+## of the colour and class are shown ([method cards_for_quest]: the ones to
+## spare first, then the cheapest) and the one chosen is given ([method
+## complete_at] with its name) — or none ("Not now": the quest stays under
+## way and its clock runs; the town offers it again on every arrival and
+## among its choices). The offer says so ([constant CHOOSE_WORDS]).
+## [method complete_at] without a name still takes the first, as before.
 ##
 ## DESIGNED, NEVER USED — kept dead here (and in
 ## docs/adventure-unused-1997-features.md):
@@ -129,6 +138,11 @@ const FINE_ONE := "You are rewarded with a fine %s."
 const FINE_MANY := "You are rewarded with %d fine %s."
 ## The tier of the dragons, "the %s Dragon".
 const DRAGON_TIER := 18
+## A card quest's own words [ours]: the offer's third line, the town's
+## line when the hero arrives with no such card, and the picker's.
+const CHOOSE_WORDS := "You will give one such card of yours away. You choose which."
+const NO_CARD_WORDS := "The keeper asks for a %s. You hold none."
+const NOT_GIVEN_WORDS := "The keeper still asks for a %s."
 
 
 # ------------------------------------------------------------ the offer --
@@ -273,6 +287,7 @@ static func offer_words(player: AdventurePlayer) -> PackedStringArray:
 		CARD:
 			lines.append("Take a %s %s to the keeper of %s." % [spell_name(color, destination), way, town])
 			lines.append(("He will give you a mana link and 1 %s." if AdventureExpansions.mana_links_allowed(player.world) else "He will give you 1 %s.") % amulet_name(color))
+			lines.append(CHOOSE_WORDS)
 	return lines
 
 
@@ -315,8 +330,11 @@ static func has_quest(player: AdventurePlayer) -> bool:
 ## (`mana_link`, `reward` or ""), and for a creature's quest done at a town
 ## or a city `pick`, the town's trade: a card of it to be picked, free
 ## ([constant CardTrade.REWARD]) — or `{}` when nothing was completed (a
-## creature's quest whose creature is not beaten yet among them).
-static func complete_at(player: AdventurePlayer, slot: int) -> Dictionary:
+## creature's quest whose creature is not beaten yet among them). A card
+## quest gives the hero's card [param give] (one of [method
+## cards_for_quest]; `{}` when the hero holds no such card of the quest's
+## kind), or with no name the first found ([method card_for_quest]).
+static func complete_at(player: AdventurePlayer, slot: int, give := "") -> Dictionary:
 	if not has_quest(player) or int(player.quest["destination"]) != slot:
 		return {}
 	var world := player.world
@@ -343,7 +361,7 @@ static func complete_at(player: AdventurePlayer, slot: int) -> Dictionary:
 			player.amulets[hue] = int(player.amulets.get(hue, 0)) + 1
 			sound = "sfx_reward"
 		CARD:
-			var at := card_for_quest(player)
+			var at := card_for_quest(player, give)
 			if at < 0:
 				return {}
 			var card_name := String(player.cards[at]["card"])
@@ -414,26 +432,102 @@ static func creature_beaten(player: AdventurePlayer, row: int) -> bool:
 
 ## The card a card quest would take, as a place in the hero's cards, or −1:
 ## one of the quest's colour and class, a card no deck holds before one a
-## deck does [ours].
-static func card_for_quest(player: AdventurePlayer) -> int:
+## deck does [ours]. With [param give] only a copy of the card of that
+## name: one no deck holds, else the one in the fewest decks.
+static func card_for_quest(player: AdventurePlayer, give := "") -> int:
 	if not has_quest(player) or int(player.quest["type"]) != CARD:
 		return -1
 	var color_bit := 1 << clampi(int(player.quest.get("color", 1)), 1, 5)
 	var class_bit := card_class(int(player.quest["destination"]))
 	var in_a_deck := -1
+	var fewest := 0
 	for i in player.cards.size():
+		if not player.cards[i] is Dictionary:
+			continue
 		var entry := player.cards[i] as Dictionary
 		var card_name := String(entry.get("card", ""))
-		if not CardRegistry.has_card(card_name):
+		if not CardRegistry.has_card(card_name) or (give != "" and card_name != give):
 			continue
 		var f := CardValue.facts(CardRegistry.get_card(card_name))
 		if int(f.get("color", 0)) & color_bit == 0 or int(f.get("type", 0)) & class_bit == 0:
 			continue
-		if (entry.get("decks", []) as Array).is_empty():
+		var held := _decks_of(entry).size()
+		if held == 0:
 			return i
-		if in_a_deck < 0:
+		if in_a_deck < 0 or (give != "" and held < fewest):
 			in_a_deck = i
+			fewest = held
 	return in_a_deck
+
+
+## Whether town [param slot] is where a card quest under way wants its
+## card: the hero chooses it there ([method cards_for_quest]).
+static func card_wanted_at(player: AdventurePlayer, slot: int) -> bool:
+	return has_quest(player) and int(player.quest["type"]) == CARD and int(player.quest["destination"]) == slot
+
+
+## THE HERO'S CARDS A CARD QUEST WOULD TAKE, a row for each name: `name`,
+## `copies` owned, `at` — the copy that would go, its place in the hero's
+## cards ([method card_for_quest]) —, `decks` — the decks that copy is in
+## (0–2; empty for a spare one) —, `last` (the only copy), `price` (1997's,
+## before any town) and `rarity` (1 common … 4 special). The ones to spare
+## first: a copy no deck holds before one a deck does, then the cheapest,
+## then by name. Empty with no card quest under way or no such card.
+static func cards_for_quest(player: AdventurePlayer) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	if not has_quest(player) or int(player.quest["type"]) != CARD:
+		return rows
+	var color_bit := 1 << clampi(int(player.quest.get("color", 1)), 1, 5)
+	var class_bit := card_class(int(player.quest["destination"]))
+	var by_name := {}
+	for i in player.cards.size():
+		if not player.cards[i] is Dictionary:
+			continue
+		var entry := player.cards[i] as Dictionary
+		var card_name := String(entry.get("card", ""))
+		if by_name.has(card_name):
+			var row: Dictionary = by_name[card_name]
+			if row.is_empty():
+				continue
+			row["copies"] = int(row["copies"]) + 1
+			row["last"] = false
+			var held := _decks_of(entry)
+			if held.size() < (row["decks"] as Array).size():
+				row["at"] = i
+				row["decks"] = held
+			continue
+		# A name looked at once: one that does not fit keeps an empty row.
+		by_name[card_name] = {}
+		if not CardRegistry.has_card(card_name):
+			continue
+		var data := CardRegistry.get_card(card_name)
+		var f := CardValue.facts(data)
+		if int(f.get("color", 0)) & color_bit == 0 or int(f.get("type", 0)) & class_bit == 0:
+			continue
+		var fresh := {"name": card_name, "copies": 1, "at": i, "decks": _decks_of(entry), "last": true,
+			"price": CardValue.price_of(f), "rarity": CardValue.rarity(card_name)}
+		by_name[card_name] = fresh
+		rows.append(fresh)
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var spare_a := (a["decks"] as Array).is_empty()
+		if spare_a != (b["decks"] as Array).is_empty():
+			return spare_a
+		if int(a["price"]) != int(b["price"]):
+			return int(a["price"]) < int(b["price"])
+		return String(a["name"]) < String(b["name"]))
+	return rows
+
+
+## The decks (0–2) a card of the hero's ([param entry]) is in, in order.
+static func _decks_of(entry: Dictionary) -> Array:
+	var out: Array = []
+	var held: Variant = entry.get("decks", [])
+	if held is Array:
+		for deck: Variant in held:
+			if (deck is int or deck is float) and not out.has(int(deck)):
+				out.append(int(deck))
+	out.sort()
+	return out
 
 
 ## THE QUEST'S TIME: when the clock has reached the deadline the quest is

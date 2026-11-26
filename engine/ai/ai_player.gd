@@ -883,6 +883,10 @@ func _try_play_land(game: MtgGame) -> bool:
 			# City of Traitors of ours sacrificed for a Mountain.
 			if _drop_costs_mana(game, inst):
 				continue
+			# ...and what it costs in LIFE (player report 2026-11-26): a
+			# land played into an Ankh of Mishra at one life.
+			if _land_toll_refuses(game, inst):
+				continue
 		var score := 0.0
 		for ability in inst.data.mana_abilities:
 			for pair in ability.produces:
@@ -903,6 +907,28 @@ func _try_play_land(game: MtgGame) -> bool:
 	if _land_drop_waits(game, best):
 		return false
 	return game.play_land(pid, best) == ""
+
+
+## THE LAND THAT COSTS LIFE (player report 2026-11-26, [member
+## AiProfile.forecasts_tactics]; own_goal.gd, "the toll on a routine
+## action"): is playing [param land] refused for the life the table
+## charges for it ([method OWN_GOAL.land_drop_cost] — 0, and nothing run,
+## with no such permanent in play)? THE RULE: a drop that costs our last
+## life is never made; one that costs a quarter of our life or more
+## ([constant OWN_GOAL.TOLL_SHARE]) is made only for a land that unlocks a
+## cast this turn ([method _land_unlocks_a_cast]; a land that enters tapped
+## unlocks none); a lighter toll is the price of the land and is paid.
+func _land_toll_refuses(game: MtgGame, land: CardInstance) -> bool:
+	var cost: int = OWN_GOAL.land_drop_cost(game, self, land)
+	if cost <= 0:
+		return false
+	var life := game.players[pid].life
+	if cost >= life:
+		return true
+	if cost * OWN_GOAL.TOLL_SHARE < life:
+		return false
+	return land.data.enters_tapped \
+		or not _land_unlocks_a_cast(game, _mana_sources(game), land)
 
 
 ## THE LAND THAT EATS ANOTHER (Pack 9 bug pass, 2026-10-06, [member
@@ -13616,6 +13642,10 @@ func _pain_kills(game: MtgGame, src: Array, tap_plan: Array) -> bool:
 	if not profile.minds_pain or tap_plan.is_empty():
 		return false
 	var pain := ManaPlanner.plan_pain(src, tap_plan)
+	# ...and what the TABLE charges for each land tapped (player report
+	# 2026-11-26, own_goal.gd: Manabarbs at one life).
+	if profile.forecasts_tactics:
+		pain += OWN_GOAL.tap_tolls(game, pid, src, tap_plan)
 	return pain > 0 and pain >= game.players[pid].life
 
 
@@ -15910,6 +15940,32 @@ func answer_discard(game: MtgGame, p_pid: int, count: int) -> Array[CardInstance
 	return out
 
 
+## Is this optional pick ([param candidates], all lands of ours in hand or
+## library) a land for the BATTLEFIELD — the prompt or the asking card's
+## text says so — whose arrival would cost our last life whichever is
+## picked ([method OWN_GOAL.land_put_is_lethal])?
+func _lethal_land_put(game: MtgGame, candidates: Array[CardInstance], prompt: String,
+		source_name: String) -> bool:
+	if not profile.forecasts_tactics or candidates.is_empty():
+		return false
+	for card in candidates:
+		if not card.is_land() or card.owner_id != pid \
+				or (card.zone != Mtg.Zone.HAND and card.zone != Mtg.Zone.LIBRARY):
+			return false
+	# Cheap first: with no toll on the table nothing below is read.
+	if not OWN_GOAL.land_put_is_lethal(game, self, candidates[0]):
+		return false
+	var to_table := prompt.contains("onto the battlefield")
+	if not to_table and source_name != "" and CardRegistry.has_card(source_name):
+		to_table = CardRegistry.get_card(source_name).oracle_text.contains("onto the battlefield")
+	if not to_table:
+		return false
+	for card in candidates:
+		if not OWN_GOAL.land_put_is_lethal(game, self, card):
+			return false
+	return true
+
+
 ## Tutor targets: the most valuable candidate — unless the seat is choosing
 ## AGAINST itself ([member PlayerChoice.adverse]: which creature a Preacher
 ## takes, which body steps into the Arena) or the list came RANKED for it
@@ -15948,6 +16004,12 @@ func answer_card(game: MtgGame, p_pid: int, candidates: Array[CardInstance],
 		var steered := CARD_COMBOS.steer(game, self, candidates, asked)
 		if steered != null:
 			return steered
+	# A LAND WHOSE ARRIVAL IS OUR LAST LIFE IS NOT FETCHED (player report
+	# 2026-11-26, own_goal.gd): an optional pick of a land for the
+	# battlefield is declined while a toll on the table makes it lethal.
+	if p_pid == pid and asked != null and asked.optional and not asked.is_cost \
+			and _lethal_land_put(game, candidates, prompt, asked.source):
+		return null
 	if prompt == "Choose a Plains to save":
 		for land in candidates:
 			if land.controller_id == p_pid: return land

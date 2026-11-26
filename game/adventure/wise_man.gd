@@ -268,6 +268,10 @@ static func reminder(player: AdventurePlayer) -> String:
 		Quests.CARD:
 			if Quests.card_for_quest(player) < 0:
 				return "I see that the people of %s have asked for a %s." % [town, Quests.spell_name(color, destination)]
+			# [ours] A card of the hero's will go, and which is theirs to say.
+			quest["data"] = way
+			return "If you seek the %s, travel %s to %s. There you choose a %s of yours to give." % [
+				Quests.amulet_name(color), WorldNames.DIRECTIONS[way], town, Quests.spell_name(color, destination)]
 	quest["data"] = way
 	return "If you seek the %s, travel %s to %s." % [Quests.amulet_name(color), WorldNames.DIRECTIONS[way], town]
 

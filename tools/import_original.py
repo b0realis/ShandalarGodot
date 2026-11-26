@@ -315,6 +315,23 @@ MANIFEST: dict[str, list[str]] = {
     "card_frame_land_black": ["Cardbk_Blackland.pic"],
     "card_frame_land_red":   ["Cardbk_Redland.pic"],
     "card_frame_land_green": ["Cardbk_Greenland.pic"],
+    # THE SET LAND FRAMES (player report, 2026-11-26: *"Non basic lands
+    # like Mishra's Factory, Strip Mine, etc, incorrectly use the Artifact
+    # frame"*). The five above are a land by the colour of its mana; these
+    # six are a land by the expansion that printed it, for the land that
+    # makes colourless mana or none — the key ends in the set's code, which
+    # is how `MiniCard.frame_skin_key` asks for it. The 1997 `Info.csv`
+    # names each card's set in these files' own words (`Arabian`,
+    # `Antiquities`, `Legends`, `Dark`), and colours every land `Grey`.
+    # Fallen Empires and Ice Age have a frame and no card in the 1997
+    # game; the packs' lands wear them. Not imported, each for want of a
+    # card to wear it: `Cardbk_Special.pic` and `Cardbk_Legends.pic`.
+    "card_frame_land_arn":   ["Cardbk_Arabiannightsland.pic"],
+    "card_frame_land_atq":   ["Cardbk_Antiquitiesland.pic"],
+    "card_frame_land_leg":   ["Cardbk_Legendsland.pic"],
+    "card_frame_land_drk":   ["Cardbk_Darklandsland.pic"],
+    "card_frame_land_fem":   ["Cardbk_Fallenempiresland.pic"],
+    "card_frame_land_ice":   ["Cardbk_Iceageland.pic"],
     # ------------------------------------- THE LIFE REGISTER, BOTH FACES --
     # `Duel.hlp`, topic **Duelist's Face**: *"When the Life Register flips
     # around to show a face, one of two things is the case. Either you have
