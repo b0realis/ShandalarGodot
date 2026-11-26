@@ -276,9 +276,15 @@ class PortalPane extends VisitPane:
 ## nothing sold, its menu's way back to the world made the way on to the
 ## battle, its line saying so.
 class FinalBuilder extends AdventureBuilder:
+	## What [DeckRescue] did before this builder came up again ("" nothing).
+	var rescued := ""
+
 	func _ready() -> void:
 		super._ready()
-		_say(BUILDER_SAYS)
+		if rescued != "":
+			_say("%s %s" % [rescued, BUILDER_SAYS], true)
+		else:
+			_say(BUILDER_SAYS)
 
 	func _menu_entries() -> Array[String]:
 		return [MENU_BACK, TO_BATTLE, "Exit game"]
@@ -724,13 +730,15 @@ func ready_for_input() -> bool:
 
 ## BUILDER: the adventure's deck builder, the hero's own cards moving,
 ## nothing sold ([FinalBuilder]); no cards at all — straight on.
-func _open_builder() -> void:
+func _open_builder(rescued := "") -> void:
 	_stop_castle_tune()
 	_page.visible = false
 	if player.cards.is_empty():
 		_after_builder.call_deferred()
 		return
-	builder = FinalBuilder.new()
+	var final_builder := FinalBuilder.new()
+	final_builder.rescued = rescued
+	builder = final_builder
 	builder.name = "DeckBuilder"
 	builder.player = player
 	builder.closed.connect(_after_builder, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
@@ -751,6 +759,14 @@ func _after_builder() -> void:
 	if is_instance_valid(builder):
 		builder.queue_free()
 	builder = null
+	# Done on a deck with no spell while the hero owns one (0.70.11
+	# campaign, bugs3 #1: forty lands against Arzakon): a playable deck is
+	# the deck in use ([DeckRescue]) and the builder is up again, saying so.
+	if DeckRescue.needed(player):
+		var said := DeckRescue.rescue(player)
+		player.deck_note = ""
+		_open_builder(said)
+		return
 	_show(BATTLE)
 
 

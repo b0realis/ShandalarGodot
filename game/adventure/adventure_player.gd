@@ -376,6 +376,9 @@ var cards: Array = []
 ## The deck in use, 0–2 (0x224C4), and the colours it was last played in
 ## (0x1EA20).
 var current_deck := 0
+## What [DeckRescue] did to keep the deck in use playable, for the world to
+## say once ("" nothing); never saved.
+var deck_note := ""
 var deck_colors: Array[String] = []
 ## The three decks' names, "" for `Deck N`, and their notes — ours.
 var deck_names: Array[String] = ["", "", ""]
@@ -1131,6 +1134,9 @@ static func from_dict(data: Dictionary) -> AdventurePlayer:
 	AdventureExpansions.note_versions(player)
 	AdventureExpansions.sync_choices(player)
 	AdventureTasks.read(player, data.get("tasks"))
+	# A save whose deck in use holds no card to stake while the hero owns
+	# one (0.70.11 campaign, bugs3 #1): rescued as it is read ([DeckRescue]).
+	DeckRescue.rescue(player)
 	return player
 
 

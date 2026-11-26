@@ -123,7 +123,8 @@ func test_places_and_indices_are_held_to_the_world() -> void:
 	assert_eq(back.facing, 8)
 	assert_eq(back.world.world_magic_sites.slice(0, 3), [0, 0, town] as Array[int], "a site of the world or none")
 	assert_eq(back.last_town, -1)
-	assert_eq([back.difficulty, back.color, back.current_deck], [3, "white", 2])
+	assert_eq([back.difficulty, back.color, back.current_deck], [3, "white", 0],
+		"deck 2 is empty in this save, so the load goes back to one that plays ([DeckRescue])")
 	assert_eq(back.gold, AdventurePlayer.MOST)
 	assert_eq(back.food, 0)
 	assert_eq(back.quest_timer, AdventurePlayer.MOST)

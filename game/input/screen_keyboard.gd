@@ -122,9 +122,31 @@ static func should_be_active() -> bool:
 				and not DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD)
 
 
-## Put the stored setting into effect. Idempotent.
+## Put the stored setting into effect. Idempotent. Under `auto` the focus
+## is watched too while the pad's pointer layer is on ([method
+## pad_wants]): whether the board then shows is asked field by field.
 func apply_settings() -> void:
-	set_active(should_be_active())
+	set_active(should_be_active() or _pad_layer_on())
+
+
+## THE CONTROLLER ALONE (campaign 2026-11-26, a fallback: it changes
+## nothing for a keyboard, a mouse or a finger). Under `auto`, on a system
+## with no on-screen keyboard of its own, a field that takes the focus
+## WHILE THE PAD'S POINTER IS AWAKE — the pad clicked it — gets the board:
+## a controller has no keys to name a deck or a save with. A field clicked
+## with the mouse never does, pad plugged in or not.
+func pad_wants() -> bool:
+	if wanted() != AUTO or DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD):
+		return false
+	var layer := get_node_or_null(^"/root/PadControls")
+	return layer != null and layer.is_awake()
+
+
+func _pad_layer_on() -> bool:
+	if wanted() != AUTO or DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD):
+		return false
+	var layer := get_node_or_null(^"/root/PadControls") if is_inside_tree() else null
+	return layer != null and layer.is_active()
 
 
 ## The Options row's own setter: store, then apply — the file and the
@@ -230,7 +252,9 @@ func _unwatch(field: Control) -> void:
 
 
 func _on_focus_changed(control: Control) -> void:
-	if _typable(control):
+	# Watched for the pad alone ([method pad_wants]) a focus shows nothing:
+	# the pad's own click on the field asks for the board.
+	if _typable(control) and should_be_active():
 		show_for(control)
 	else:
 		_release()

@@ -1886,7 +1886,7 @@ func _file_box(box_name: String, mode: FileDialog.FileMode, filters: Array) -> F
 	box.name = box_name
 	box.file_mode = mode
 	box.access = FileDialog.ACCESS_FILESYSTEM
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.filters = PackedStringArray(filters)
 	if _last_folder != "" and DirAccess.dir_exists_absolute(_last_folder):
 		box.current_dir = _last_folder

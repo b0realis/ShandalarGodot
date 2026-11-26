@@ -191,7 +191,7 @@ func _site_of(kind: int, ruled: bool) -> int:
 
 
 func test_nothing_to_stake_is_the_game_over() -> void:
-	player.cards = [{"card": "Plains", "decks": [0]}, {"card": "Serra Angel", "decks": []}]
+	player.cards = [{"card": "Plains", "decks": [0]}]   # no spell owned: no rescue ([DeckRescue])
 	var dice := player.dice
 	var entry := RuledTowns.enter(player, town)
 	assert_true(bool(entry["no_ante"]), "ExitIfNoUsableDeckCards, as the town is entered")

@@ -75,6 +75,8 @@ func choice_lines(choice: Dictionary) -> Array:
 	return lines
 
 
+var _chain_items: Dictionary = {}
+
 func ingest(room: Dictionary) -> void:
 	seat = int(room.seat)
 	view = room.game
@@ -159,10 +161,17 @@ func ingest(room: Dictionary) -> void:
 		var host := find_instance(card.attached_to)
 		if host != null and host != card: host.attachments.append(card.id)
 	stack.clear()
+	# ONE OBJECT A CHAIN HANDLE (campaign 2026-11-26), as a card keeps its
+	# own ([method _face]): the Spell Chain keeps the entry of an object
+	# that stands ([method DuelScreen._rebuild_stack]).
+	var chain_items := {}
 	for i in view.stack.size():
-		var item := StackItem.new()
 		var row: Dictionary = presentation.chain[i]
 		var label: Dictionary = view.stack[i]
+		var item: StackItem = _chain_items.get(local_id(row.id))
+		if item == null: item = StackItem.new()
+		item.targets.clear()
+		chain_items[local_id(row.id)] = item
 		item.id = local_id(row.id)
 		item.kind = int(row.kind)
 		item.controller = local_seat(int(label.controller))
@@ -173,6 +182,7 @@ func ingest(room: Dictionary) -> void:
 		item.card = _face(row.face, Mtg.Zone.STACK) if not row.face.is_empty() else _unknown(item.controller, Mtg.Zone.STACK, label.name)
 		for ref in row.refs: item.targets.append(target(ref))
 		stack.append(item)
+	_chain_items = chain_items
 	combat.clear()
 	for key in faces:
 		if faces[key].attacking: combat.attackers[local_id(key)] = true

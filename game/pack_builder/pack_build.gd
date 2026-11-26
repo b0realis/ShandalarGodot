@@ -37,8 +37,18 @@ var id := ""
 var title := ""
 ## "idle", "working", "done", "failed" or "stopped".
 var state := "idle"
-## "downloading", "writing", "checking" or "tidying".
+## "preparing" (only with [member aside]), "downloading", "writing",
+## "checking" or "tidying".
 var phase := ""
+## THE CARD LIST READ ON A THREAD (campaign 2026-11-26): reading a pack's
+## recipe — its own JSON, parsed and checked — and counting what is cached
+## took 50 to 110 ms in the frame a pack began, the bar and Stop standing
+## still. With this set before [method start] (the window sets it) that
+## work is done on a [Thread] — it reads the game's own files and the
+## cache's names, nothing shared — while [method step] waits in phase
+## "preparing"; the build then goes on exactly as without it. Where no
+## thread may run it is done in place, as before.
+var aside := false
 var outcome := {}
 var fetch: PackFetch = null
 var writer: PackWriter = null
@@ -47,6 +57,8 @@ var _recipe := {}
 var _cache := ""
 var _tidy: Array = []
 var _tidy_dirs: Array = []
+var _thread: Thread = null
+var _prepared := {}
 
 
 func start(pack_id: String, on: PackBuildHost) -> void:
@@ -60,13 +72,40 @@ func start(pack_id: String, on: PackBuildHost) -> void:
 	if locked != "":
 		_end("failed", "locked", locked, true)
 		return
-	_recipe = PackRecipes.recipe(id)
+	_cache = host.cache_root().path_join(id)
+	if aside and OS.has_feature("threads") and not OS.has_feature("web"):
+		var thread := Thread.new()
+		if thread.start(PackBuild._prepare.bind(id, _cache)) == OK:
+			_thread = thread
+			phase = "preparing"
+			# There from the start, as without a thread — idle until the
+			# list is read.
+			fetch = PackFetch.new()
+			fetch.gentle = gentle
+			return
+	_begin(_prepare(id, _cache))
+
+
+## The recipe of [param pack_id] and how many of its pictures are in
+## [param cache] already: `{recipe, have}`. Run on the build's thread or
+## in place; it touches nothing of the build.
+static func _prepare(pack_id: String, cache: String) -> Dictionary:
+	var recipe := PackRecipes.recipe(pack_id)
+	var have := 0
+	if bool(recipe.get("ok", false)):
+		have = PackFetch.cached_count(recipe["jobs"], cache)
+	return {"recipe": recipe, "have": have}
+
+
+## The rest of [method start], with the recipe read.
+func _begin(prepared: Dictionary) -> void:
+	var about := PackRecipes.about(id)
+	_recipe = prepared["recipe"]
 	if not bool(_recipe.get("ok", false)):
 		_end("failed", "refused", "This build cannot make it: %s." % String(_recipe.get("why", "")))
 		return
-	_cache = host.cache_root().path_join(id)
 	var jobs: Array = _recipe["jobs"]
-	var have := PackFetch.cached_count(jobs, _cache)
+	var have := int(prepared["have"])
 	var lacking := int(about["pictures"]) - have
 	var need_mb := int(ceil(float(about["fetch_mb"]) * float(lacking) / float(maxi(int(about["pictures"]), 1)))) \
 		+ int(about["zip_mb"]) + SPARE_MB
@@ -80,7 +119,8 @@ func start(pack_id: String, on: PackBuildHost) -> void:
 	if closed != "":
 		_end("failed", "disk", closed, true)
 		return
-	fetch = PackFetch.new()
+	if fetch == null:
+		fetch = PackFetch.new()
 	fetch.transport = host.transport()
 	fetch.clock = host.now_msec
 	fetch.gentle = gentle
@@ -93,6 +133,12 @@ func step() -> bool:
 	if state != "working":
 		return false
 	match phase:
+		"preparing":
+			if not _thread.is_alive():
+				var prepared: Dictionary = _thread.wait_to_finish()
+				_thread = null
+				phase = ""
+				_begin(prepared)
 		"downloading":
 			# As many of the fetch's small steps as fit, until it can only
 			# wait: an answer that is in is acted on in the frame it came.
@@ -116,6 +162,7 @@ func step() -> bool:
 func stop() -> void:
 	if state != "working":
 		return
+	_join()
 	if fetch != null:
 		fetch.stop()
 	if writer != null:
@@ -131,6 +178,8 @@ func stop() -> void:
 ## Where it is, for the window's line: "downloading 512 of 760".
 func line() -> String:
 	match phase:
+		"preparing":
+			return "reading the card list"
 		"downloading":
 			var words := "downloading %d of %d" % [fetch.pictures_done, fetch.pictures_total]
 			var pause := fetch.pause_seconds()
@@ -238,6 +287,16 @@ func _tidy_some() -> void:
 			DirAccess.remove_absolute(folder)
 		_tidy_dirs.clear()
 		_end("done", "", "")
+
+
+## The thread reading the recipe, waited for (a tenth of a second at
+## most) and let go: a [Thread] must be joined before it goes, so a build
+## begun with [member aside] is stepped to its end or stopped ([method
+## stop]) — the window does one or the other, always.
+func _join() -> void:
+	if _thread != null:
+		_thread.wait_to_finish()
+		_thread = null
 
 
 func _close_transport() -> void:

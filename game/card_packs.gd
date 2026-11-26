@@ -279,11 +279,19 @@ static func _id_for(path: String) -> String:
 ## Re-read the configured folder immediately. An enabled id remains in
 ## Settings when its ZIP is absent or invalid, so repairing the file and
 ## pressing Rescan brings it back without making the player enable it twice.
-func rescan() -> void:
+##
+## With [param background] (campaign 2026-11-26: the Card Packs page's
+## Rescan and the end of the pack builder's job froze the window for most
+## of a second) the card pool is rebuilt on a thread, as [method
+## set_enabled_many] does it, and this returns at once: the caller shows
+## that it is working and waits for [method CardRegistry.poll]. Without it,
+## or where no thread may run, the pool is rebuilt here as before.
+func rescan(background := false) -> void:
 	if not change_refusal().is_empty(): return
 	discover()
 	_configure_registry()
-	CardRegistry.ensure_loaded()
+	if not background or not CardRegistry.load_in_background():
+		CardRegistry.ensure_loaded()
 	rescanned.emit()
 
 
@@ -740,7 +748,7 @@ func pick_pack() -> void:
 	box.title = "Choose a card pack zip"
 	box.access = FileDialog.ACCESS_FILESYSTEM
 	box.filters = PackedStringArray(["*.zip ; Card packs"])
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.size = Vector2i(760, 520)
 	box.current_dir = _skin_pack().pick_start_dir()
 	box.file_selected.connect(func(path: String) -> void:

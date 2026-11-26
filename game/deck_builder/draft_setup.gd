@@ -397,7 +397,7 @@ func _browse() -> void:
 	var picker := FileDialog.new()
 	picker.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	picker.access = FileDialog.ACCESS_FILESYSTEM
-	picker.use_native_dialog = true
+	picker.use_native_dialog = Controls.system_file_box()
 	picker.title = "Draft save folder"
 	var path := ProjectSettings.globalize_path(GamePaths.expand(folder.text))
 	picker.current_dir = path if DirAccess.dir_exists_absolute(path) else OS.get_user_data_dir()

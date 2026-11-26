@@ -1521,7 +1521,8 @@ func _arrival_refused(game: MtgGame, inst: CardInstance) -> bool:
 	return _freeze_in_force(game, inst.data) or _rent_copy_in_play(game, inst.data) \
 		or _repeatable_copy_in_play(game, inst.data) \
 		or _least_power_meal_is_ours(game, inst) or _arrival_discard_unpaid(game, inst) \
-		or _copy_shape_missing(game, inst)
+		or _copy_shape_missing(game, inst) \
+		or OWN_GOAL.is_rescue(self, inst)   # campaign 2026-11-26: a response's card
 
 
 ## w1-5: does [param data] freeze the untap step ([method _card_freezes])
@@ -2235,8 +2236,12 @@ func _cast_gate(game: MtgGame, inst: CardInstance) -> String:
 	if why != "":
 		return why
 	if inst.data.cast_condition.is_valid():
-		return String(inst.data.cast_condition.call(game, pid))
-	return ""
+		why = String(inst.data.cast_condition.call(game, pid))
+		if why != "":
+			return why
+	# THE OWN GOAL (campaign 2026-11-26): a card whose own text loses us
+	# the game or our own board in this position (own_goal.gd).
+	return OWN_GOAL.cast_refusal(game, self, inst)
 
 
 ## THE SECOND LEGEND (2026-09-07, [member AiProfile.holds_duplicates]):
@@ -2850,6 +2855,7 @@ const MIRAGE_TACTICS := preload("res://engine/ai/mirage_tactics.gd")
 const TEMPEST_SPELLS := preload("res://engine/ai/tempest_spells.gd")
 const URZA_SPELLS := preload("res://engine/ai/urza_spells.gd")
 const CARD_COMBOS := preload("res://engine/ai/card_combos.gd")
+const OWN_GOAL := preload("res://engine/ai/own_goal.gd")
 
 
 ## Activate the best-scoring ability that clears the bar for [param moment],
@@ -6887,6 +6893,16 @@ func _lethal_life_mana(game: MtgGame) -> String:
 	return "paid %d life and cast %s for %d" % [life, inst.data.card_name, x]
 
 
+## Is the first target [param inst]'s spell asks for the target of an
+## effect that harms what it is aimed at ([method _is_harmful]) — the
+## damage of a Flare, the mill of a Ray of Erasure — and not of its draw?
+func _harm_owns_the_target(inst: CardInstance) -> bool:
+	for e in inst.data.spell_effects:
+		if e.target_spec != null:
+			return _is_harmful(inst, e)
+	return false
+
+
 ## The opponent's end step: cast the held instant with the best use, or
 ## "" to keep holding. Removal at their best creature worth a card, a
 ## bounce only at something big or dressed in auras, a draw into a thin
@@ -6945,6 +6961,16 @@ func _fire_held_instant(game: MtgGame) -> String:
 			else:
 				if intent.target_spec != null:
 					targets = [TargetRef.player(pid)]
+					# THE DRAW IS THE RIDER (campaign 2026-11-26): Flare's
+					# 1 damage, with "draw a card at the next upkeep" after
+					# it, was aimed at our own face by the line above. A
+					# target that belongs to a HARMFUL effect is picked the
+					# way every other cast picks it.
+					if profile.forecasts_tactics and _harm_owns_the_target(inst):
+						var picked = _choose_targets(game, inst, 0)
+						if picked == null or (picked as Array).is_empty():
+							continue
+						targets = picked
 				value = 3.0 + _draw_need(me.hand.size())
 		elif intent.answers_creatures():
 			var victim := _best_victim(game, inst, intent, 0)
@@ -15394,6 +15420,13 @@ func answer_yes_no(game: MtgGame, p_pid: int, prompt: String, hint: bool) -> boo
 		return false
 	# A CUMULATIVE UPKEEP PAID IN BODIES FOR THEM (campaign fix-ai-c):
 	# Varchild's War-Riders, [method _upkeep_gift_answer].
+	# THE OWN GOAL (campaign 2026-11-26, own_goal.gd): the upkeep that
+	# eats the library is paid, the peace that stops our attack is not.
+	if p_pid == pid and game.current_step() == Mtg.Step.UPKEEP:
+		var own_goal: int = OWN_GOAL.upkeep_answer(game, self, prompt,
+			_offer_subject(game, prompt), hint)
+		if own_goal >= 0:
+			return own_goal == 1
 	if hint and p_pid == pid:
 		var gift := _upkeep_gift_answer(game, prompt)
 		if gift >= 0:

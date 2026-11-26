@@ -866,12 +866,10 @@ static func left_batch() -> bool:
 
 static func _write_batch(moves: Array, installed: Array) -> bool:
 	DirAccess.make_dir_recursive_absolute(aside_folder())
-	var file := FileAccess.open(batch_path(), FileAccess.WRITE)
-	if file == null:
-		return false
-	file.store_string(JSON.stringify({"format": BATCH_FORMAT, "moves": moves, "installed": installed}, "\t"))
-	file.close()
-	return true
+	# Written beside and renamed (bug pass 2026-11-26): a kill mid-write
+	# left half a record, read at the next start as no batch at all.
+	return Settings.write_atomically(batch_path(),
+		JSON.stringify({"format": BATCH_FORMAT, "moves": moves, "installed": installed}, "\t").to_utf8_buffer()) == OK
 
 
 static func _forget_batch() -> void:

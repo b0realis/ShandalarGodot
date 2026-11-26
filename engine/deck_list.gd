@@ -83,13 +83,14 @@ const MAX_TOTAL := 100000
 ## needs implemented cards); false = format-only parsing — the converter
 ## handles historic decks full of not-yet-implemented cards, and the Deck
 ## Builder's IMPORT reads those same names as [member proxies].
-static func load_file(path: String, strict := true) -> DeckList:
+## [param forgiving]: see [method _forgiven] — the Deck Builder's doors only.
+static func load_file(path: String, strict := true, forgiving := false) -> DeckList:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		var deck := DeckList.new()
 		deck.errors.append("cannot open '%s'" % path)
 		return deck
-	return from_text(file.get_as_text(), path, strict)
+	return from_text(file.get_as_text(), path, strict, forgiving)
 
 
 ## [method load_file] for text already in hand: the format is still the
@@ -97,13 +98,13 @@ static func load_file(path: String, strict := true) -> DeckList:
 ## its stem. For a caller that has the file open for another reason — the
 ## battle setup screen reads each deck once for its heading AND its cards
 ## (2026-10-01) — so one read serves both.
-static func from_text(text: String, path: String, strict := true) -> DeckList:
+static func from_text(text: String, path: String, strict := true, forgiving := false) -> DeckList:
 	var deck := DeckList.new()
 	var base := path.get_file().get_basename()
 	if path.get_extension().to_lower() == "dck":
-		deck.parse_dck(text, base, strict)
+		deck.parse_dck(text, base, strict, forgiving)
 	else:
-		deck.parse(text, base, strict, path.get_extension().to_lower() == "txt")
+		deck.parse(text, base, strict, path.get_extension().to_lower() == "txt", false, forgiving)
 	return deck
 
 
@@ -127,7 +128,7 @@ static func from_text(text: String, path: String, strict := true) -> DeckList:
 ##   sections -> [member sideboard]. Numeric ids are ignored on read
 ##   (names are authoritative; ids are re-emitted from cards/data/
 ##   dck_ids.txt when writing — see tools/deck_convert.gd).
-func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
+func parse_dck(text: String, fallback_name := "deck", strict := true, forgiving := false) -> void:
 	deck_name = fallback_name
 	if strict:
 		CardRegistry.ensure_loaded()
@@ -179,6 +180,8 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 		if count > MAX_COUNT:
 			errors.append(_too_large(line_number))
 			continue
+		if forgiving and not CardRegistry.has_card(card_name):
+			card_name = _forgiven(card_name)
 		if not CardRegistry.has_card(card_name):
 			if strict:
 				errors.append("line %d: unknown/unimplemented card '%s'" % [
@@ -212,8 +215,9 @@ func parse_dck(text: String, fallback_name := "deck", strict := true) -> void:
 ## section lines (`Deck`, `Sideboard`, `SIDEBOARD:`, Forge's `[Main]`),
 ## a name line under Arena's `About` or Forge's `[metadata]`, and a
 ## printing after a card's name (`(M10) 146`, `[M10]`, `|M10`).
+## [param forgiving] reads a name by its letters ([method _forgiven]).
 func parse(text: String, fallback_name := "deck", strict := true, blank_sideboard := false,
-		foreign := false) -> void:
+		foreign := false, forgiving := false) -> void:
 	deck_name = fallback_name
 	if strict:
 		CardRegistry.ensure_loaded()
@@ -290,10 +294,13 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 			continue
 		var count := _read_count(count_token)
 		var card_name := line.substr(space + 1).strip_edges()
+		var written := card_name
 		if foreign:
 			if tail == null:
 				tail = _printing_tail()
 			card_name = _foreign_name(card_name, tail)
+		if forgiving and not CardRegistry.has_card(card_name):
+			card_name = _forgiven(card_name, written)
 		if count < 1:
 			errors.append("line %d: count must be positive" % line_number)
 			continue
@@ -314,6 +321,11 @@ func parse(text: String, fallback_name := "deck", strict := true, blank_sideboar
 				sideboard.append(card_name)
 			else:
 				cards.append(card_name)
+	# A printing chosen for a name written another way goes with the card.
+	for was in _respelled:
+		if printings.has(was) and not printings.has(_respelled[was]):
+			printings[_respelled[was]] = printings[was]
+			printings.erase(was)
 
 
 ## A count token that is_valid_int() already passed, read WITHOUT letting
@@ -366,6 +378,37 @@ func _note_proxy(card_name: String) -> void:
 var _proxy_seen: Dictionary = {}
 
 
+## NAMES READ BY THEIR LETTERS (campaign 2026-11-26, bugs3 #2). A list
+## from a deck site, a word processor or a person spells a card its own
+## way — "lightning bolt", "Aladdin’s Lamp" with a typographic apostrophe,
+## "Dandan" without its accent, "Ali From Cairo", "Lightning  Bolt" — and
+## each used to become a proxy "this game does not implement". A FORGIVING
+## read asks [method CardRegistry.names_like] for a name the pool does not
+## have as written and deals the pool's own spelling when exactly one card
+## answers. A name the pool has as written is never asked (the exact match
+## wins); a name several cards answer to stays as written — a proxy — and
+## is kept in [member doubtful] so the caller can say which cards it could
+## be. The Deck Builder's doors only (Load, Import, Paste): the duel's
+## strict loader and every other reader are as they were.
+func _forgiven(card_name: String, written := "") -> String:
+	for candidate: String in ([card_name] if written == "" or written == card_name else [card_name, written]):
+		var like := CardRegistry.names_like(candidate)
+		if like.size() == 1:
+			_respelled[candidate] = like[0]
+			return like[0]
+		if like.size() > 1:
+			doubtful[card_name] = like
+			return card_name
+	return card_name
+
+
+## written name -> the cards it could be, for the names a forgiving read
+## could not settle (they are in [member proxies] too).
+var doubtful: Dictionary = {}
+## written name -> the pool's spelling a forgiving read dealt instead.
+var _respelled: Dictionary = {}
+
+
 # --- campaign 2026-10-12 f-deck: other programs' exports (lenient only) ---
 
 const SECTION_MAIN := "main"
@@ -386,7 +429,7 @@ const SECTION_SKIP := "skip"
 ## the registry does not know is a proxy, as on every import. The strict
 ## loaders — a `.deck` the setup screen plays — are untouched.
 func parse_foreign(text: String, fallback_name := "deck", blank_sideboard := true) -> void:
-	parse(text, fallback_name, false, blank_sideboard, true)
+	parse(text, fallback_name, false, blank_sideboard, true, true)
 
 
 ## Is [param text] a Forge deck file? Its `[metadata]` or `[Main]` line

@@ -329,7 +329,7 @@ func choose() -> void:
 	# After the mode: setting the mode retitles the box.
 	box.title = PICK_TITLE
 	box.access = FileDialog.ACCESS_FILESYSTEM
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.size = Vector2i(760, 520)
 	box.current_dir = start_dir()
 	box.dir_selected.connect(func(path: String) -> void:
@@ -351,7 +351,7 @@ func choose_image() -> void:
 	box.title = PICK_IMAGE_TITLE
 	box.access = FileDialog.ACCESS_FILESYSTEM
 	box.filters = PackedStringArray(IMAGE_FILTERS)
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.size = Vector2i(760, 520)
 	box.current_dir = start_dir()
 	box.file_selected.connect(func(path: String) -> void:

@@ -390,26 +390,54 @@ func _pack_label(id: String) -> String:
 ## lenient keeps it and notes a proxy — so a deck whose lenient parse
 ## noted NO proxy would parse identically under strict, and the lenient
 ## result stands in for both; only a deck with a proxy is parsed twice.
+## WHAT THE LAST SCAN READ, KEPT BETWEEN VISITS: path -> [the file's
+## text, its heading, its lenient list, its strict list (the same object
+## when there was no proxy), its color mask]. Magic Battle opens from the
+## title and again after every duel, and parsing all 330 shipped decks
+## took 65-70 ms of each opening; the files are still READ every time (5
+## ms) and a file is parsed again only when its text differs — so a deck
+## saved a moment ago is seen whatever the clock or its size says. The
+## lists are the registry's answer too (which names are cards), so the
+## table is let go when the pool changes. Names and numbers only, never a
+## [CardData]. The kept lists are read, never changed.
+static var _scan_kept: Dictionary = {}
+static var _scan_registry := -1
+static var _scan_pool := -1
+
+
 func _scan_decks() -> void:
 	# The pool is in before the first parse, as the strict load that
 	# used to come first saw to; the lenient parse asks the registry too.
 	CardRegistry.ensure_loaded()
 	var groups := {}
+	if _scan_registry != CardRegistry.revision or _scan_pool != CardRegistry.size():
+		_scan_kept.clear()
+		_scan_registry = CardRegistry.revision
+		_scan_pool = CardRegistry.size()
+	var kept_now := {}
 	for path in DeckStore.all_deck_paths():
 		var text := DeckStore.read_text(path)
-		groups[path] = DeckGroups.of_text(path, text)
+		# A FILE READ THE SAME AS LAST TIME IS NOT PARSED AGAIN (campaign
+		# 2026-11-26, smooth1 #7): see [member _scan_kept].
+		var kept: Array = _scan_kept.get(path, [])
+		if kept.is_empty() or String(kept[0]) != text:
+			var parsed := DeckList.from_text(text, path, false)
+			kept = [text, DeckGroups.of_text(path, text), parsed,
+				parsed if parsed.proxies.is_empty() else DeckList.from_text(text, path, true),
+				DeckStore.colors_of(parsed)]
+		kept_now[path] = kept
+		groups[path] = kept[1]
 		# THE DECLARED PACK COMES FIRST. With its pack off such a deck may
 		# still load strictly (the pack only reprints its cards) or only
 		# leniently (the pack is where its cards live); either way the
 		# remedy is the pack, so the row says so and nothing else.
-		var lenient := DeckList.from_text(text, path, false)
-		var deck := lenient if lenient.proxies.is_empty() \
-			else DeckList.from_text(text, path, true)
+		var lenient: DeckList = kept[2]
+		var deck: DeckList = kept[3]
 		# [QoL] THE PIPS ARE THE LENIENT LOAD'S: a card that is not in the
 		# registry has no colour to count either way, so the three rows
 		# below agree, and a deck listed for its proxies still shows the
 		# colours of the cards it does hold.
-		_deck_masks[path] = DeckStore.colors_of(lenient)
+		_deck_masks[path] = kept[4]
 		var deck_names: Array[String] = []
 		deck_names.assign(lenient.cards + lenient.sideboard)
 		var missing := _missing_packs(lenient.required_packs, deck_names)
@@ -431,6 +459,8 @@ func _scan_decks() -> void:
 			_deck_paths.append(path)
 			_proxy_paths[path] = lenient.proxies
 			_deck_titles[path] = lenient.deck_name
+	# Only the files still there are kept.
+	_scan_kept = kept_now
 	_deck_paths.sort()
 	_playable_paths.sort()
 	_scan_groups = groups

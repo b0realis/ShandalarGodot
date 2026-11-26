@@ -84,6 +84,7 @@ var _contents_button: Button = null
 
 
 func _ready() -> void:
+	set_process(false)   # only while a page is still being built ([method _process])
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pages = HelpPages.pages()
 	# A room of the shell, so the shell's bed plays on through it — the
@@ -249,6 +250,16 @@ func _input(event: InputEvent) -> void:
 			_close()
 
 
+## The Help is a screen of pages: the pad's LB is its "page before", no
+## right click ([constant PadControls.PAGE_GROUP]).
+func pad_shoulders_page() -> bool:
+	return is_visible_in_tree()
+
+
+func _enter_tree() -> void:
+	add_to_group("pad_shoulder_pagers")
+
+
 func _command_for(event: InputEvent) -> String:
 	if event is InputEventKey:
 		if not event.pressed:
@@ -267,6 +278,14 @@ func _command_for(event: InputEvent) -> String:
 		return ""
 	if not (event is InputEventJoypadButton) or not event.pressed:
 		return ""
+	# The shoulders turn the pages (campaign 2026-11-26): LB back, RB on —
+	# with the pad pointer on too, which leaves LB to a screen of pages
+	# ([method pad_shoulders_page]).
+	match (event as InputEventJoypadButton).button_index:
+		JOY_BUTTON_LEFT_SHOULDER:
+			return "back"
+		JOY_BUTTON_RIGHT_SHOULDER:
+			return "next"
 	var pad := get_node_or_null(^"/root/PadControls")
 	if pad != null and pad.owns(event):
 		return ""
@@ -299,11 +318,80 @@ func _rebuild() -> void:
 	for child in _body.get_children():
 		_body.remove_child(child)
 		child.queue_free()
-	for block in page.get("blocks", []):
-		_add_block(block)
+	_waiting = _units_of(page)
+	_build_some()
+	# The Contents' first topic is where the ring starts: it is built now.
+	while _page == 0 and not _waiting.is_empty() \
+			and _body.find_child("HelpTopic*", true, false) == null:
+		_add_block(_waiting.pop_front())
+	set_process(not _waiting.is_empty())
 	if _scroll != null:
 		_scroll.scroll_vertical = 0
 	_keep_the_ring(hidden)
+
+
+# --- campaign 2026-11-26: a long page is built over a few frames ---
+#
+# A page was built whole inside the press that turned to it, and a long
+# paragraph costs 3 to 10 ms to letter: 16 of the 76 pages took more than
+# 33 ms with their frame and "The Deck Builder" 107 ms (measured on the
+# fast desk), a visible hitch on every turn of a long page. Now the top of
+# the page — what the window shows — is built in the press, up to
+# [constant SLICE_MS], and the rest follows from [method _process] a slice
+# a frame, top to bottom, under a page the player is already reading.
+#
+# WITH A DISPLAY ONLY ([member slices]), as the duel's other moving parts
+# are: a run without one builds the whole page at once, so a test reads
+# all of a page the moment it turns to it.
+
+## How long one slice of a page may build, in milliseconds.
+const SLICE_MS := 6.0
+## Is a long page built over several frames?
+var slices := DisplayServer.get_name() != "headless"
+## The parts of the page shown that are still to be built, in order.
+var _waiting: Array = []
+
+
+## [param page]'s blocks as the parts one slice may stop between: each
+## block, with a block of icon rows or of card examples a part a row.
+func _units_of(page: Dictionary) -> Array:
+	var units: Array = []
+	for block: Dictionary in page.get("blocks", []):
+		var rows_key := ""
+		match String(block.get("kind", "")):
+			HelpPages.ICONS: rows_key = "entries"
+			HelpPages.CARDS: rows_key = "examples"
+		var rows: Array = block.get(rows_key, []) if rows_key != "" else []
+		if rows.size() < 2:
+			units.append(block)
+			continue
+		for row in rows:
+			var unit := block.duplicate()
+			unit[rows_key] = [row]
+			units.append(unit)
+	return units
+
+
+## Build the next parts of the page: all of them, or with [member slices]
+## as many as [constant SLICE_MS] allow — one at least.
+func _build_some() -> void:
+	var started := Time.get_ticks_usec()
+	while not _waiting.is_empty():
+		_add_block(_waiting.pop_front())
+		if slices and float(Time.get_ticks_usec() - started) / 1000.0 >= SLICE_MS:
+			break
+
+
+func _process(_delta: float) -> void:
+	_build_some()
+	if _waiting.is_empty():
+		set_process(false)
+
+
+## Is the page shown built to its end?
+func page_built() -> bool:
+	return _waiting.is_empty()
+# --- end campaign 2026-11-26 ---
 
 
 ## THE RING STAYS ON THE SCREEN (bug campaign 2026-10-12). The keyboard
@@ -332,6 +420,7 @@ func _add_block(block: Dictionary) -> void:
 			# rank of heading rather than two competing ones.
 			var heading := UiChrome.body_label(String(block.get("text", "")), HEADING_SIZE)
 			heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			heading.size.x = _born_width()
 			var font := GameSkin.font("font_title")
 			if font != null:
 				heading.add_theme_font_override("font", font)
@@ -363,6 +452,7 @@ func _contents_links(entries: Array) -> Control:
 		button.name = "HelpTopic%d" % index
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.size.x = _born_width() * 0.5
 		button.clip_text = true
 		button.add_theme_font_size_override("font_size", BODY_SIZE)
 		button.tooltip_text = "Page %d · %s" % [index + 1, entry.title]
@@ -377,7 +467,20 @@ func _paragraph(text: String, size: int) -> Label:
 	var label := UiChrome.body_label(text, size)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size.x = _born_width()
 	return label
+
+
+## THE WIDTH A WRAPPING LABEL IS BORN WITH (campaign 2026-11-26). A new
+## label is nothing wide until its container places it, and one that wraps
+## is measured the moment it enters the tree — at that width, a line a
+## word: a 1,500-letter paragraph cost 11 ms to add and as much again when
+## the container gave it its real width (measured; 1 ms and nothing with
+## this). So it is born as wide as the column it is going into; the
+## container still decides, and a narrower place only wraps it again.
+func _born_width() -> float:
+	var wide := _body.size.x if _body != null else 0.0
+	return wide if wide > 100.0 else MAX_TEXT_WIDTH
 
 
 ## A readable rule callout. Source metadata stays in HelpPages, never in

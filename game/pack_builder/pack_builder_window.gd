@@ -58,6 +58,12 @@ const WHY_BODY := "Thank you, Scryfall! Every card picture here comes from scryf
 ## past it, it scrolls, so the window never grows off the screen.
 const FAILURES_IN_FULL := 3
 const SUMMARY_MOST := 190.0
+## The line while the card pool takes the new packs in ([method
+## PackBuildHost.settling]) — on a thread, the window alive meanwhile.
+const READING := "Reading the new packs..."
+## Pixels an arrow key scrolls the summary; PageUp and PageDown go most of
+## a box.
+const SUMMARY_STEP := 40
 const BAR := Color(0.78, 0.62, 0.30)
 const BAR_GROUND := Color(0.18, 0.15, 0.11)
 const DIM := Color8(74, 66, 60)
@@ -89,6 +95,13 @@ var _outcomes: Array[Dictionary] = []
 var _stopped := false
 var _art_built := false
 var _focus_before: WeakRef = null
+## The last job's packs are in and the card pool is reading them.
+var _settling := false
+var _settle_in := 0
+var _installed: Array = []
+## The caches of packs that are installed are being removed ([method
+## PackBuildHost.sweep]).
+var _sweeping := false
 
 
 ## Open the window over [param host]. [param on] stands in for the game in
@@ -236,6 +249,18 @@ func _ready() -> void:
 	_summary_box.custom_minimum_size.x = WIDTH - 60.0
 	_summary_box.visible = false
 	_summary_box.add_child(_summary)
+	# A LONG SUMMARY IS READ BY THE KEYBOARD AND THE PAD (campaign
+	# 2026-11-26): past [constant SUMMARY_MOST] the box scrolled by the
+	# wheel alone. It now takes the ring when it has more than it shows,
+	# and Up, Down, PageUp, PageDown, Home and End scroll it; at either end
+	# Up and Down move the ring on, as on any row.
+	_summary_box.focus_mode = Control.FOCUS_NONE
+	# The ring is drawn here: the box's own focus border takes room from
+	# the text, and a summary that just fit grew a scroll bar.
+	_summary_box.draw.connect(_draw_summary_ring)
+	_summary_box.focus_entered.connect(_summary_box.queue_redraw)
+	_summary_box.focus_exited.connect(_summary_box.queue_redraw)
+	_summary_box.gui_input.connect(_on_summary_input)
 	_summary.minimum_size_changed.connect(_fit_summary)
 	_summary.visibility_changed.connect(_fit_summary)
 	column.add_child(_summary_box)
@@ -272,6 +297,7 @@ func _ready() -> void:
 	_focus_before = weakref(before) if before != null and not is_ancestor_of(before) else null
 	_first_focus().grab_focus()
 	set_process(false)
+	_sweep_caches()
 
 
 func _exit_tree() -> void:
@@ -280,6 +306,11 @@ func _exit_tree() -> void:
 	if _build != null:
 		_build.stop()
 		_build = null
+	# Gone between the last pack and the catalogue's reading of the folder:
+	# it is read now, so what was built is not left unseen.
+	if _settle_in > 0:
+		_settle_in = 0
+		game.settle(_installed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -297,6 +328,22 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _sweeping:
+		# A little each frame, beside a build as well as without one.
+		if not game.sweep_step():
+			_sweeping = false
+			if mode != "working":
+				set_process(false)
+		if mode != "working":
+			return
+	if _settling:
+		if _settle_in > 0:
+			_settle_in -= 1
+			if _settle_in == 0:
+				game.settle(_installed)
+		elif not game.settling():
+			_finished()
+		return
 	if mode != "working" or _build == null:
 		return
 	if _build.step():
@@ -523,6 +570,8 @@ func _start() -> void:
 func _begin_next() -> void:
 	_build = PackBuild.new()
 	_build.gentle = _gentle.button_pressed
+	# Its card list is read on a thread: the bar and Stop stay alive.
+	_build.aside = true
 	_build.start(_queue[_at], game)
 	_show_progress()
 
@@ -541,7 +590,7 @@ func _show_progress() -> void:
 ## Rough seconds until the whole job is done: this pack's pace for what it
 ## still has to fetch, and for the packs after it.
 func _seconds_left() -> int:
-	if _build == null or _build.fetch == null:
+	if _build == null or _build.fetch == null or _build.phase == "preparing":
 		return -1
 	var fetch := _build.fetch
 	var pace := _opening_pace()
@@ -565,13 +614,36 @@ func stop() -> void:
 
 
 func _finish() -> void:
-	set_process(false)
 	var installed: Array = []
 	for outcome: Dictionary in _outcomes:
 		if bool(outcome.get("ok", false)):
 			installed.append(String(outcome["id"]))
-	# The catalogue reads the card folder again (a numbered pack came in).
-	game.settle(installed)
+	# The catalogue reads the card folder again when a numbered pack came
+	# in. The window says so first and asks two frames later — reading the
+	# folder is one go of a few tenths of a second — and the card pool is
+	# then rebuilt on a thread, the window waiting for it ([method
+	# _process]). With nothing new there is nothing to wait for.
+	var new_packs := false
+	for id: String in installed:
+		new_packs = new_packs or id != PackRecipes.BASE
+	if not new_packs:
+		game.settle(installed)
+		_finished()
+		return
+	_settling = true
+	_settle_in = 2
+	_installed = installed
+	_line.text = READING
+	_bar.value = 1.0
+	_overall.text = ""
+	_stop.disabled = true
+
+
+## The job is over and the card pool has the new packs: back to choosing,
+## with the summary.
+func _finished() -> void:
+	_settling = false
+	set_process(_sweeping)
 	mode = "choose"
 	_work.visible = false
 	_stop.visible = false
@@ -584,8 +656,11 @@ func _finish() -> void:
 	_refresh_rows()
 	_summary.text = summary()
 	_summary.visible = true
+	_fit_summary()
 	_fence()
 	_close.grab_focus()
+	# A pack whose tidying Stop cut short is installed now: its cache goes.
+	_sweep_caches()
 
 
 ## What came of the last job, in words: what is in, what is not and why,
@@ -629,8 +704,73 @@ func summary() -> String:
 
 ## The summary's box as tall as the summary, up to [constant SUMMARY_MOST].
 func _fit_summary() -> void:
+	var had_ring := _summary_box.has_focus()
 	_summary_box.visible = _summary.visible
-	_summary_box.custom_minimum_size.y = minf(_summary.get_combined_minimum_size().y, SUMMARY_MOST)
+	var tall := _summary.get_combined_minimum_size().y
+	_summary_box.custom_minimum_size.y = minf(tall, SUMMARY_MOST)
+	# The ring only when there is more than the box shows.
+	var wanted := Control.FOCUS_ALL if _summary.visible and tall > SUMMARY_MOST else Control.FOCUS_NONE
+	if _summary_box.focus_mode != wanted:
+		_summary_box.focus_mode = wanted
+		if is_node_ready():
+			_fence()
+	# The ring is never left on a box that went or scrolls no more.
+	if had_ring and wanted == Control.FOCUS_NONE and is_node_ready():
+		(_close if _close.visible else _stop).grab_focus()
+
+
+## Whether the summary's box takes the ring: it has more than it shows.
+func summary_scrolls() -> bool:
+	return _summary_box.visible and _summary_box.focus_mode == Control.FOCUS_ALL
+
+
+func _draw_summary_ring() -> void:
+	if _summary_box.has_focus():
+		_summary_box.draw_style_box(OriginalDialog.focus_ring(), Rect2(Vector2.ZERO, _summary_box.size))
+
+
+## The keys on the summary's box while it has the ring.
+func _on_summary_input(event: InputEvent) -> void:
+	if not summary_scrolls():
+		return
+	var bar := _summary_box.get_v_scroll_bar()
+	var most := int(maxf(bar.max_value - bar.page, 0.0))
+	var at := _summary_box.scroll_vertical
+	var to := at
+	var page := int(maxf(_summary_box.size.y - SUMMARY_STEP, SUMMARY_STEP))
+	if event.is_action_pressed("ui_down", true):
+		to = at + SUMMARY_STEP
+	elif event.is_action_pressed("ui_up", true):
+		to = at - SUMMARY_STEP
+	elif event.is_action_pressed("ui_page_down", true):
+		to = at + page
+	elif event.is_action_pressed("ui_page_up", true):
+		to = at - page
+	elif event.is_action_pressed("ui_home", true):
+		to = 0
+	elif event.is_action_pressed("ui_end", true):
+		to = most
+	else:
+		return
+	to = clampi(to, 0, most)
+	if to == at:
+		# At the end already: Up and Down move the ring on.
+		return
+	_summary_box.scroll_vertical = to
+	accept_event()
+
+
+## The caches of packs that are installed, removed a little each frame
+## ([method PackBuildHost.stale_caches]).
+func _sweep_caches() -> void:
+	if _sweeping:
+		return
+	var stale := game.stale_caches()
+	if stale.is_empty():
+		return
+	game.sweep(stale)
+	_sweeping = true
+	set_process(true)
 
 
 ## Close the window. While a pack is being built this is Stop first.
@@ -661,6 +801,9 @@ func _fence() -> void:
 			column.append(check)
 	# Under the rows: the tick, or its "?" alone while the tick is held.
 	column.append(_why if _gentle.disabled else _gentle)
+	# And the summary under that, when it scrolls.
+	if summary_scrolls():
+		column.append(_summary_box)
 	var buttons: Array[Control] = []
 	for button: Button in [_ok, _stop, _close]:
 		if button.visible and not button.disabled:
@@ -677,6 +820,7 @@ func _fence() -> void:
 		here.focus_neighbor_right = here.get_path_to(here)
 		here.focus_previous = here.get_path_to(up if up != here else buttons[-1])
 		here.focus_next = here.get_path_to(down)
+	var under_tick: Control = _summary_box if summary_scrolls() else buttons[0]
 	if not _gentle.disabled:
 		# The "?" beside the tick: right of it, and the same way up and down.
 		_gentle.focus_neighbor_right = _gentle.get_path_to(_why)
@@ -684,9 +828,9 @@ func _fence() -> void:
 		_why.focus_neighbor_left = _why.get_path_to(_gentle)
 		_why.focus_neighbor_right = _why.get_path_to(_why)
 		_why.focus_neighbor_top = _why.get_path_to(_gentle.get_node(_gentle.focus_neighbor_top))
-		_why.focus_neighbor_bottom = _why.get_path_to(buttons[0])
+		_why.focus_neighbor_bottom = _why.get_path_to(under_tick)
 		_why.focus_previous = _why.get_path_to(_gentle)
-		_why.focus_next = _why.get_path_to(buttons[0])
+		_why.focus_next = _why.get_path_to(under_tick)
 		if _gentle.get_node(_gentle.focus_neighbor_top) == _gentle:
 			_why.focus_neighbor_top = _why.get_path_to(_why)
 	for i in buttons.size():

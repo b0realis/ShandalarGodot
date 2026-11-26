@@ -562,6 +562,50 @@ static func game_name_like(card_name: String) -> String:
 	return String(_lower_names.get(name_key(card_name), ""))
 
 
+## [method name_key] → every name in the pool with that key (game and
+## community cards alike), for [method names_like]; rebuilt per pool.
+static var _key_names: Dictionary = {}
+static var _key_revision := -1
+static var _key_count := -1
+
+
+## EVERY CARD IN THE POOL [param card_name] COULD BE MEANT FOR, by
+## [method name_key]: the same letters and digits in any case, with or
+## without accents, apostrophes, spaces and signs. One name is a sure
+## match, several are a doubt the caller must not settle by itself, none
+## is no card (a name without a Latin letter or digit has no key).
+static func names_like(card_name: String) -> PackedStringArray:
+	ensure_loaded()
+	if _key_revision != revision or _key_count != _cards.size():
+		_key_names.clear()
+		for name in _cards:
+			var key := name_key(String(name))
+			if key == "":
+				continue
+			var held: PackedStringArray = _key_names.get(key, PackedStringArray())
+			held.append(String(name))
+			_key_names[key] = held
+		_key_revision = revision
+		_key_count = _cards.size()
+	var wanted := name_key(card_name)
+	if wanted == "":
+		return PackedStringArray()
+	return _key_names.get(wanted, PackedStringArray())
+
+
+## THE POOL'S OWN SPELLING OF [param card_name], for a list another
+## program or a person wrote ("lightning bolt", "Aladdin’s Lamp",
+## "Dandan"): the name itself when the pool has it exactly — an exact
+## match always wins — else the one card [method names_like] finds, else
+## "" (no such card, or more than one it could be).
+static func resolve_name(card_name: String) -> String:
+	ensure_loaded()
+	if _cards.has(card_name):
+		return card_name
+	var like := names_like(card_name)
+	return like[0] if like.size() == 1 else ""
+
+
 ## The community cards left out because the game card whose rules they
 ## keep is not in the pool now.
 static func community_waiting() -> Array[String]:

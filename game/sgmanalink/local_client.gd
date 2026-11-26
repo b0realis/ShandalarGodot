@@ -145,15 +145,23 @@ func _connect() -> Error:
 func forget() -> void:
 	mpn.reset()
 	CardPacks.unlock_catalogue(self)
+	var was_wanted := _wanted
 	_wanted = false
 	_welcomed = false
 	if _socket != null:
-		if online and _socket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		# Welcomed is enough: the host knows the seat from the welcome on,
+		# before the first table makes this client [member online].
+		if (online or _welcomed_socket == _socket) and _socket.get_ready_state() == WebSocketPeer.STATE_OPEN:
 			_socket.send_text(SgProtocol.encode({"v": SgProtocol.VERSION, "type": "abandon"}))
 			_socket.poll()
 			_closing.append({"socket": _socket, "until": Time.get_ticks_msec() + 1000})
-		else: _socket.close(-1)
+		else:
+			_socket.close(-1)
+			_part_offline(was_wanted)
+	elif was_wanted:
+		_part_offline(true)
 	_socket = null
+	_welcomed_socket = null
 	_access = ""
 	_resume = ""
 	_nickname = ""
@@ -189,6 +197,108 @@ func forget() -> void:
 const EXIT_DRAIN_MS := 200
 
 
+# --- campaign 2026-11-26: a seat given up while the connection is down ---
+#
+# A guest whose connection had dropped ("Connection lost; reconnecting...")
+# and who then pressed Disconnect, or closed the screen, told the host
+# nothing: [method forget] sent "abandon" only over an open, synchronized
+# connection. The host kept the seat for its whole reconnect grace
+# ([constant SgLocalServer.RECONNECT_GRACE_MS], 300 s) and the player left
+# at the table was told to wait for someone who had gone.
+#
+# So the leaving is carried by a PARTING of its own: for a few seconds
+# after such a Disconnect this client keeps trying the host — connect, the
+# hello with the seat's resume code, "abandon" on the welcome, close —
+# and then gives up quietly. The same messages an online guest's leaving
+# sends, in the same order; nothing of the protocol changes. A guest whose
+# network is really gone reaches nobody, and the host's grace is what it is
+# for. Only a seat this client was still trying to get back is given up
+# this way: one the host ended, refused, or handed to another connection
+# is not this client's to abandon.
+
+## How long a parting keeps trying the host, and how often.
+const PARTING_MS := 4000
+const PARTING_RETRY_MS := 400
+## The partings under way: `{address, port, access, tls, resume, nickname,
+## build, stamp, until, retry_at, socket, hello}`.
+var _partings: Array = []
+## The connection the host's welcome came over ([method forget]).
+var _welcomed_socket: WebSocketPeer = null
+
+
+func _part_offline(was_wanted: bool) -> void:
+	if not was_wanted or _resume.is_empty() or _port == 0 or host_final:
+		return
+	_partings.append({"address": _address, "port": _port, "access": _access,
+		"tls": _tls_options, "resume": _resume, "nickname": _nickname,
+		"build": build_fingerprint, "stamp": build_stamp,
+		"until": Time.get_ticks_msec() + PARTING_MS, "retry_at": 0,
+		"socket": null, "hello": false})
+
+
+## One step of every parting. Nothing here waits.
+func _serve_partings() -> void:
+	for parting: Dictionary in _partings.duplicate():
+		if _serve_parting(parting):
+			if parting.socket != null: (parting.socket as WebSocketPeer).close(-1)
+			_partings.erase(parting)
+
+
+## True when [param parting] is over: the abandon is on its way (its
+## socket then waits among [member _closing]), the host answered something
+## else, or its time is up.
+func _serve_parting(parting: Dictionary) -> bool:
+	var now := Time.get_ticks_msec()
+	if now >= int(parting.until):
+		return true
+	var socket: WebSocketPeer = parting.socket
+	if socket == null:
+		if now < int(parting.retry_at):
+			return false
+		parting.retry_at = now + PARTING_RETRY_MS
+		socket = WebSocketPeer.new()
+		socket.supported_protocols = SgProtocol.subprotocols()
+		socket.inbound_buffer_size = SgProtocol.MAX_BYTES * 2
+		socket.outbound_buffer_size = 65536
+		socket.max_queued_packets = 64
+		parting.hello = false
+		var scheme := "wss" if parting.tls != null else "ws"
+		if socket.connect_to_url("%s://%s:%d" % [scheme, parting.address, int(parting.port)], parting.tls) != OK:
+			return false
+		parting.socket = socket
+		return false
+	socket.poll()
+	var connection := socket.get_ready_state()
+	if connection == WebSocketPeer.STATE_CLOSED:
+		# Not reached, or hung up on: again in a moment, while there is time.
+		parting.socket = null
+		return bool(parting.hello)   # a host that closed on the hello has answered
+	if connection != WebSocketPeer.STATE_OPEN:
+		return false
+	if socket.get_selected_protocol() != SgProtocol.SUBPROTOCOL:
+		return true
+	if not parting.hello:
+		socket.send_text(SgProtocol.encode({"v": SgProtocol.VERSION,
+			"type": "hello", "access": parting.access, "resume": parting.resume,
+			"nickname": parting.nickname, "build": parting.build, "stamp": parting.stamp}))
+		parting.hello = true
+		return false
+	if socket.get_available_packet_count() == 0:
+		return false
+	var packet := socket.get_packet()
+	var message := SgProtocol.decode_payload(packet) if socket.was_string_packet() else {}
+	# Anything but the welcome of this build's host is no seat to give up.
+	if not SgViewProtocol.valid(message) or message.get("type") != "welcome" \
+			or message.get("v") != SgProtocol.VERSION or message.get("build") != parting.build:
+		return true
+	socket.send_text(SgProtocol.encode({"v": SgProtocol.VERSION, "type": "abandon"}))
+	socket.poll()
+	_closing.append({"socket": socket, "until": now + 1000})
+	parting.socket = null
+	return true
+# --- end campaign 2026-11-26 ---
+
+
 func _exit_tree() -> void:
 	var here := SgLocalServer.hosts_port(_port)
 	forget()
@@ -201,13 +311,14 @@ func _exit_tree() -> void:
 ## polls in place of the short sleep (a test's host in this process).
 func drain(limit_ms := EXIT_DRAIN_MS, between := Callable()) -> void:
 	var deadline := Time.get_ticks_msec() + limit_ms
-	while not _closing.is_empty():
+	while not _closing.is_empty() or not _partings.is_empty():
+		_serve_partings()
 		for closing in _closing.duplicate():
 			closing.socket.poll()
 			if closing.socket.get_ready_state() == WebSocketPeer.STATE_CLOSED:
 				closing.socket.close(-1)
 				_closing.erase(closing)
-		if _closing.is_empty() or Time.get_ticks_msec() >= deadline:
+		if (_closing.is_empty() and _partings.is_empty()) or Time.get_ticks_msec() >= deadline:
 			break
 		if between.is_valid(): between.call()
 		else: OS.delay_msec(5)
@@ -303,6 +414,7 @@ func poll() -> void:
 		else:
 			var request := mpn.next(Time.get_ticks_msec())
 			if not request.is_empty(): _socket.send_text(SgProtocol.encode(request))
+	_serve_partings()
 	for closing in _closing.duplicate():
 		closing.socket.poll()
 		if closing.socket.get_ready_state() == WebSocketPeer.STATE_CLOSED or Time.get_ticks_msec() >= int(closing.until):
@@ -428,6 +540,7 @@ func poll() -> void:
 				guest = message.guest
 				_seq = maxi(_seq, int(message.seq) + 1)
 				_welcomed = true
+				_welcomed_socket = _socket
 				_unanswered = 0
 				status = "Synchronizing with host..."
 			"state":

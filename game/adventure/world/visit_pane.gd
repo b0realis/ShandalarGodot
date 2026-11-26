@@ -121,6 +121,10 @@ var k := 1.0
 var _note: Label
 var _choices: HFlowContainer
 var _said: Label
+## The words' own scrolling ([method _fit]): they scroll inside the pane
+## once the picture can give no more room; the least height they keep.
+var _said_scroll: ScrollContainer
+const WORDS_LEAST := 66.0
 var _card: CardPreview
 var _card_name := ""
 ## The picture's width on the screen: the words wrap to it.
@@ -290,8 +294,15 @@ func _ready() -> void:
 	# A wrapping label has no width of its own: the picture's, or it
 	# breaks at every word and the pane grows past the screen.
 	_said.custom_minimum_size = Vector2(_width, 0)
-	_said.visible = not words.is_empty()
-	column.add_child(_said)
+	_said.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_said_scroll = ScrollContainer.new()
+	_said_scroll.name = "WordsScroll"
+	_said_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_said_scroll.visible = not words.is_empty()
+	_said_scroll.add_child(_said)
+	column.add_child(_said_scroll)
+	# The words' height is theirs to tell: a scroller has none of its own.
+	_said.minimum_size_changed.connect(_fit)
 	# The choices wrap: a riddle's ten answers, five cards' names.
 	_choices = HFlowContainer.new()
 	_choices.name = "Choices"
@@ -504,10 +515,35 @@ func _fit() -> void:
 	if not is_inside_tree() or _art == null:
 		return
 	var room := get_viewport_rect().size.y - ROOM_MARGIN
-	var rest := get_combined_minimum_size().y - _art.custom_minimum_size.y
-	var grow := clampf((room - rest) / PICTURE.y, LEAST, _most)
+	# THE WORDS SCROLL WHEN THE PICTURE CAN GIVE NO MORE (0.70.11 campaign,
+	# bugs2 #4: at its least size the picture narrowed the words, which
+	# wrapped into more lines, and a long place's pane passed the screen,
+	# its Leave with it): they keep their whole height while the pane
+	# fits, and what is left of the screen — never less than [constant
+	# WORDS_LEAST] — once it would not.
+	var shown := _said_scroll != null and _said_scroll.visible
+	var words := _said.get_combined_minimum_size().y if shown else 0.0
+	var held := _said_scroll.custom_minimum_size.y if shown else 0.0
+	var rest := get_combined_minimum_size().y - _art.custom_minimum_size.y - held
+	var grow := clampf((room - rest - words) / PICTURE.y, LEAST, _most)
+	if shown:
+		var want := ceilf(minf(words, maxf(WORDS_LEAST, room - rest - PICTURE.y * grow)))
+		if absf(want - held) >= 1.0:
+			_said_scroll.custom_minimum_size.y = want
+			if want < held:
+				# A pane keeps the height it once had: back to what it needs.
+				_fit_height.call_deferred()
 	if absf(grow - _grow) * PICTURE.y >= 1.0:
 		_set_grow(grow)
+
+
+## The pane back at the height it needs, about its own middle when it grows
+## both ways (a pane over the world's middle).
+func _fit_height() -> void:
+	var before := size.y
+	reset_size()
+	if grow_vertical == Control.GROW_DIRECTION_BOTH:
+		position.y += (before - size.y) / 2.0
 
 
 func picture_key() -> String:
@@ -533,7 +569,8 @@ func _fill_choices() -> void:
 func say(lines: Array) -> void:
 	place["lines"] = lines
 	_said.text = "\n".join(lines)
-	_said.visible = not lines.is_empty()
+	_said_scroll.visible = not lines.is_empty()
+	_fit.call_deferred()
 
 
 ## The choices now: [param actions], each `[id, words, ready]`; [param
@@ -767,7 +804,7 @@ func ask_whose_deck(color: int) -> void:
 
 
 func words() -> String:
-	return _said.text if _said != null and _said.visible else ""
+	return _said.text if _said != null and _said_scroll.visible else ""
 
 
 ## What a choice does.

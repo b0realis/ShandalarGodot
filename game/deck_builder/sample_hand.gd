@@ -160,6 +160,14 @@ static func is_land_name(card_name: String) -> bool:
 ## the hand's own lands pay for, by count), average_cost (of the spells
 ## held), seen: [{name, hands}] (the spells held most often)}`; `hands`
 ## are counts of [param runs]. {} for an empty deck.
+##
+## A PROXY IS A CARD IN THE HAND AND NOTHING MORE (campaign 2026-11-26):
+## it has no data, so it is no land, no creature and no spell of a known
+## cost — it takes its place in the seven and is left out of the plays,
+## the average and the spells seen ("the statistics simply skip them",
+## [DeckModel]). It used to count as a spell that costs nothing. And a
+## real spell that costs nothing (Ornithopter, Black Lotus) is a play with
+## no land at all, where it used to wait for one.
 static func trials(deck: DeckModel, runs := 1000, p_seed := -1) -> Dictionary:
 	var sample := SampleHand.new(deck, p_seed)
 	if sample.deck_size() == 0 or runs <= 0:
@@ -169,7 +177,7 @@ static func trials(deck: DeckModel, runs := 1000, p_seed := -1) -> Dictionary:
 	var wanted := {}
 	for card_name in deck.names():
 		var data := DeckModel._card(card_name)
-		var fact := {"land": false, "creature": false, "cost": 0, "makes": []}
+		var fact := {"land": false, "creature": false, "cost": 0, "makes": [], "known": data != null}
 		if data != null:
 			fact["land"] = data.is_land()
 			fact["creature"] = data.is_creature()
@@ -210,15 +218,16 @@ static func trials(deck: DeckModel, runs := 1000, p_seed := -1) -> Dictionary:
 			if bool(fact.get("land", false)):
 				n += 1
 				land_copies[card_name] = int(land_copies.get(card_name, 0)) + 1
-			else:
+			elif bool(fact.get("known", false)):
 				creature = creature or bool(fact.get("creature", false))
 				cheapest = mini(cheapest, int(fact.get("cost", 0)))
 				cost_total += int(fact.get("cost", 0))
 				spell_total += 1
 		for card_name in held:
-			if bool((facts.get(card_name, {}) as Dictionary).get("land", false)):
+			var held_fact: Dictionary = facts.get(card_name, {})
+			if bool(held_fact.get("land", false)):
 				land_hands[card_name] = int(land_hands.get(card_name, 0)) + 1
-			else:
+			elif bool(held_fact.get("known", false)):
 				seen[card_name] = int(seen.get(card_name, 0)) + 1
 		lands[n] += 1
 		land_total += n
@@ -226,9 +235,10 @@ static func trials(deck: DeckModel, runs := 1000, p_seed := -1) -> Dictionary:
 		out["all_land"] += 1 if n == size else 0
 		out["keepable"] += 1 if n >= 2 and n <= 5 else 0
 		out["creature"] += 1 if creature else 0
-		out["turn_one"] += 1 if n >= 1 and cheapest <= 1 else 0
-		out["turn_two"] += 1 if (n >= 1 and cheapest <= 1) or (n >= 2 and cheapest <= 2) else 0
-		out["castable"] += 1 if n >= 1 and cheapest <= n else 0
+		# A spell that costs nothing needs no land; the rest need theirs.
+		out["turn_one"] += 1 if cheapest <= mini(n, 1) else 0
+		out["turn_two"] += 1 if cheapest <= mini(n, 2) else 0
+		out["castable"] += 1 if cheapest <= n else 0
 		var every := true
 		for color in color_hands:
 			if made.has(color):

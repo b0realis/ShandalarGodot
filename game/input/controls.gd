@@ -97,6 +97,40 @@ const PANEL_ACTIONS: Array[Dictionary] = [
 	{"name": "duel_attack_all", "label": "Attack-all key",
 		"tip": "While you choose attackers, puts every creature that can attack into the attack."},
 ]
+## THE WORLD MAP'S ACTIONS (campaign 2026-11-26, the owner: *"lets implement
+## full controller support"*): the adventure's keys that a controller needs
+## a button for, declared like the duel's — `project.godot [input]`, a key
+## and a pad button each, rebound through [method bind], remembered in the
+## same `controls` key — and listed on the Options screen under their own
+## title, `World map`. A SECOND GROUP: a key or button moves only between
+## actions of one group ([method group_of]), so B, X, Y, Start, Back and RB
+## mean in the world what they mean in a duel and neither list takes them
+## off the other. The keys are the ones the world always had (M, F5, Space,
+## Ctrl+S — [method WorldScreen._unhandled_input]); the walking keys, the
+## World Magics' digits and the F keys stay the world's own, as 1997's.
+## Escape and the pad's B close what is open through the engine's
+## `ui_cancel` and are not listed.
+const WORLD_ACTIONS: Array[Dictionary] = [
+	{"name": "world_map", "label": "Map",
+		"tip": "Opens and closes the map of Shandalar, on the road and in a town. F2 does too."},
+	{"name": "world_hero", "label": "Hero and tasks",
+		"tip": "Opens and closes your hero's pane: the stats, the journal and the tasks, on the road and in a town."},
+	{"name": "world_stop", "label": "Stop and find the hero",
+		"tip": "Stops the walk and brings the view back to your hero."},
+	{"name": "world_menu", "label": "Options menu",
+		"tip": "Opens and closes the world's options: save, load, the panes, the main menu. A right click does too; F10 as well (a handheld's Select)."},
+	{"name": "world_confirm", "label": "First choice",
+		"tip": "In a town or any other pane: puts the pointer on the first choice; pressed again there, takes it."},
+	{"name": "world_quicksave", "label": "Quicksave",
+		"tip": "Saves to the Quickslot at once, on the road, on the map and in a town."},
+]
+## The two groups' names ([method group_of]).
+const DUEL_GROUP := "duel"
+const WORLD_GROUP := "world"
+## The pad buttons no action may hold by default: the pad pointer's own
+## (`PadControls` — A and LB click, the D-pad hops or walks).
+const POINTER_BUTTONS: Array[int] = [JOY_BUTTON_A, JOY_BUTTON_LEFT_SHOULDER,
+	JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT]
 ## The pad's buttons by the names a player knows them by (the Xbox
 ## letters, which a Steam Deck and most pads print), for the file and
 ## the rows.
@@ -126,7 +160,7 @@ const MODIFIERS: Array[Key] = [KEY_SHIFT, KEY_CTRL, KEY_ALT, KEY_META]
 ## reason to lose the keyboard.
 static func apply() -> void:
 	var stored: Dictionary = Settings.get_value(SETTINGS_KEY, {})
-	for action in names():
+	for action in all_names():
 		var events := defaults(action)
 		# The choices are always the project's digits (campaign 2026-10-12
 		# f-shell): a stored row for one is the old bug's leftover (r2-10).
@@ -151,6 +185,38 @@ static func names() -> Array[String]:
 	for entry in PANEL_ACTIONS:
 		out.append(String(entry["name"]))
 	return out
+
+
+## The world map's actions ([constant WORLD_ACTIONS]), by name.
+static func world_names() -> Array[String]:
+	var out: Array[String] = []
+	for entry in WORLD_ACTIONS:
+		out.append(String(entry["name"]))
+	return out
+
+
+## Every action of both groups: the duel's ([method names]) and the world
+## map's ([method world_names]).
+static func all_names() -> Array[String]:
+	var out := names()
+	out.append_array(world_names())
+	return out
+
+
+## The group [param action] belongs to: [constant WORLD_GROUP] for the
+## world map's, [constant DUEL_GROUP] for every other.
+static func group_of(action: String) -> String:
+	return WORLD_GROUP if action.begins_with("world_") else DUEL_GROUP
+
+
+## The listed row of [param action] in either group (`{name, label, tip}`),
+## or `{}`.
+static func entry_of(action: String) -> Dictionary:
+	for list in [ACTIONS, WORLD_ACTIONS, PANEL_ACTIONS]:
+		for entry: Dictionary in list:
+			if String(entry["name"]) == action:
+				return entry
+	return {}
 
 
 ## The project's own events for [param action] — what `project.godot`
@@ -203,13 +269,15 @@ static func _set_events(action: String, events: Array[InputEvent]) -> void:
 ## off any other listed action, and remember it. Anything but a key or
 ## a pad button, a bare modifier, or an echo is refused (false).
 static func bind(action: String, event: InputEvent) -> bool:
-	if not bindable(event) or not names().has(action):
+	if not bindable(event) or not all_names().has(action):
 		return false
 	var pressed := event.duplicate() as InputEvent
 	pressed.set("pressed", false)   # the map holds the key, not a press of it
 	pressed.set("device", -1)       # any keyboard, any pad
-	for other in names():
-		if other == action:
+	for other in all_names():
+		if other == action or group_of(other) != group_of(action):
+			# The other group's: a duel's button and the world's are pressed
+			# on different screens and share a key freely.
 			continue
 		# A LISTED ACTION NEVER TAKES A DIGIT OFF THE CHOICES (campaign
 		# 2026-10-12 f-shell, r2-10): the choice list reads its digits
@@ -269,7 +337,7 @@ static func is_default(action: String) -> bool:
 ## Write the actions that differ from the defaults; nothing when none do.
 static func _store() -> void:
 	var out := {}
-	for action in names():
+	for action in all_names():
 		if is_default(action) or CHOICES.has(action):
 			continue
 		var texts: Array = []
@@ -307,7 +375,7 @@ static func pressed(event: InputEvent, action: String) -> bool:
 		return false
 	if event is InputEventKey and event.echo:
 		return false
-	if action == "duel_pause" and is_menu_key(event):
+	if (action == "duel_pause" or action == "world_menu") and is_menu_key(event):
 		return true
 	return event.is_action_pressed(action, false, true)
 
@@ -351,6 +419,16 @@ static func text(action: String) -> String:
 static func hint(action: String) -> String:
 	var key := key_of(action)
 	return "" if key == null else "  [%s]" % describe(key)
+
+
+## The pad's hint beside a word, the twin of [method hint]: "  [Y]", or ""
+## when no pad button is bound — or when no controller is connected, so a
+## desk with a keyboard and a mouse reads what it always read.
+static func pad_hint(action: String) -> String:
+	var pad := pad_of(action)
+	if pad == null or Input.get_connected_joypads().is_empty():
+		return ""
+	return "  [%s]" % describe(pad)
 
 
 ## One event in the player's words.
@@ -402,6 +480,49 @@ static func decode(text: String) -> InputEvent:
 			pad.button_index = int(name.substr(7)) as JoyButton
 			return pad
 	return null
+
+
+# --- campaign 2026-11-26: the world map's actions ---
+
+## Which of the world map's actions [param event] presses, "" for none
+## ([method pressed]'s exactness: the action's modifiers and no others).
+static func world_action(event: InputEvent) -> String:
+	if not (event is InputEventKey or event is InputEventJoypadButton):
+		return ""
+	for entry in WORLD_ACTIONS:
+		if pressed(event, String(entry["name"])):
+			return String(entry["name"])
+	return ""
+
+
+## Whether [param key] is the project's own key of a world action that the
+## player has since given another key (or whose key went to another
+## action): the world's old `match` on keycodes must not answer it any
+## more. Never true while nothing is rebound.
+static func world_key_retired(key: InputEventKey) -> bool:
+	if key == null:
+		return false
+	for action in world_names():
+		for event in defaults(action):
+			if event is InputEventKey and _same(event, key):
+				var now := key_of(action)
+				return now == null or not _same(now, event)
+	return false
+
+
+## WHETHER A FILE BOX SHOULD BE THE SYSTEM'S OWN (campaign 2026-11-26, a
+## fallback for the controller alone): yes, as ever — unless the pad's
+## pointer is what is being played with right now (`PadControls.is_awake`),
+## for the system's window is outside the game and a controller cannot
+## work it; then the engine's own box opens inside the game, where the
+## left stick points and RT clicks ([method PadControls._poll]). A phone
+## or a headset keeps its system's picker, the only door to its storage.
+static func system_file_box() -> bool:
+	if OS.has_feature("mobile"):
+		return true
+	var tree := Engine.get_main_loop() as SceneTree
+	var layer: Node = tree.root.get_node_or_null(^"PadControls") if tree != null else null
+	return layer == null or not layer.is_awake()
 
 
 # --- campaign 2026-10-12 f-shell: the handheld's menu key, dark rows ---

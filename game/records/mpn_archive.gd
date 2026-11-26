@@ -54,6 +54,7 @@ func start(game: MtgGame, headers: Dictionary, directory := "") -> bool:
 		return false
 	_write(MpnCodec.header_text(headers))
 	if _file == null: return false
+	prune(folder, KEEP_RECORDS, KEEP_BYTES, path)
 	recorder = MpnRecorder.new(game)
 	recorder.recorded.connect(_record)
 	recorder.observe()
@@ -155,3 +156,72 @@ static func files(directory := "") -> Array[String]:
 	out.sort()
 	out.reverse()
 	return out
+
+
+## THE FOLDER HAS A BOUND (campaign of 2026-11-26). Every duel that is not
+## a test writes a recording of some 40 to 140 KB, and nothing removed
+## one: a season of play was thousands of files that only a file manager
+## could clear — and on the web, a handheld or a portable game they ride
+## along with everything else. So the newest [constant KEEP_RECORDS]
+## recordings are kept, and of those no more than [constant KEEP_BYTES]
+## together; a new recording lets the oldest go ([method prune]). Past
+## Games says the number and offers Delete and Delete all.
+const KEEP_RECORDS := 500
+const KEEP_BYTES := 64 * 1024 * 1024
+
+
+## Whether [param name] is a recording this class named itself:
+## `YYYYMMDDTHHMMSSZ-<24 hex digits>.mpn` ([method start]). Only such a
+## file is ever pruned — never an imported one (`import-…`), nor a file
+## the player put in the folder under a name of their own.
+static func is_recorded_name(name: String) -> bool:
+	if name.length() != 45 or not name.ends_with(".mpn") or name[8] != "T" or name[15] != "Z" or name[16] != "-":
+		return false
+	return (name.substr(0, 8) + name.substr(9, 6)).is_valid_int() and name.substr(17, 24).is_valid_hex_number()
+
+
+## Remove the oldest recordings of [param directory] (the game's own
+## folder when "") past [param keep_records] files or [param keep_bytes]
+## bytes together; how many went. By name, which starts with the time —
+## oldest first — and only names of [method is_recorded_name]; never
+## [param spare] (the recording being written).
+static func prune(directory := "", keep_records := KEEP_RECORDS, keep_bytes := KEEP_BYTES, spare := "") -> int:
+	var folder := GamePaths.records_folder() if directory == "" else directory
+	var dir := DirAccess.open(folder)
+	if dir == null: return 0
+	var names: Array[String] = []
+	for name in dir.get_files():
+		if is_recorded_name(name): names.append(name)
+	names.sort()
+	names.reverse()      # newest first
+	var kept := 0
+	var bytes := 0
+	var removed := 0
+	var full := false    # once the bound is met, everything older goes
+	for name in names:
+		var at := folder.path_join(name)
+		var size := FileAccess.get_size(at)
+		full = full or kept >= keep_records or bytes + size > keep_bytes
+		if at == spare or not full:
+			kept += 1
+			bytes += maxi(0, size)
+		elif not dir.is_link(name) and DirAccess.remove_absolute(at) == OK:
+			removed += 1
+	return removed
+
+
+## Remove the recording at [param path_value] — only an `.mpn` file that
+## sits in [param directory] itself (the game's own folder when "").
+static func delete(path_value: String, directory := "") -> bool:
+	var folder := GamePaths.records_folder() if directory == "" else directory
+	if path_value.get_extension().to_lower() != "mpn" or path_value != folder.path_join(path_value.get_file()):
+		return false
+	return FileAccess.file_exists(path_value) and DirAccess.remove_absolute(path_value) == OK
+
+
+## Remove every recording [method files] lists; how many went.
+static func delete_all(directory := "") -> int:
+	var removed := 0
+	for at in files(directory):
+		if delete(at, directory): removed += 1
+	return removed

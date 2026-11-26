@@ -116,8 +116,9 @@ func test_every_copy_of_the_deck_in_use_is_staked_alike() -> void:
 
 
 func test_no_card_to_stake_is_the_game_over() -> void:
+	# A hero who owns no spell at all: since 0.70.11 a spell in the bag or in
+	# another deck is a way out ([DeckRescue]), and no end.
 	_deck(["Forest", "Island", "Swamp"])
-	player.cards.append({"card": "Serra Angel", "decks": []})   # not in the deck in use
 	_creature(1, 1)
 	var meeting := CreatureMeeting.begin(player, 0)
 	assert_true(bool(meeting["no_ante"]), "ExitIfNoUsableDeckCards: only the deck in use counts")

@@ -22126,6 +22126,43 @@ game"), with a Linux export run to prove it.
   built and passed by `CardPacks.inspect` against a stand-in network,
   the skin from a 1997 install 613 files in about 10 s.
 
+## 2026-11-26 — Version 0.70.11
+
+Version 0.70.11 (Android version code 70011). Its notes are
+`docs/releases/0.70.11.md`; the campaign's record is
+`docs/campaign-2026-11-26.md`. LAN stays protocol 32; saves stay v9.
+The owner: "one smoothness of gameplay pass over all, one robustness
+pass over all, one bug find and one bug fix campaign", and, after a
+player's report, "implement full controller support".
+
+- **Controller:** `PadControls.dpad_walks()` (screens in group
+  `pad_dpad_walkers` answer `pad_dpad_walks()`), the D-pad typing the
+  arrow keys on the free world and the dungeon board; a second action
+  list in `Controls` (world_map, world_hero, world_stop, world_menu,
+  world_first, world_quicksave) with Options groups "World map" and
+  "Menus and screens"; `Controls.system_file_box()` gives a pad the
+  in-game file box; the on-screen keyboard on a pad's click.
+- **Adventure:** `DeckRescue` (an empty deck in use never ends an
+  adventure while a spell is owned; rescue on load);
+  `DataSites._dungeon_room` (early-exit room check); the island made on
+  a worker; Embark without threads; a save on
+  `NOTIFICATION_APPLICATION_PAUSED`; a conceded duel ended in the
+  engine.
+- **Duel and LAN:** a zero-metrics fallback face in `GameSkin.font`;
+  kept table widgets in `SgDuelView` and `MpnDuelTable`; kept Spell
+  Chain entries; `SpellFlight` idle; Help built at column width and in
+  slices; `CoinToss.hurry()`; `SgLocalClient` parting "abandon".
+- **AI:** `engine/ai/own_goal.gd` (cards recognised by text: self-loss
+  permanents, symmetric wipes, harmful riders' targets).
+- **Decks and packs:** `CardRegistry.resolve_name`/`names_like`,
+  forgiving readers in `DeckList`; `DeckFilter` keeps group answers;
+  the Magic Battle scan cached; Card Packs switches in the background;
+  `PackBuild.aside`; `PackBuildHost.sweep()`.
+- **Files:** `PortalPack.one_list` (one zip guard for save Import and
+  every pack); `Settings.safe_text`; `Settings.sweep_pending`; tar
+  bounds; portrait bound; `MpnArchive` keeps 500 recordings / 64 MB,
+  Delete and Delete all; `PortableMode` cancel and stale-folder sweep.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

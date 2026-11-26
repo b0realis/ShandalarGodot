@@ -272,7 +272,7 @@ func _notification(what: int) -> void:
 ## does not count. Returns early when the toss leaves the tree.
 func _wait(seconds: float) -> void:
 	var until := clock_ms() + int(seconds * 1000.0)
-	while clock_ms() < until:
+	while clock_ms() < until and not _verdict_skip_requested:
 		if not is_inside_tree():
 			return
 		await get_tree().process_frame
@@ -285,16 +285,59 @@ func _wait(seconds: float) -> void:
 ## following play/draw question. Handle the press before it reaches GUI
 ## controls; releases, wheel events and other presentation modes ignore it.
 func _input(event: InputEvent) -> void:
-	if not _video_playing or _held:   # held: the click is the Pause window's (c12 h4-8)
+	if _held:   # held: the click is the Pause window's (c12 h4-8)
 		return
 	var click: bool = event is InputEventMouseButton and event.pressed \
 		and event.button_index == MOUSE_BUTTON_LEFT
 	var tap: bool = event is InputEventScreenTouch and event.pressed
-	if click or tap:
+	if not (click or tap):
+		return
+	if _video_playing:
 		get_viewport().set_input_as_handled()
+	hurry()
+
+
+# --- campaign 2026-11-26: the toss can be hurried, by any hand ---
+## Which part of the toss a press would end now.
+var _spin_playing := false
+var _spin_skip_requested := false
+var _verdict_showing := false
+var _verdict_skip_requested := false
+## The spin's tweens now running ([method _spin_coin]).
+var _spin_tweens: Array[Tween] = []
+
+
+## ONE PRESS, ONE PART: the movie or the spin ends on the face it was
+## going to show, and a press under the verdict ends its hold. The movie
+## answered only a click and the spin and the verdict nothing at all
+## (4.1 s, 1.5 s and 1.5 s; 1.9 s for the instant toss), so from the
+## keyboard or a pad every duel began with up to 5.8 s of waiting. The
+## duel screen sends its confirm keys here ([method DuelScreen._on_control]);
+## a click or a touch arrives by [method _input]. True when the press ended
+## something. Never while the toss is held.
+func hurry() -> bool:
+	if _held:
+		return false
+	if _video_playing:
 		if not _video_skip_requested:
 			_video_skip_requested = true
 			video_skipped.emit()
+		return true
+	if _spin_playing:
+		if not _spin_skip_requested:
+			_spin_skip_requested = true
+			video_skipped.emit()   # the toss's sound stops with its picture
+			# Each tween ends where it was going; the spin's loop reads
+			# the request as it wakes and sets the coin down.
+			for tween in _spin_tweens.duplicate():
+				if tween != null and tween.is_valid():
+					tween.custom_step(TURN * HALF_TURNS)
+		return true
+	if _verdict_showing:
+		_verdict_skip_requested = true
+		return true
+	return false
+# --- end campaign 2026-11-26 ---
 
 
 # ------------------------------------------------------- style selection --
@@ -502,7 +545,13 @@ func run(config: DuelConfig, winner: int, winner_is_you: bool,
 
 	# On the toss's own clock, so the Pause window holds the verdict too
 	# (the bug campaign c12, h4-8): a tree timer ran out under it.
+	# A press ends it ([method hurry]).
+	_verdict_skip_requested = false
+	_verdict_showing = true
 	await _wait(hold)
+	if not is_instance_valid(self):
+		return
+	_verdict_showing = false
 	if not is_instance_valid(self) or not is_instance_valid(panel) or not is_inside_tree():
 		return
 	var fade := panel.create_tween()
@@ -542,7 +591,12 @@ func _spin_coin(panel: Control, config: DuelConfig, winner: int) -> void:
 	faces[shown].visible = true
 
 	# The toss: the coin rises, turning end over end, and falls back.
+	var rest_y := coin.position.y
+	var lands_on := (shown + HALF_TURNS) % 2
+	_spin_skip_requested = false
+	_spin_playing = true
 	var arc := coin.create_tween()
+	_spin_tweens = [arc]
 	arc.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	arc.tween_property(coin, "position:y", coin.position.y - 58.0,
 		TURN * HALF_TURNS * 0.5)
@@ -550,22 +604,39 @@ func _spin_coin(panel: Control, config: DuelConfig, winner: int) -> void:
 	arc.tween_property(coin, "position:y", coin.position.y,
 		TURN * HALF_TURNS * 0.5)
 	for half_turn in HALF_TURNS:
+		if _spin_skip_requested:
+			break
 		# Squash to an edge-on sliver, swap the face, open out again.
 		var spin := coin.create_tween()
+		_spin_tweens = [arc, spin]
 		spin.set_trans(Tween.TRANS_SINE)
 		spin.tween_property(coin, "scale:y", 0.06, TURN * 0.5)
 		await spin.finished
-		if not is_instance_valid(panel):
+		if not is_instance_valid(self) or not is_instance_valid(panel):
 			return
+		if _spin_skip_requested:
+			break
 		faces[shown].visible = false
 		shown = 1 - shown
 		faces[shown].visible = true
 		var open := coin.create_tween()
+		_spin_tweens = [arc, open]
 		open.set_trans(Tween.TRANS_SINE)
 		open.tween_property(coin, "scale:y", 1.0, TURN * 0.5)
 		await open.finished
-		if not is_instance_valid(panel):
+		if not is_instance_valid(self) or not is_instance_valid(panel):
 			return
+	_spin_playing = false
+	_spin_tweens = []
+	if _spin_skip_requested:
+		# HURRIED ([method hurry]): the coin is down, on the face it was
+		# always going to land on.
+		if arc.is_valid():
+			arc.kill()
+		coin.position.y = rest_y
+		coin.scale = Vector2.ONE
+		for seat in 2:
+			faces[seat].visible = seat == lands_on
 
 	# It settles face-up, showing the leader's colour.
 	var settle := coin.create_tween()

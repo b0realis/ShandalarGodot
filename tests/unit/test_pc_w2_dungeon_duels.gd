@@ -219,8 +219,7 @@ func test_every_card_banned_stakes_nothing_but_plays() -> void:
 
 
 func test_no_card_to_stake_is_the_game_over() -> void:
-	_deck(_copies("Forest", 20))
-	player.cards.append({"card": "Grizzly Bears", "decks": [1]})
+	_deck(_copies("Forest", 20))   # no spell owned: no rescue ([DeckRescue])
 	var duel := DungeonDuels.setup(player, _run(6, DungeonDuels.CARRY, 3, [1, 2, 3, 4, 5]), 0)
 	assert_false(DungeonDuels.draw_stake(player, duel), "ExitIfNoUsableDeckCards")
 	assert_true(bool(duel["no_ante"]))

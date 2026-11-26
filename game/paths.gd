@@ -275,6 +275,47 @@ static func shown(path: String) -> String:
 	return full
 
 
+## THE FOLDERS THE GAME WRITES, swept of the pending files an interrupted
+## write left in them a day or more ago ([method Settings.sweep_pending],
+## which says what is and is not removed); how many went. Once at a start
+## ([method Settings._load]). `user://` and the folders in it two deep —
+## the saves, the decks and their exports, the skins, the checkpoints —
+## but the engine's own and the big picture folders, where the game writes
+## no such file; then the places the player's keys moved elsewhere. At
+## most [constant SWEEP_FOLDERS] folders are looked into.
+const SWEEP_SKIPPED: Array[String] = ["logs", "shader_cache", "vulkan", "objectdb_snapshots",
+	"original_skin", "cardpack_build", "music", "portraits", "gut_temp_directory"]
+const SWEEP_FOLDERS := 200
+
+static func sweep_pending(now := -1.0) -> int:
+	var folders: Array[String] = ["user://"]
+	var at := 0
+	var depth := {"user://": 0}
+	while at < folders.size() and folders.size() < SWEEP_FOLDERS:
+		var here := folders[at]
+		at += 1
+		if int(depth[here]) >= 2:
+			continue
+		var dir := DirAccess.open(here)
+		if dir == null:
+			continue
+		for sub in dir.get_directories():
+			if (int(depth[here]) == 0 and sub in SWEEP_SKIPPED) or dir.is_link(sub) or folders.size() >= SWEEP_FOLDERS:
+				continue
+			var path := here.path_join(sub)
+			folders.append(path)
+			depth[path] = int(depth[here]) + 1
+	var files_dir := android_files_dir()
+	for place: String in [cardpacks_folder(), expanded_adventure_folder(), tournaments_folder(), drafts_folder(),
+			records_folder(), skin_zip().get_base_dir(), player_place("user://adventures", files_dir)]:
+		if place != "" and not folders.has(place):
+			folders.append(place)
+	var removed := 0
+	for folder in folders:
+		removed += Settings.sweep_pending(folder, now)
+	return removed
+
+
 ## Where the keys live, for the Options note.
 static func settings_file() -> String:
 	return shown(Settings.PATH)

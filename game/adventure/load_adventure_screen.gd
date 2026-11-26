@@ -521,7 +521,7 @@ func pick_export() -> void:
 	box.title = "Export the adventure"
 	box.access = FileDialog.ACCESS_FILESYSTEM
 	box.filters = PackedStringArray(["*.zip ; Exported adventures"])
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.size = Vector2i(760, 520)
 	box.current_dir = load("res://game/skin_pack.gd").pick_start_dir()
 	box.current_file = AdventureTransfer.file_name_for(String(save["name"]))
@@ -593,7 +593,7 @@ func pick_import() -> void:
 	box.title = "Choose an exported adventure"
 	box.access = FileDialog.ACCESS_FILESYSTEM
 	box.filters = PackedStringArray(["*.zip ; Exported adventures"])
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.size = Vector2i(760, 520)
 	box.current_dir = load("res://game/skin_pack.gd").pick_start_dir()
 	box.file_selected.connect(func(path: String) -> void:

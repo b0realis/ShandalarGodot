@@ -261,6 +261,8 @@ static func meet(player: AdventurePlayer, row: int, color: int, slot := -1,
 	if stake != "":
 		(meeting["creature_ante"] as Array[String]).append(stake)
 	player.dice = dice.state
+	# The end only for a hero with no card to stake at all ([DeckRescue]).
+	DeckRescue.rescue(player)
 	if usable_cards(player).is_empty():
 		meeting["no_ante"] = true
 		return meeting

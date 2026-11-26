@@ -177,6 +177,7 @@ static func enter(player: AdventurePlayer, slot: int, again := false) -> Diction
 	if again and not _last.is_empty() and int(_last["slot"]) == slot \
 			and int(_last["player"]) == player.get_instance_id():
 		var kept: Dictionary = _last["entry"]
+		DeckRescue.rescue(player)
 		kept["no_ante"] = CreatureMeeting.usable_cards(player).is_empty()
 		var staked := stake(player, slot) if not kept["no_ante"] else {"names": [] as Array[String], "places": [] as Array[int]}
 		kept["hero_ante"] = staked["names"]
@@ -189,6 +190,7 @@ static func enter(player: AdventurePlayer, slot: int, again := false) -> Diction
 	var entry := {"slot": slot, "wizard": TownStatus.ruler(world, slot), "tier": tier(player, slot),
 		"row": 0, "hero_ante": [] as Array[String], "hero_ante_at": [] as Array[int],
 		"creature_ante": [] as Array[String], "no_ante": false}
+	DeckRescue.rescue(player)
 	if CreatureMeeting.usable_cards(player).is_empty():
 		entry["no_ante"] = true
 	else:

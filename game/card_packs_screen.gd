@@ -47,6 +47,24 @@ var _add_note: Label
 ## at all. There it is disabled and says what to use instead. A test
 ## stands in for the platform through [member on_android].
 static var on_android := OS.has_feature("android")
+## THE BROWSER HAS NO `Get Card Packs...` (bug campaign 2026-11-26): its
+## Options carry no such button, so the foot note does not send a player
+## there. A test stands in for the platform through [member on_web].
+static var on_web := OS.has_feature("web")
+const BUILT_IN_GAME := "Options > Get Card Packs... builds them here in the game. Or build "
+const BUILT_BY_TOOLS := "Build "
+## WORKING, NOT FROZEN (campaign 2026-11-26): Enable, Disable and Rescan
+## rebuilt the card pool on the drawing thread — the window stood still
+## 0.15 to 1.7 seconds a press with nothing said. The pool is now rebuilt
+## on a thread ([method CardPacks.set_enabled_many], [method
+## CardPacks.rescan]) as the Embark does it; until [method
+## CardRegistry.poll] says it is in, an hourglass and these words stand
+## beside Back and the buttons that change the packs are held.
+const WORKING := "Working..."
+var _busy := false
+## Frames until a Rescan asked for reads the folder; 0 when none is.
+var _rescan_in := 0
+var _working: Control
 const OPEN_FOLDER_ANDROID := "This device has no file manager that can open the card folder. Use Add pack... to bring a pack in."
 
 
@@ -86,7 +104,7 @@ func _ready() -> void:
 	tools.add_child(open)
 	var rescan := UiChrome.menu_button("Rescan", Vector2(110, 32), 13)
 	rescan.name = "Rescan"
-	rescan.pressed.connect(CardPacks.rescan)
+	rescan.pressed.connect(_rescan)
 	tools.add_child(rescan)
 	# `Add pack...` (the owner, 2026-10-21: option A of three mockups, *"the
 	# leanest"*): a chosen zip is checked and copied in ([method
@@ -118,7 +136,7 @@ func _ready() -> void:
 	actions.add_theme_constant_override("separation", 10)
 	_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_enable.name = "EnablePack1"
-	_enable.pressed.connect(CardPacks.set_enabled.bind(CardPacks.ID, true))
+	_enable.pressed.connect(_switch.bind(CardPacks.ID, true))
 	actions.add_child(_enable)
 	_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_disable.name = "DisablePack1"
@@ -135,7 +153,7 @@ func _ready() -> void:
 	second_actions.add_theme_constant_override("separation", 10)
 	_second_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_second_enable.name = "EnablePack2"
-	_second_enable.pressed.connect(CardPacks.set_enabled.bind(FallenEmpiresPack.ID, true))
+	_second_enable.pressed.connect(_switch.bind(FallenEmpiresPack.ID, true))
 	second_actions.add_child(_second_enable)
 	_second_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_second_disable.name = "DisablePack2"
@@ -152,7 +170,7 @@ func _ready() -> void:
 	third_actions.add_theme_constant_override("separation", 10)
 	_third_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_third_enable.name = "EnablePack3"
-	_third_enable.pressed.connect(CardPacks.set_enabled.bind(IceAgePack.ID, true))
+	_third_enable.pressed.connect(_switch.bind(IceAgePack.ID, true))
 	third_actions.add_child(_third_enable)
 	_third_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_third_disable.name = "DisablePack3"
@@ -168,7 +186,7 @@ func _ready() -> void:
 	fourth_actions.add_theme_constant_override("separation", 10)
 	_fourth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_fourth_enable.name = "EnablePack4"
-	_fourth_enable.pressed.connect(CardPacks.set_enabled.bind(HomelandsPack.ID, true))
+	_fourth_enable.pressed.connect(_switch.bind(HomelandsPack.ID, true))
 	fourth_actions.add_child(_fourth_enable)
 	_fourth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_fourth_disable.name = "DisablePack4"
@@ -185,7 +203,7 @@ func _ready() -> void:
 	fifth_actions.add_theme_constant_override("separation", 10)
 	_fifth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_fifth_enable.name = "EnablePack5"
-	_fifth_enable.pressed.connect(CardPacks.set_enabled.bind(AlliancesPack.ID, true))
+	_fifth_enable.pressed.connect(_switch.bind(AlliancesPack.ID, true))
 	fifth_actions.add_child(_fifth_enable)
 	_fifth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_fifth_disable.name = "DisablePack5"
@@ -201,7 +219,7 @@ func _ready() -> void:
 	sixth_actions.add_theme_constant_override("separation", 10)
 	_sixth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_sixth_enable.name = "EnablePack6"
-	_sixth_enable.pressed.connect(CardPacks.set_enabled.bind(PortalPack.ID, true))
+	_sixth_enable.pressed.connect(_switch.bind(PortalPack.ID, true))
 	sixth_actions.add_child(_sixth_enable)
 	_sixth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_sixth_disable.name = "DisablePack6"
@@ -217,7 +235,7 @@ func _ready() -> void:
 	seventh_actions.add_theme_constant_override("separation", 10)
 	_seventh_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_seventh_enable.name = "EnablePack7"
-	_seventh_enable.pressed.connect(CardPacks.set_enabled.bind(FifthEditionPack.ID, true))
+	_seventh_enable.pressed.connect(_switch.bind(FifthEditionPack.ID, true))
 	seventh_actions.add_child(_seventh_enable)
 	_seventh_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_seventh_disable.name = "DisablePack7"
@@ -233,7 +251,7 @@ func _ready() -> void:
 	eighth_actions.add_theme_constant_override("separation", 10)
 	_eighth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_eighth_enable.name = "EnablePack8"
-	_eighth_enable.pressed.connect(CardPacks.set_enabled.bind(MirageBlockPack.ID, true))
+	_eighth_enable.pressed.connect(_switch.bind(MirageBlockPack.ID, true))
 	eighth_actions.add_child(_eighth_enable)
 	_eighth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_eighth_disable.name = "DisablePack8"
@@ -249,7 +267,7 @@ func _ready() -> void:
 	ninth_actions.add_theme_constant_override("separation", 10)
 	_ninth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_ninth_enable.name = "EnablePack9"
-	_ninth_enable.pressed.connect(CardPacks.set_enabled.bind(TempestBlockPack.ID, true))
+	_ninth_enable.pressed.connect(_switch.bind(TempestBlockPack.ID, true))
 	ninth_actions.add_child(_ninth_enable)
 	_ninth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_ninth_disable.name = "DisablePack9"
@@ -265,7 +283,7 @@ func _ready() -> void:
 	tenth_actions.add_theme_constant_override("separation", 10)
 	_tenth_enable = UiChrome.menu_button("Enable", Vector2(120, 34), 13)
 	_tenth_enable.name = "EnablePack10"
-	_tenth_enable.pressed.connect(CardPacks.set_enabled.bind(UrzaBlockPack.ID, true))
+	_tenth_enable.pressed.connect(_switch.bind(UrzaBlockPack.ID, true))
 	tenth_actions.add_child(_tenth_enable)
 	_tenth_disable = UiChrome.menu_button("Disable", Vector2(120, 34), 13)
 	_tenth_disable.name = "DisablePack10"
@@ -274,7 +292,7 @@ func _ready() -> void:
 	content.add_child(tenth_actions)
 
 	var local_only := UiChrome.body_label(
-		"Packs are not distributed with the game. Options > Get Card Packs... builds them here in the game. Or build them yourself with "
+		"Packs are not distributed with the game. " + (BUILT_BY_TOOLS if on_web else BUILT_IN_GAME) + "them yourself with "
 		+ "tools/pack_1_dotp_complete.py, tools/pack_2_fallen_empires.py, "
 		+ "tools/pack_3_ice_age.py, tools/pack_4_homelands.py, tools/pack_5_alliances.py, tools/pack_6_portal.py, tools/pack_7_fifth_edition.py, tools/pack_8_mirage_block.py, tools/pack_9_tempest_block.py or tools/pack_10_urza_block.py, "
 		+ "place the exact ZIP here, then Rescan.", 13)
@@ -287,7 +305,35 @@ func _ready() -> void:
 	back.pressed.connect(_back)
 	var back_row := HBoxContainer.new()
 	back_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	# Back stays in the middle: as much room left of it as the hourglass
+	# and its words have on the right.
+	var left_of_back := Control.new()
+	left_of_back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_of_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	back_row.add_child(left_of_back)
 	back_row.add_child(back)
+	var right_of_back := Control.new()
+	right_of_back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_of_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	back_row.add_child(right_of_back)
+	var working := HBoxContainer.new()
+	working.name = "Working"
+	working.add_theme_constant_override("separation", 8)
+	working.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	working.offset_left = 12.0
+	working.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	working.visible = false
+	var glass := Hourglass.new()
+	glass.name = "Hourglass"
+	glass.custom_minimum_size = Vector2(26, 38)
+	glass.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	working.add_child(glass)
+	var words := UiChrome.body_label(WORKING, 15)
+	words.name = "WorkingWords"
+	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	working.add_child(words)
+	right_of_back.add_child(working)
+	_working = working
 
 	# Keep every pack reachable at the game's minimum window height.
 	var scroll := ScrollContainer.new()
@@ -319,9 +365,77 @@ func _ready() -> void:
 	# nothing focused — the arrows, Tab and the D-pad had nothing to move
 	# from and there was no way back without a mouse. Up walks the list.
 	back.grab_focus()
+	set_process(false)
+
+
+## Switch [param id] on or off with the card pool rebuilt behind the
+## hourglass — the buttons' way and `Disable anyway`'s.
+func _switch(id: String, on: bool) -> void:
+	_pool_is_in()
+	if _busy:
+		return
+	var ids: Array[String] = [id]
+	CardPacks.set_enabled_many(ids, on, true)
+	_wait_for_the_pool()
+
+
+## Rescan, the same way. Reading the folder itself is still done in one
+## go ([method CardPacks.discover], 0.2 to 0.35 s with ten packs), so the
+## hourglass is drawn first and the folder read two frames later.
+func _rescan() -> void:
+	_pool_is_in()
+	if _busy or not CardPacks.change_refusal().is_empty():
+		return
+	_busy = true
+	_rescan_in = 2
+	_working.visible = true
+	set_process(true)
+	_refresh()
+
+
+## True while the pool a press here asked for is still being built.
+func is_working() -> bool:
+	return _busy
+
+
+func _wait_for_the_pool() -> void:
+	if not CardRegistry.is_loading() or CardRegistry.poll():
+		return
+	_busy = true
+	_working.visible = true
+	set_process(true)
+	_refresh()
+
+
+func _process(_delta: float) -> void:
+	if not _busy:
+		set_process(false)
+		return
+	if _rescan_in > 0:
+		_rescan_in -= 1
+		if _rescan_in == 0:
+			CardPacks.rescan(true)
+		return
+	if _pool_is_in():
+		_refresh()
+
+
+## The wait is over when the pool is in — whoever built it: the thread
+## this page started, or something that asked for a card meanwhile and
+## built it in place. True when that ended the wait just now.
+func _pool_is_in() -> bool:
+	if not _busy or _rescan_in > 0:
+		return false
+	if CardRegistry.is_loading() and not CardRegistry.poll():
+		return false
+	_busy = false
+	_working.visible = false
+	set_process(false)
+	return true
 
 
 func _refresh() -> void:
+	_pool_is_in()
 	var tenth := CardPacks.status(UrzaBlockPack.ID)
 	_tenth_enable.disabled = not tenth.available or tenth.enabled
 	_tenth_disable.disabled = not tenth.available or not tenth.enabled
@@ -443,10 +557,10 @@ func _refresh() -> void:
 			String(state.get("rejection", "not found"))]
 	var refusal := CardPacks.change_refusal()
 	var rescan := find_child("Rescan", true, false) as Button
-	rescan.disabled = not refusal.is_empty()
+	rescan.disabled = not refusal.is_empty() or _busy
 	rescan.tooltip_text = refusal
 	var add := find_child("AddPack", true, false) as Button
-	add.disabled = OS.has_feature("web") or not refusal.is_empty()
+	add.disabled = OS.has_feature("web") or not refusal.is_empty() or _busy
 	add.tooltip_text = refusal if not refusal.is_empty() else ADD_PACK_TOOLTIP
 	# EVERY pack's pair — Pack 7's was missing until the bug pass of
 	# 2026-10-03, so it stayed live under an SGManalink session's lock;
@@ -455,7 +569,7 @@ func _refresh() -> void:
 		_third_enable, _third_disable, _fourth_enable, _fourth_disable, _fifth_enable, _fifth_disable, _sixth_enable, _sixth_disable,
 		_seventh_enable, _seventh_disable, _eighth_enable, _eighth_disable, _ninth_enable, _ninth_disable,
 		_tenth_enable, _tenth_disable]:
-		button.disabled = button.disabled or not refusal.is_empty()
+		button.disabled = button.disabled or not refusal.is_empty() or _busy
 		button.tooltip_text = refusal
 	if not refusal.is_empty(): _status.text += "\n" + refusal
 
@@ -473,14 +587,14 @@ func _on_pack_added(result: Dictionary) -> void:
 func _request_disable(id := CardPacks.ID) -> void:
 	var warning := CardPacks.disable_warning(id)
 	if warning == "":
-		CardPacks.set_enabled(id, false)
+		_switch(id, false)
 		return
 	if is_instance_valid(_warning):
 		return
 	_warning = UiChrome.action_popup(self, "Current deck uses " + CardPacks.label_for(id), warning, [
 		{"label": "Keep enabled", "name": "KeepEnabled", "cancel": true},
 		{"label": "Disable anyway", "name": "DisableAnyway",
-			"callable": CardPacks.set_enabled.bind(id, false)},
+			"callable": _switch.bind(id, false)},
 	], 570.0)
 	_warning.tree_exited.connect(func() -> void: _warning = null)
 

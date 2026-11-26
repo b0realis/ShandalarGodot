@@ -64,6 +64,7 @@ func _disconnect_actions(node: Node) -> void:
 
 func present(state: Dictionary, headers: Dictionary) -> void:
 	projection.ingest(state, headers)
+	_keep_cards()
 	for pid in 2: config.player_names[pid] = projection.players[pid].player_name
 	# A card shown at a later instant must never remain visible after rewind
 	# or concealment. Full-screen inspection belongs to the same observation.
@@ -71,6 +72,71 @@ func present(state: Dictionary, headers: Dictionary) -> void:
 	if _fullscreen_card != null: _fullscreen_card.dismiss()
 	_close_graveyard()
 	_refresh()
+
+# --- campaign 2026-11-26: the replay table kept between steps ---
+#
+# Every step shown freed every card on the table and built each again
+# (42 ms at 33 permanents, 73 ms at 53, measured), because the projection
+# makes every card a new object for each observation and the table's kept
+# slots are named by the card objects ([method DuelScreen._slot_key]).
+#
+# ONE OBJECT A HANDLE, FOR AS LONG AS IT IS THE SAME CARD: after each
+# observation the card last shown under a handle takes over EVERYTHING the
+# new one holds and stands in its place in the projection, so a card that
+# did not change is the same object the table already draws. Nothing of the
+# earlier observation is left on it; a handle that names another card, or
+# one turned face up or down, is a new object and is built anew.
+var _kept_cards: Dictionary = {}
+static var _card_fields: PackedStringArray = []
+
+func _keeps_table_widgets() -> bool:
+	return keep_table_widgets
+
+func _keep_cards() -> void:
+	var standing: Dictionary = {}
+	var swap: Dictionary = {}
+	for handle in projection.rows:
+		var fresh := projection.find_instance(projection.local_id(handle))
+		if fresh == null: continue
+		var kept: CardInstance = _kept_cards.get(handle)
+		if kept != null and kept != fresh and kept.face_down == fresh.face_down \
+				and kept.data.card_name == fresh.data.card_name:
+			_take_over(kept, fresh)
+			swap[fresh] = kept
+			standing[handle] = kept
+		else:
+			standing[handle] = fresh
+	_kept_cards = standing
+	if swap.is_empty(): return
+	for id in projection._instances.keys():
+		if swap.has(projection._instances[id]): projection._instances[id] = swap[projection._instances[id]]
+	for player in projection.players:
+		for zone: Array in [player.battlefield, player.phased_out, player.hand,
+				player.library, player.graveyard, player.exile, player.ante]:
+			for at in zone.size():
+				if swap.has(zone[at]): zone[at] = swap[zone[at]]
+	for item in projection.stack:
+		if swap.has(item.card): item.card = swap[item.card]
+
+## [param kept] becomes what [param fresh] is: every field and every note.
+static func _take_over(kept: CardInstance, fresh: CardInstance) -> void:
+	if _card_fields.is_empty():
+		for property in fresh.get_property_list():
+			if int(property.usage) & PROPERTY_USAGE_SCRIPT_VARIABLE:
+				_card_fields.append(String(property.name))
+	for field in _card_fields:
+		kept.set(field, fresh.get(field))
+	for note in kept.get_meta_list():
+		if not fresh.has_meta(note): kept.remove_meta(note)
+	for note in fresh.get_meta_list():
+		kept.set_meta(note, fresh.get_meta(note))
+
+## What [method _make_card] sets on a new card, set again on a kept one.
+func _redress_card(w: MiniCard, inst: CardInstance) -> void:
+	w.face_down = inst.face_down
+	w.refresh()
+	w.set_highlight(MiniCard.Highlight.COMMITTED if game.combat.attackers.has(inst.id) or game.combat.blocks.has(inst.id) else MiniCard.Highlight.NONE)
+# --- end campaign 2026-11-26 ---
 
 func _refresh() -> void:
 	if not _built or projection.observation.is_empty(): return

@@ -193,10 +193,32 @@ func concede() -> void:
 		return
 	conceded = true
 	var report := duel.report() if duel != null else DuelReport.new()
+	_concede_in_the_game()
 	report.finished = true
 	report.winner = 1
 	report.result = DuelReport.LOSS
 	_finish(report)
+
+
+## THE GAME ITSELF ENDED BY THE CONCESSION (0.70.11 campaign, bugs4 #1):
+## the loss was written on the report by hand and the game never ended, so
+## the duel's recording closed with no result and Past Games filed it
+## "Incomplete". The hero's seat concedes in the engine ([method
+## MtgGame.concede]) — heard by the recording, which writes 0-1 as for a
+## duel lost on the table — and by nothing of the duel's screen: its End of
+## Duel window and sounds stay away, and the adventure's own loss and stake
+## are counted once, from the report, as before.
+func _concede_in_the_game() -> void:
+	if duel == null or duel.game == null or duel.game.game_over:
+		return
+	for heard: Callable in [_closed, _questions_over]:
+		for sent: Signal in [duel.duel_closed, duel.duel_finished]:
+			if sent.is_connected(heard):
+				sent.disconnect(heard)
+	var screen_hears := Callable(duel, &"_on_game_over")
+	if duel.has_method(&"_on_game_over") and duel.game.game_ended.is_connected(screen_hears):
+		duel.game.game_ended.disconnect(screen_hears)
+	duel.game.concede(0)
 
 
 func _closed(report: DuelReport) -> void:

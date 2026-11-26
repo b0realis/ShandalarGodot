@@ -58,7 +58,7 @@ func _browse(kind: String) -> void:
 	var picker := FileDialog.new()
 	picker.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	picker.access = FileDialog.ACCESS_USERDATA if OS.has_feature("web") else FileDialog.ACCESS_FILESYSTEM
-	picker.use_native_dialog = not OS.has_feature("web")
+	picker.use_native_dialog = not OS.has_feature("web") and Controls.system_file_box()
 	picker.title = "Choose saved draft " + kind
 	picker.filters = PackedStringArray(["*.json ; Dealt pool"] if kind == "pool" else ["*.deck,*.dec ; Text deck"])
 	var folder := GamePaths.drafts_folder()

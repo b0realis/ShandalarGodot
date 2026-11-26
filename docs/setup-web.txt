@@ -54,6 +54,9 @@ addresses or clearing browser storage.
 On a tablet the game types the mouse for your finger: tap clicks, hold
 and lift right-clicks, drag drags, a swipe scrolls a list; Options >
 Display > Touch controls is Auto / On / Off. The table is landscape.
+Getting Started (https://b0realis.github.io/ShandalarGodot/) walks
+through hosting, the Home Screen icon, offline play and saves on a
+tablet, step by step.
 
 
 ---------------------------------------------------------------------
@@ -65,19 +68,26 @@ no art. Without any the game draws its own clean skin and every card
 shows a plain art window; it plays the same. The art is two zips the
 game reads in place, never unpacked:
 
-    skin/original_skin.zip   the 1997 art (84 MB). A download of its
+    skin/original_skin.zip   the 1997 art (107 MB). A download of its
                              own where you got this zip — or already
                              in skin/ if yours is the "-with-skin"
                              one. Put it in skin/ beside index.html
                              and the game fetches it once and keeps
                              it in the browser's own storage; or
                              choose it in Options > Skin, or drop it
-                             on the page.
+                             on the page. The skin in a "-with-skin"
+                             zip is offered with the release for your
+                             own play: serve it from a host only you
+                             and your household use, not from a
+                             public site for others.
 
-    skin/cardart.zip         the card pictures (193 MB). NOT a
+    skin/cardart.zip         the card pictures (about 190 MB). NOT a
                              download — the pictures are Scryfall's,
                              on a licence of their own — but built in
-                             a few minutes by the scripts in tools/:
+                             a few minutes by an installed (non-web)
+                             game, Options > Get Card Packs..., which
+                             keeps it in its card folder, or by the
+                             scripts in tools/:
 
         python3 tools/fetch_card_art.py --out cardart/
         python3 tools/mtg_assets.py --from-cardart cardart/ --out cardart.zip
@@ -108,7 +118,10 @@ THE 1997 ART FROM YOUR OWN DISC
 ---------------------------------------------------------------------
 
 If you own the original and would rather import it yourself than use
-the original_skin.zip download:
+the original_skin.zip download, an installed (non-web) game does it in
+Options > Build from a 1997 install... and keeps the skin as
+classic_no-video.zip; choose that zip in the browser's Options > Skin.
+Or with the tool, on your computer:
 
     python3 tools/mtg_assets.py                          explains what it needs
     python3 tools/mtg_assets.py --check   /path/to/game  looks, reports, writes nothing

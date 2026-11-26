@@ -177,12 +177,89 @@ func clear_work() -> void:
 
 
 ## After the last build: the catalogue reads the card folder again when a
-## numbered pack among [param ids] was put there.
+## numbered pack among [param ids] was put there. The card pool is rebuilt
+## on a thread ([method CardPacks.rescan], campaign 2026-11-26 — in the
+## foreground it froze the window most of a second); the window waits for
+## [method settling] to say it is in.
 func settle(ids: Array) -> void:
 	for id: String in ids:
 		if id != PackRecipes.BASE:
-			CardPacks.rescan()
+			CardPacks.rescan(true)
 			return
+
+
+## True while the card pool [method settle] asked for is still being
+## built. Asked once a frame; it never waits.
+func settling() -> bool:
+	return CardRegistry.is_loading() and not CardRegistry.poll()
+
+
+## A CACHE NOBODY WILL USE AGAIN (campaign 2026-11-26). A pack's pictures
+## are kept under [method cache_root] until that same build has put the
+## pack in place. A pack that came in another way — a zip the player
+## copied in after stopping a download — or whose tidying was cut short
+## kept its 20 to 189 MB there for good: an installed pack cannot be
+## ticked, so nothing looked at its cache again. [method stale_caches]
+## names the packs that are "installed" ([method status]) and still have a
+## cache folder; [method sweep] lists what is in them and [method
+## sweep_step] removes it, [constant PackBuild.TIDY_PER_STEP] files a call.
+##
+## Only `<cache_root>/<id>` for an id of [method PackRecipes.ids] is ever
+## touched — no path comes from a file's contents — and a link found
+## there is removed as a link, never followed.
+func stale_caches() -> Array[String]:
+	var out: Array[String] = []
+	for id: String in PackRecipes.ids():
+		if DirAccess.dir_exists_absolute(cache_root().path_join(id)) \
+				and String(status(id).get("state", "")) == "installed":
+			out.append(id)
+	return out
+
+
+var _sweep_files: Array[String] = []
+var _sweep_dirs: Array[String] = []
+
+
+## Begin removing the caches of [param ids] (of [method stale_caches]).
+func sweep(ids: Array[String]) -> void:
+	var known := PackRecipes.ids()
+	for id: String in ids:
+		if known.has(id):
+			_sweep_list(cache_root().path_join(id))
+
+
+## One frame's worth of the sweep. True while there is more to remove.
+func sweep_step() -> bool:
+	for n in PackBuild.TIDY_PER_STEP:
+		if _sweep_files.is_empty():
+			break
+		DirAccess.remove_absolute(_sweep_files.pop_back())
+	if not _sweep_files.is_empty():
+		return true
+	# Deepest first; a folder that would not empty simply stays.
+	for folder: String in _sweep_dirs:
+		DirAccess.remove_absolute(folder)
+	_sweep_dirs.clear()
+	return false
+
+
+func _sweep_list(folder: String) -> void:
+	var dir := DirAccess.open(folder)
+	if dir == null:
+		return
+	dir.include_hidden = true
+	_sweep_dirs.push_front(folder)
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		var path := folder.path_join(entry)
+		if dir.current_is_dir() and not dir.is_link(path):
+			if entry != "." and entry != "..":
+				_sweep_list(path)
+		else:
+			_sweep_files.append(path)
+		entry = dir.get_next()
+	dir.list_dir_end()
 
 
 ## Whether the 1997 pictures just built are worn the moment the window

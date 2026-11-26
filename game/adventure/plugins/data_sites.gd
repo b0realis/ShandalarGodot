@@ -1237,7 +1237,7 @@ func _spawn_problem(player: AdventurePlayer, entry: Dictionary, site_key := "") 
 		var key := String(effect["spawn_dungeon"])
 		if dungeon_state(player, key) == "open":
 			continue
-		if player.world.encounters.size() >= WorldClues.MOST_SLOTS or _dungeon_tile(player, key, site_key).x < 0:
+		if player.world.encounters.size() >= WorldClues.MOST_SLOTS or not _dungeon_room(player, key, site_key):
 			return say("site.no_room")
 	return ""
 
@@ -1299,6 +1299,60 @@ static func _airy(tile: Vector2i, air: Dictionary) -> bool:
 	return true
 
 
+## The tiles no raised dungeon takes on [param player]'s land, a set
+## `{tile: true}` read once for every tile asked (the review of
+## 2026-11-21): those the land's places and anchorages keep — the places'
+## own among them — and the lairs'.
+func _dungeon_kept(player: AdventurePlayer) -> Dictionary:
+	var world := player.world
+	var kept := DungeonDoors.kept_points(world)
+	for point: Variant in AdventureSites.points(world):
+		kept[Vector2i(int(point[0]), int(point[1]))] = true
+	# A lair stands on its tile until it is explored, and its pane is asked
+	# before a dungeon's: never under one (as no place is, [method
+	# AdventureSites.blocked_tiles]).
+	for creature: Variant in player.monsters:
+		if creature is Dictionary and String(creature.get("kind", "")) == "lair" \
+				and AdventurePlayer._is_number(creature.get("x")) and AdventurePlayer._is_number(creature.get("y")):
+			kept[Vector2i(int(creature["x"]) / 32, int(creature["y"]) / 32)] = true
+	return kept
+
+
+## WHETHER DUNGEON [param key] HAS A TILE TO RISE ON — [method
+## _dungeon_tile]'s answer "some tile", without its search (0.70.11
+## campaign, smooth2 #1: a place's pane asked the whole search — the land's
+## every tile listed, tested and sorted, 18 ms a time — for each button,
+## each time the pointer rested on the place). The land is walked outward
+## from the place and the walk ends at the first tile [method _dungeon_tile]
+## would keep in any of its lists: of the place's land, not kept, one a
+## dungeon may take, `min` or more away. Nothing is remembered, so the
+## answer is never an old one.
+func _dungeon_room(player: AdventurePlayer, key: String, site_key := "") -> bool:
+	var world := player.world
+	var here := _here(player, site_key)
+	if not world.is_land(here.x, here.y):
+		return false
+	var least := float((dungeon(key).get("distance", {}) as Dictionary).get("min", 6))
+	var portal := FinalBattle.portal_tile_of(player)
+	var hero := player.tile()
+	var kept := _dungeon_kept(player)
+	var seen := {here: true}
+	var walked: Array[Vector2i] = [here]
+	var i := 0
+	while i < walked.size():
+		var tile := walked[i]
+		i += 1
+		if tile.distance_to(here) >= least and not kept.has(tile) \
+				and DungeonDoors.takes_dungeon(world, tile, hero, portal, kept):
+			return true
+		for d in [1, 3, 5, 7]:
+			var next := tile + Vector2i(ShandalarWorld.DX[d], ShandalarWorld.DY[d])
+			if not seen.has(next) and world.is_land(next.x, next.y):
+				seen[next] = true
+				walked.append(next)
+	return false
+
+
 ## The tile dungeon [param key] would rise on: land of the place's own
 ## land, one a moved dungeon could take ([method DungeonDoors.takes_dungeon])
 ## and away from every place ([method AdventureSites.points]) and every
@@ -1319,18 +1373,7 @@ func _dungeon_tile(player: AdventurePlayer, key: String, site_key := "") -> Vect
 	var least := float(distance.get("min", 6))
 	var most := float(distance.get("max", 24))
 	var portal := FinalBattle.portal_tile_of(player)
-	# The tiles the land's places and anchorages keep, read once for every
-	# tile asked (the review of 2026-11-21) — the places' own among them.
-	var kept := DungeonDoors.kept_points(world)
-	for point: Variant in AdventureSites.points(world):
-		kept[Vector2i(int(point[0]), int(point[1]))] = true
-	# A lair stands on its tile until it is explored, and its pane is asked
-	# before a dungeon's: never under one (as no place is, [method
-	# AdventureSites.blocked_tiles]).
-	for creature: Variant in player.monsters:
-		if creature is Dictionary and String(creature.get("kind", "")) == "lair" \
-				and AdventurePlayer._is_number(creature.get("x")) and AdventurePlayer._is_number(creature.get("y")):
-			kept[Vector2i(int(creature["x"]) / 32, int(creature["y"]) / 32)] = true
+	var kept := _dungeon_kept(player)
 	var air := _dungeon_air(player, kept)
 	var inside: Array[Vector2i] = []
 	var beyond: Array[Vector2i] = []

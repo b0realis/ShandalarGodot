@@ -1,8 +1,8 @@
 # Contributing to Shandalar
 
 The development and contribution guide for ShandalarGodot, a GPL-3.0 remake
-of MicroProse's 1997 *Magic: The Gathering*. Checked against **0.60.12** on
-**2 November 2026**. The version in `project.godot` is authoritative;
+of MicroProse's 1997 *Magic: The Gathering*. Checked against **0.70.11** on
+**26 November 2026**. The version in `project.godot` is authoritative;
 published downloads can lag behind `main`.
 
 Start here for setup, tests and contribution rules. Use the
@@ -59,7 +59,7 @@ for scripted probes. The game runs without imported art or a skin.
 For exports, copy `export_presets.cfg.example` to the ignored
 `export_presets.cfg` and configure the official export templates and local
 paths. Its include filter (`*.deck, *.txt, cards/data/*.json,
-packaging/card_packs/*/*.json`) carries data files that are not Godot
+packaging/card_packs/*/*.json` and the rest of the example's line) carries data files that are not Godot
 resources; a preset made afresh in the editor leaves them out, and without
 the creatures' decks every adventure duel is won at once (issue #16). Such a
 build says "Missing game files" on the title screen. Follow [release builds](docs/release-builds.md) for the target matrix,
@@ -81,7 +81,7 @@ cross-export is not a native runtime test; Web must also run in a browser.
 | `decks/` | Bundled deck lists grouped by provenance, plus the committed `ratings.txt` ledger. [Deck provenance](docs/decks-1997.md) explains the groups. |
 | `tests/` | GUT regressions and shared fixtures. `tests/game_test.gd` supplies the `GameTest` harness. |
 | `tools/` | Build, import, packaging and measurement tools. Excluded from the game PCK; approved player tools are copied beside packaged games. |
-| `expanded_adventure/` | Adventure plugins: the Last Refuge prototype (data only) and the authors' guide `GUIDE/`. Excluded from the game PCK (`.gdignore`, export filters); copied beside packaged games. Plugins never carry code — see [adventure plugins](docs/adventure-plugins.md). |
+| `expanded_adventure/` | Adventure plugins: the Last Refuge prototype and six places (sites plugins), all data only, and the authors' guide `GUIDE/`. Excluded from the game PCK (`.gdignore`, export filters); copied beside packaged games. Plugins never carry code — see [adventure plugins](docs/adventure-plugins.md). |
 | `addons/gut/` | Vendored test framework. Keep framework changes separate from game changes. |
 | `assets/` | Local imported 1997 material and card art; not tracked. A fresh clone or worktree has none. |
 | `docs/` | Design, authoring guides, audits and release records. Use the code map rather than keeping another file census here. |
@@ -239,6 +239,10 @@ For release preparation:
 python3 -m unittest discover -s tools -p 'test_*.py'
 ```
 
+Run one Python module the same way (`-p 'test_NAME.py'`): the tool tests
+import their tools by bare name, so `python3 -m unittest tools.test_NAME`
+from the root fails to import.
+
 `SHARDS=N ./run_tests.sh` distributes a whole run over processes. Linux
 uses half the cores, clamped to 1–6, by default. macOS defaults to one
 because processes share the integration-test profile; keep its runs
@@ -366,8 +370,10 @@ provide these guards; a hand-written command does not.
 ## Skins, card art and paths
 
 Imported 1997 material and card pictures stay out of Git.
-Public packages contain no card art or generated numbered packs: they
-include the tools for players to build them. Plain game packages have no
+Public packages contain no card art or generated numbered packs: the game
+builds them for the player (**Options → Get Card Packs...**, 0.70.9; not in
+the browser), and the packages include the Python tools that make the same
+ZIPs. Plain game packages have no
 skin; `-with-skin` packages include the release's `original_skin.zip`.
 The 2x skin is a separate download. See [card art and packs](docs/card-art-and-packs.md)
 and [the skin catalogue](docs/skin-catalogue.txt).
@@ -417,6 +423,14 @@ otherwise Godot treats that CSV catalogue as a translation table.
   stands; read them from the game (`CardShop.offers`, `CardHints.current`)
   instead. A slow first frame changed a town's cards in one deal and not
   in another (`test_card_shop.gd`, 2026-11-11).
+- Tests never touch the network. The suite's hook
+  (`tests/support/pin_calendar.gd`) sets `PackTransport.network_allowed`
+  to false, so a test that reaches the real transport fails at once; use a
+  stand-in transport. Real-network probes live outside the repository.
+- CI has no 1997 skin, and skinless buttons are a few pixels taller. After
+  a UI layout change, rerun the affected UI tests with `assets/original`
+  moved aside as well as with it; a run with the skin alone does not show
+  what CI will see.
 - Fresh clones/worktrees lack ignored assets. Import or link the intended
   local assets and rerun a bounded Godot import before art-dependent
   checks. Set `GODOT` explicitly when the sibling tools path does not exist.
@@ -441,7 +455,9 @@ otherwise Godot treats that CSV catalogue as a translation table.
 
 Every pushed change increments the **last numeric component** of
 `project.godot`'s `config/version`, unless the owner explicitly directs a
-different version. Group a coherent change and its verification before
+different version. The Android preset's `version/code` follows it
+(`major * 1000000 + minor * 1000 + patch`; see
+[Android](docs/android-experimental.md)). Group a coherent change and its verification before
 pushing. Commit subjects stay short and descriptive. Use a pseudonymous
 author and committer with a GitHub noreply address.
 

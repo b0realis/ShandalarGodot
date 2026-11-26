@@ -361,6 +361,9 @@ static func enter_at_start() -> void:
 	if not available():
 		return
 	var dir := folder()
+	# A first copy that never finished (the game closed or killed mid-copy)
+	# is cleared before anything else looks at the game folder.
+	clear_stale_making(dir)
 	var has_folder := DirAccess.dir_exists_absolute(dir)
 	var writable := has_folder and can_write(dir)
 	match plan(system, has_folder, OS.get_user_data_dir(), dir, String(env.get(ENV_PORTABLE, "")), writable):
@@ -459,18 +462,41 @@ class Copy extends RefCounted:
 	var done_bytes := 0
 	var error := ""
 	var finished := false
+	## Stopped on request ([method cancel]) before everything was copied.
+	var cancelled := false
+	var _stop := false
 	var _mutex := Mutex.new()
 	var _task := -1
 
 	func progress() -> Dictionary:
 		_mutex.lock()
 		var out := {"files": done_files, "of_files": files.size(), "bytes": done_bytes,
-			"of_bytes": bytes, "error": error, "finished": finished}
+			"of_bytes": bytes, "error": error, "finished": finished, "cancelled": cancelled}
 		_mutex.unlock()
 		return out
 
+	## Ask the copy to stop (campaign of 2026-11-26: it could not be, and a
+	## window closed mid-copy kept the game's process alive to the last
+	## file). The worker looks between two files, so the one being copied
+	## is finished first; [method wait] then returns, `cancelled` set and
+	## `error` saying so. What was copied so far stays for the caller to
+	## remove ([method PortableMode.remove_made] for a folder in the making).
+	func cancel() -> void:
+		_mutex.lock()
+		_stop = true
+		_mutex.unlock()
+
 	func run() -> void:
 		for rel in files:
+			_mutex.lock()
+			var stop := _stop
+			if stop:
+				cancelled = true
+				error = "The copy was stopped."
+				finished = true
+			_mutex.unlock()
+			if stop:
+				return
 			var target := to.path_join(rel)
 			var made := DirAccess.make_dir_recursive_absolute(target.get_base_dir())
 			var result := made if made != OK else DirAccess.copy_absolute(from.path_join(rel), target)
@@ -486,7 +512,17 @@ class Copy extends RefCounted:
 				done_bytes += file.get_length()
 				file.close()
 			_mutex.unlock()
+		# All there, as measured: a folder emptied under the copy (another
+		# start of the game clearing what it took for a leftover, [method
+		# PortableMode.clear_stale_making]) must not pass for a whole one.
+		var missing := ""
+		for rel in files:
+			if not FileAccess.file_exists(to.path_join(rel)):
+				missing = rel
+				break
 		_mutex.lock()
+		if missing != "":
+			error = "%s could not be copied (it is not there)." % missing
 		finished = true
 		_mutex.unlock()
 
@@ -495,6 +531,77 @@ class Copy extends RefCounted:
 		if _task >= 0:
 			WorkerThreadPool.wait_for_task_completion(_task)
 			_task = -1
+		PortableMode._running.erase(self)
+
+
+## The copies on a worker that nobody has waited for yet.
+static var _running: Array[Copy] = []
+
+
+## Ask every copy still running to stop, without waiting (a Cancel
+## button: the screen goes on watching [method Copy.progress], which ends
+## `cancelled` once the file being copied is through).
+static func cancel_copies() -> void:
+	for job in _running:
+		job.cancel()
+
+
+## Stop every copy still running and wait for each (a screen or the game
+## leaving while one runs): the engine joins its workers at exit, so a
+## copy left running kept the process alive, windowless, to its last file.
+## The copies stopped, for the caller to clean up after.
+static func stop_copies() -> Array[Copy]:
+	var stopped: Array[Copy] = _running.duplicate()
+	for job in stopped:
+		job.cancel()
+	for job in stopped:
+		job.wait()
+	return stopped
+
+
+## The folders a first copy was being made in and never finished, beside
+## the portable folder [param dir]: `portable-making`, `portable-making-2`…
+## (a game closed or killed mid-copy left one for good, at the profile's
+## full size, and the next try took the next name). Only a real folder of
+## exactly such a name whose top holds nothing but the one folder a copy
+## puts there ([method user_dir_in]'s first name) — or nothing at all — is
+## one of ours; anything else is left alone.
+static func stale_making(dir: String, system: String, user_dir: String) -> Array[String]:
+	var out: Array[String] = []
+	var base := _clean(dir)
+	var parent := DirAccess.open(base.get_base_dir())
+	if parent == null or system == "":
+		return out
+	var stem := base.get_file() + "-making"
+	for name in parent.get_directories():
+		var number := name.trim_prefix(stem + "-")
+		if name != stem and not (name.begins_with(stem + "-") and number.is_valid_int() and not number.begins_with("-")):
+			continue
+		if parent.is_link(name):
+			continue
+		var making := base.get_base_dir().path_join(name)
+		var first := user_dir_in(system, making, user_dir).trim_prefix(making + "/").get_slice("/", 0)
+		var inside_it := DirAccess.open(making)
+		if inside_it == null:
+			continue
+		inside_it.include_hidden = true
+		var folders := inside_it.get_directories()
+		if not inside_it.get_files().is_empty() or folders.size() > 1 \
+				or (folders.size() == 1 and (folders[0] != first or inside_it.is_link(first))):
+			continue
+		out.append(making)
+	return out
+
+
+## Remove them ([method stale_making]); how many. At a start ([method
+## enter_at_start]) and before a new copy is made.
+static func clear_stale_making(dir := "") -> int:
+	if dir == "":
+		dir = folder()
+	var found := stale_making(dir, platform(), OS.get_user_data_dir())
+	for making in found:
+		remove_made(making)
+	return found.size()
 
 
 ## Copy `user://` [param from] into [param to] on a worker: the [Copy] to
@@ -520,6 +627,7 @@ static func start_copy(from: String, to: String, threaded := true) -> Copy:
 		job.finished = true
 		return job
 	if threaded:
+		_running.append(job)
 		job._task = WorkerThreadPool.add_task(job.run, false, "portable copy")
 	else:
 		job.run()

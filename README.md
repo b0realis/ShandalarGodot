@@ -75,7 +75,8 @@ Windows, Linux, macOS (Apple Silicon and Intel), Steam Deck, Raspberry Pi 5,
 web, Meta Quest 3, and experimental Android ARM64 and ArkOS handhelds.
 The release page has setup instructions and SHA-256 checksums;
 [handheld](docs/handhelds.md), [Android](docs/android-experimental.md) and
-[web](docs/setup-web.txt) guides cover their platform details.
+[web](docs/setup-web.txt) guides cover their platform details; Getting Started
+has a chapter on iPad and web play.
 
 For the adventure, choose **Shandalar** and create a hero.
 It is playable from beginning to end and still being playtested.
@@ -102,9 +103,11 @@ ship from a mainland harbor. It is a small package of data — JSON, text,
 pictures and music, never code — dropped into the `expanded_adventure`
 folder and ticked in Embark's **Expanded adventure plugins...** window; a
 plugin names the card packs it needs, and packs behave exactly as they do
-without it. The game ships one, **The Last Refuge** (Fallen Empires), a
-finished game-design and learning demo for authors to play and take apart;
-new lands are the community's to make. The authors' guide is
+without it. A **sites plugin** adds places to the lands instead. The desktop
+downloads ship seven plugins: **The Last Refuge** (Fallen Empires), a
+finished game-design and learning demo for authors to play and take apart,
+and six places, among them *An Old Adventurer's Hut* and the *Conjuration
+Wizard Guild*; new lands and places are the community's to make. The authors' guide is
 `expanded_adventure/GUIDE/index.html` in the game folder, the tool
 `tools/adventure_plugin.py` (`new`, `validate`, `export`, `compat`), and the
 developer reference [docs/adventure-plugins.md](docs/adventure-plugins.md).
@@ -133,8 +136,10 @@ Choose a `-with-skin` download for the original 1997 look and sounds, or use
 the built-in appearance. A separate **2× skin** is available for larger screens.
 Use a current skin: older packs may lack the adventure artwork and sounds.
 
-**Card pictures and completed card packs are not bundled.** Every release
-includes Python 3.10+ tools to build them. Follow the
+**Card pictures and completed card packs are not bundled.** On current main
+the game builds them itself: **Options → Get Card Packs...** downloads the
+pictures and makes each pack. Every release also includes Python 3.10+ tools
+that build the same ZIPs. Follow the
 [artwork and pack guide](docs/card-art-and-packs.md); no source checkout is needed.
 
 On desktop, keep skin and base-card-art ZIPs in **`skin/`**, and numbered pack
@@ -143,7 +148,9 @@ Use **Options → Skin** or **Options → Card Packs → Add pack…** to import
 Web supports skin and base artwork in browser storage, but currently has no
 numbered-pack installation or LAN multiplayer.
 
-To make a skin from your own 1997 installation, or customize one, see the
+To make a skin from your own 1997 installation, use **Options → Build from a
+1997 install...** on current main (kept as `classic_no-video.zip`); for the
+complete skin with the movies, or to customize one, see the
 [skin importer](tools/mtg_assets.py), [player-file locations](docs/player-files.md)
 and [asset catalogue](docs/skin-catalogue.txt).
 

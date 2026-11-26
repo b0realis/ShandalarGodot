@@ -752,6 +752,7 @@ enum Row { LANDS, OTHER, CREATURES }
 
 
 func _ready() -> void:
+	set_process_input(false)   # only while the dying total counts ([method _input])
 	if config == null:
 		config = DuelConfig.hotseat_default()
 	_build_ui()
@@ -1250,12 +1251,42 @@ func _run_death_countdown() -> void:
 	# for ever (see [method _show_result_window]). A SceneTreeTimer
 	# counts whatever this node is doing, paused included; the tween is
 	# the picture, the timer is the wait.
-	await get_tree().create_timer(LOSS_COUNT_SECONDS + LOSS_HOLD_SECONDS).timeout
-	if not is_instance_valid(self):
-		return
+	#
+	# A PRESS ENDS IT (campaign 2026-11-26): the count and its hold kept
+	# the End of Duel window back 1.4 s after every duel lost to damage,
+	# and no key or click did anything until then. So the wait is the
+	# wall clock read once a frame — the tree's own signal, which a held
+	# node does not stop either — and a click, a touch or one of the
+	# window's keys ends it at once ([method _input], [method _answer_result]).
+	var tree := get_tree()
+	var until := Time.get_ticks_msec() + int((LOSS_COUNT_SECONDS + LOSS_HOLD_SECONDS) * 1000.0)
+	_death_count_hurried = false
+	_death_counting = true
+	set_process_input(true)
+	while Time.get_ticks_msec() < until and not _death_count_hurried:
+		await tree.process_frame
+		if not is_instance_valid(self):
+			return
+	_death_counting = false
+	set_process_input(false)
 	if tween.is_valid():
 		tween.kill()
 	_life_countdown.clear()
+
+
+## Is the dying total counting down now, and has a press ended it?
+var _death_counting := false
+var _death_count_hurried := false
+
+
+## A click or a touch while the dying total counts ends the count. Asked
+## for only during the count ([method _run_death_countdown]).
+func _input(event: InputEvent) -> void:
+	if not _death_counting:
+		return
+	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT) \
+			or (event is InputEventScreenTouch and event.pressed):
+		_death_count_hurried = true
 
 
 ## One frame of the count. Writes the numeral directly rather than calling
@@ -1322,6 +1353,8 @@ func result_window_up() -> bool:
 func _answer_result() -> void:
 	if result_window_up():
 		_on_game_over_dismissed()
+	elif _death_counting:
+		_death_count_hurried = true   # the count ends and the window comes
 
 
 func _on_game_over_dismissed() -> void:
@@ -11512,7 +11545,24 @@ func _rebuild_stack() -> void:
 	# piles and the graveyard shelves (tests/ui/test_card_dimensions.gd).
 	# It is also why the NAME is no longer written into the caption: the
 	# small card titles itself, exactly as `DrawSmallCardTitle` does.
-	_clear_children(_chain_box)
+	#
+	# AN ENTRY THAT STANDS IS KEPT (campaign 2026-11-26), as the table's
+	# slots are: every redraw freed each entry and built it again — a
+	# band, its style, a wrapped label and a whole card, about 1 ms an
+	# object, so ten spells on the chain cost every redraw 9 ms.
+	if is_inside_tree():
+		var held := get_viewport().gui_get_focus_owner()
+		if held != null and _chain_box.is_ancestor_of(held):
+			held.release_focus()
+	var standing := {}
+	for child in _chain_box.get_children():
+		if _keeps_table_widgets() and child.has_meta(CHAIN_ENTRY) \
+				and not child.is_queued_for_deletion() \
+				and not standing.has(child.get_meta(CHAIN_ENTRY)):
+			standing[child.get_meta(CHAIN_ENTRY)] = child
+		else:
+			_chain_box.remove_child(child)
+			child.queue_free()
 	var chain_root: Control = _chain_box
 	if _chain_box.get_parent() is PanelContainer:
 		chain_root = _chain_box.get_parent()
@@ -11522,62 +11572,131 @@ func _rebuild_stack() -> void:
 		_chain_minimized = false
 	chain_root.visible = not game.stack.is_empty() and not _chain_folded()
 	_dress_chain_head()
+	var at := 0
 	for item in game.stack:
-		var entry := VBoxContainer.new()
-		entry.add_theme_constant_override("separation", 0)
-		# The TAN band over the card — the reference's gold `Ability
-		# Effect` strip, which in the original is an effect card's own
-		# title bar peeking above the card it belongs to.
-		var caption_box := PanelContainer.new()
-		var caption_style := StyleBoxFlat.new()
-		caption_style.bg_color = Color(0.80, 0.72, 0.52)
-		caption_style.border_color = Color(0.42, 0.32, 0.18)
-		caption_style.set_border_width_all(1)
-		caption_style.set_content_margin_all(3)
-		caption_box.add_theme_stylebox_override("panel", caption_style)
-		var caption := Label.new()
-		caption.text = _chain_caption(item)
-		# Wrapped and pinned to the card's width so a long player name
-		# widens the BAND's line count, never the strip: the entry is one
-		# card wide, and the card is the thing that sets the width.
-		caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		caption.custom_minimum_size.x = MiniCard.SIZE.x - 8
-		caption.add_theme_font_size_override("font_size", 10)
-		caption.add_theme_color_override("font_color", Color(0.16, 0.11, 0.06))
-		caption_box.add_child(caption)
-		# `@MENU_SPELLCHAIN` on the band (f-minihelp, 2026-10-13); the card
-		# under it keeps its own menu. STOP so the press ends here, and the
-		# band carries the entry's tooltip itself for the same reason.
-		caption_box.mouse_filter = Control.MOUSE_FILTER_STOP
-		var words := _chain_words(item)
-		caption_box.tooltip_text = words
-		caption_box.gui_input.connect(_on_chain_band_input.bind(caption_box))
-		entry.add_child(caption_box)
-		# The card itself — fully wired by _make_card: clickable (which is
-		# how a counterspell TAKES a chain object as its target, through
-		# `_on_card_clicked` → `_try_take_target`), hover-docked in the
-		# Showcase, highlighted and cued like any other card.
-		var w: Control
-		var changes: Array[CardData] = []
-		if item.kind == Mtg.StackKind.SPELL:
-			changes = _text_change_ghost_data(item.card)
-		if not changes.is_empty():
-			w = _make_widget(item.card, item)
-			# Unlike battlefield rows, the chain has a caption immediately
-			# above each spell. Reserve the fan's height below that caption.
-			var room := MarginContainer.new()
-			room.add_theme_constant_override("margin_top", int(AURA_PEEK.y * changes.size()))
-			room.add_child(w)
-			entry.add_child(room)
+		var key := _chain_entry_key(item)
+		var entry: Control = standing.get(key) if not key.is_empty() else null
+		if entry != null:
+			standing.erase(key)
+			_redress_chain_entry(entry, item)
+			chain_entries_kept += 1
 		else:
-			w = _make_card(item.card, item)
-			entry.add_child(w)
-		# The chain object's description (its TARGETS) on top of the card's
-		# own tooltip. A `Button` stops Godot's tooltip walk at itself, so
-		# the entry's copy below would never be reached over the card.
-		w.tooltip_text = "%s\n%s" % [words, w.tooltip_text]
-		entry.tooltip_text = words
-		_chain_box.add_child(entry)
+			entry = _make_chain_entry(item)
+			if not key.is_empty():
+				entry.set_meta(CHAIN_ENTRY, key)
+			_chain_box.add_child(entry)
+			chain_entries_built += 1
+		if entry.get_index() != at:
+			_chain_box.move_child(entry, at)
+		at += 1
+	for key in standing:
+		_chain_box.remove_child(standing[key])
+		(standing[key] as Node).queue_free()
+	_chain_box.queue_sort()
+
+
+## Where a chain entry keeps its name ([method _chain_entry_key]).
+const CHAIN_ENTRY := &"chain_entry"
+## Chain entries built and kept so far — plain counters for the tests.
+var chain_entries_built := 0
+var chain_entries_kept := 0
+
+
+## The name of [param item]'s entry: the object, its card and what decides
+## the entry's shape. Empty for an entry that is always built anew — a
+## spell with a text change fanned behind it stands in a wrap of its own.
+func _chain_entry_key(item: StackItem) -> Array:
+	if item.card == null:
+		return []
+	if item.kind == Mtg.StackKind.SPELL and not _text_change_ghost_data(item.card).is_empty():
+		return []
+	return [item, item.card, item.kind, item.card.data, _chain_names_ability(item)]
+
+
+## A kept entry reads its object afresh: the band's words, and on the card
+## what [method _make_card] sets on a chain object's new one — KEEP THE TWO
+## IN STEP.
+func _redress_chain_entry(entry: Control, item: StackItem) -> void:
+	var caption_box := entry.get_child(0) as Control
+	var w := entry.get_child(1) as MiniCard
+	var words := _chain_words(item)
+	(caption_box.get_child(0) as Label).text = _chain_caption(item)
+	caption_box.tooltip_text = words
+	entry.tooltip_text = words
+	var inst := item.card
+	var as_ability := _chain_names_ability(item)
+	w.face_down = inst.face_down
+	w.no_auto_tap = false
+	w.pending_damage = _pending_damage_for(inst.id)
+	w.set_target_state(_ability_target_state(item) if as_ability \
+		else _target_state_for(inst))
+	w.refresh()
+	if _flight != null and _flight.is_flying(inst.id):
+		w.modulate.a = 0.0
+	var highlight: int = _ability_highlight(item) if as_ability \
+		else _highlight_for(inst)
+	w.castable = highlight == MiniCard.Highlight.CASTABLE
+	w.set_highlight(highlight)
+	w.tooltip_text = "%s\n%s" % [words, w.tooltip_text]
+
+
+## One chain object's entry: its band and its card.
+func _make_chain_entry(item: StackItem) -> Control:
+	var entry := VBoxContainer.new()
+	entry.add_theme_constant_override("separation", 0)
+	# The TAN band over the card — the reference's gold `Ability
+	# Effect` strip, which in the original is an effect card's own
+	# title bar peeking above the card it belongs to.
+	var caption_box := PanelContainer.new()
+	var caption_style := StyleBoxFlat.new()
+	caption_style.bg_color = Color(0.80, 0.72, 0.52)
+	caption_style.border_color = Color(0.42, 0.32, 0.18)
+	caption_style.set_border_width_all(1)
+	caption_style.set_content_margin_all(3)
+	caption_box.add_theme_stylebox_override("panel", caption_style)
+	var caption := Label.new()
+	caption.text = _chain_caption(item)
+	# Wrapped and pinned to the card's width so a long player name
+	# widens the BAND's line count, never the strip: the entry is one
+	# card wide, and the card is the thing that sets the width.
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	caption.custom_minimum_size.x = MiniCard.SIZE.x - 8
+	caption.add_theme_font_size_override("font_size", 10)
+	caption.add_theme_color_override("font_color", Color(0.16, 0.11, 0.06))
+	caption_box.add_child(caption)
+	# `@MENU_SPELLCHAIN` on the band (f-minihelp, 2026-10-13); the card
+	# under it keeps its own menu. STOP so the press ends here, and the
+	# band carries the entry's tooltip itself for the same reason.
+	caption_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	var words := _chain_words(item)
+	caption_box.tooltip_text = words
+	caption_box.gui_input.connect(_on_chain_band_input.bind(caption_box))
+	entry.add_child(caption_box)
+	# The card itself — fully wired by _make_card: clickable (which is
+	# how a counterspell TAKES a chain object as its target, through
+	# `_on_card_clicked` → `_try_take_target`), hover-docked in the
+	# Showcase, highlighted and cued like any other card.
+	var w: Control
+	var changes: Array[CardData] = []
+	if item.kind == Mtg.StackKind.SPELL:
+		changes = _text_change_ghost_data(item.card)
+	if not changes.is_empty():
+		w = _make_widget(item.card, item)
+		# Unlike battlefield rows, the chain has a caption immediately
+		# above each spell. Reserve the fan's height below that caption.
+		var room := MarginContainer.new()
+		room.add_theme_constant_override("margin_top", int(AURA_PEEK.y * changes.size()))
+		room.add_child(w)
+		entry.add_child(room)
+	else:
+		w = _make_card(item.card, item)
+		entry.add_child(w)
+	# The chain object's description (its TARGETS) on top of the card's
+	# own tooltip. A `Button` stops Godot's tooltip walk at itself, so
+	# the entry's copy below would never be reached over the card.
+	w.tooltip_text = "%s\n%s" % [words, w.tooltip_text]
+	entry.tooltip_text = words
+	return entry
 
 
 ## Cards per battlefield pile — the original groups lands and other
@@ -11709,10 +11828,11 @@ func _rebuild_field(pid: int) -> void:
 # name moved (a land tapped, an Aura attached, a card arrived or left) is
 # built anew, as every slot was before.
 #
-# ONLY THIS SCREEN'S OWN TABLE ([method _keeps_table_widgets]): a screen
-# built on this one that dresses its cards its own way (the replay table)
-# rebuilds as before, and a LAN view's cards are new objects with every
-# table it receives, so nothing of its would be kept anyway.
+# THIS SCREEN'S OWN TABLE, AND A SCREEN BUILT ON IT THAT SAYS SO
+# ([method _keeps_table_widgets]). The LAN view and the replay table do
+# since the campaign of 2026-11-26: each sees to it that a card is the same
+# object from one table to the next, and the replay table, which dresses
+# its cards its own way, has its own [method _redress_card].
 
 ## Where a slot keeps its name ([method _slot_key]).
 const SLOT_KEY := &"table_slot"
@@ -14875,6 +14995,13 @@ func _on_control(event: InputEvent) -> void:
 		if Controls.pressed(event, "duel_pause") \
 				or (is_paused() and Controls.pressed(event, "duel_cancel")):
 			_toggle_pause()
+		# THE TOSS CAN BE HURRIED (campaign 2026-11-26): the bar's two
+		# confirm keys end the movie or the spin, and again the verdict
+		# ([method CoinToss.hurry]). Nothing else of the table answers.
+		elif not is_paused() and not leave_question_open() \
+				and _toss_overlay is CoinToss and is_instance_valid(_toss_overlay) \
+				and (Controls.pressed(event, "duel_space") or Controls.pressed(event, "duel_done")):
+			(_toss_overlay as CoinToss).hurry()
 		return
 	# THE PAUSE WINDOW owns both its keys while it is up, and nothing
 	# else reaches the table under it (§ the Pause block above).
@@ -14926,7 +15053,7 @@ func _on_control(event: InputEvent) -> void:
 		# point the bar has two buttons and the key is ambiguous.
 		# The original says so; Return and Esc still name one each.
 		# Under the End of Duel window the one button is its OK.
-		if result_window_up():
+		if result_window_up() or _death_counting:
 			_answer_result()
 		elif not _can_cancel() and not _dialogs_open():
 			_on_done()
@@ -14945,7 +15072,7 @@ func _on_control(event: InputEvent) -> void:
 		# returns at once unless the mode is NORMAL), so the one
 		# keystroke the manual names could not answer the prompts
 		# that most need answering.
-		if result_window_up():
+		if result_window_up() or _death_counting:
 			_answer_result()
 		elif _modal_open() or _dialogs_open():
 			pass          # the dialog's own OK answers it
@@ -14962,7 +15089,7 @@ func _on_control(event: InputEvent) -> void:
 		# [method _can_cancel] is the same predicate the Situation
 		# Bar's Cancel button uses, so the key and the button can
 		# never disagree about whether there is anything to undo.
-		if result_window_up():
+		if result_window_up() or _death_counting:
 			_answer_result()
 		elif _can_cancel() or _dialogs_open():
 			_on_escape()

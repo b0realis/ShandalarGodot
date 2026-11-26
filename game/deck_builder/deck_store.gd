@@ -144,7 +144,7 @@ static func deck_paths_in(dir_path: String) -> Array[String]:
 ## A file that will not parse still gets a line, naming itself, so the
 ## list never hides a deck the player can see in the folder.
 static func describe(path: String) -> String:
-	return describe_list(DeckList.load_file(path, false), path)
+	return describe_list(DeckList.load_file(path, false, true), path)
 
 
 ## [method describe] for a list already read — the Load Deck dialog reads
@@ -590,7 +590,7 @@ static func saved_message(deck: DeckModel, path := "") -> String:
 ## played. (s30 drops them on the save side —
 ## `domain/collection.go:258-261` — which is the behaviour this replaces.)
 static func load_deck(path: String, out_report: Array) -> DeckModel:
-	var lenient := DeckList.load_file(path, false)
+	var lenient := DeckList.load_file(path, false, true)
 	if not lenient.errors.is_empty():
 		out_report.append(LOAD_ERROR % path.get_file())
 		out_report.append_array(lenient.errors)
@@ -633,6 +633,9 @@ static func _fold(list: DeckList, out_report: Array) -> DeckModel:
 		out_report.append(PROXIED % [list.proxies.size(),
 			"" if list.proxies.size() == 1 else "s",
 			", ".join(PackedStringArray(list.proxies))])
+	# A name several cards answer to was not guessed at: say which.
+	for written in list.doubtful:
+		out_report.append(DOUBTFUL % [written, " or ".join(list.doubtful[written])])
 	return model
 
 
@@ -657,6 +660,9 @@ static func _fold(list: DeckList, out_report: Array) -> DeckModel:
 ## The line a lenient fold reports when it had to proxy names. Ours, in
 ## our own voice, and it names them — see [ProxyCard].
 const PROXIED := "%d card%s became a proxy: %s"
+## A written name that more than one card answers to ([member
+## DeckList.doubtful]) — left a proxy, and both cards named.
+const DOUBTFUL := "\"%s\" could be %s. Write the name out in full."
 ## What Import can read. Every format [DeckList] parses, which is every
 ## format this project writes.
 const IMPORT_FILTERS := ["*.deck ; Shandalar deck", "*.dec ; Decklist",
@@ -706,7 +712,7 @@ static func import_text(text: String, fallback_name: String,
 		out_report: Array) -> DeckModel:
 	var lenient := DeckList.new()
 	if looks_like_dck(text):
-		lenient.parse_dck(text, fallback_name, false)
+		lenient.parse_dck(text, fallback_name, false, true)
 	else:
 		lenient.parse_foreign(text, fallback_name, true)
 	if not lenient.errors.is_empty():
@@ -729,7 +735,7 @@ static func foreign_list(text: String, path: String) -> DeckList:
 	var base := path.get_file().get_basename()
 	var ext := path.get_extension().to_lower()
 	if looks_like_dck(text) or (ext == "dck" and not DeckList.looks_like_forge(text)):
-		list.parse_dck(text, base, false)
+		list.parse_dck(text, base, false, true)
 	else:
 		list.parse_foreign(text, base, ext == "txt")
 	return list

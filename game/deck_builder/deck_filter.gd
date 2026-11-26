@@ -1309,22 +1309,141 @@ func _ability_mask() -> int:
 ## `[prefix, rank, name]` order exactly, because each list is already in
 ## `[rank, name]` order. Measured on 829 cards: 3.52 ms -> 2.29 ms, and the
 ## sort itself 1.23 ms -> 0.08 ms.
+##
+## CAMPAIGN 2026-11-26 (smooth2 #3): WHAT DID NOT MOVE IS NOT ASKED AGAIN.
+## With every card pack on the pool is 3,684 cards and one walk of it
+## through [method matches] cost 17-30 ms — on every letter typed and
+## every medallion clicked, though a letter changes only the type-ahead's
+## answer and a medallion only its own group's. So the answers are kept
+## per group ([method _keep_groups]): the sets, the colors, the types and
+## the Other Filters each as one byte per card, asked again only when that
+## group's own state moved; the cards that pass all four are the BASE, and
+## the type-ahead walks the base's folded names — or, when the needle only
+## grew ("se" to "ser"), the cards the last needle left. The list returned
+## is the one the plain walk returned, card for card
+## (`tests/unit/test_c1126_deck_filter.gd` compares them).
 func apply(pool: Array) -> Array[CardData]:
 	var ordered := _pool_in_order(pool)
+	_sync_masks()
+	_keep_groups(ordered)
 	var needle := _needle
 	var lead: Array[CardData] = []
+	if needle == "":
+		_typed = ""
+		lead.resize(_base.size())
+		for i in _base.size():
+			lead[i] = ordered[_base[i]]
+		return lead
+	var from := _base
+	if _typed != "" and _typed_base == _base_serial and _typed_rules == search_rules \
+			and needle.contains(_typed):
+		from = _typed_hits
+	var hits := PackedInt32Array()
 	var rest: Array[CardData] = []
-	for d in ordered:
-		if not matches(d):
-			continue
-		# A name PREFIX match leads, which is what the manual promises the
-		# type-ahead does.
-		if needle != "" and String(_facts_for(d)[FACT_NAME]).begins_with(needle):
-			lead.append(d)
-		else:
-			rest.append(d)
+	for i in from:
+		var name := _kept_names[i]
+		if name.contains(needle):
+			hits.append(i)
+			# A name PREFIX match leads, which is what the manual promises
+			# the type-ahead does.
+			if name.begins_with(needle):
+				lead.append(ordered[i])
+			else:
+				rest.append(ordered[i])
+		elif search_rules and String(_facts_for(ordered[i])[FACT_TEXT]).contains(needle):
+			hits.append(i)
+			rest.append(ordered[i])
+	_typed = needle
+	_typed_base = _base_serial
+	_typed_rules = search_rules
+	_typed_hits = hits
 	lead.append_array(rest)
 	return lead
+
+
+## The order [method apply] last walked and each card's folded name in it.
+var _kept_order: Array[CardData] = []
+var _kept_names := PackedStringArray()
+var _kept_registry := -1
+## Per group (sets, colors, types, Other Filters): the state it was asked
+## under, and one byte per card of [member _kept_order] — 1 passes.
+var _group_stamps: Array = [null, null, null, null]
+var _group_passes: Array[PackedByteArray] = [PackedByteArray(), PackedByteArray(),
+	PackedByteArray(), PackedByteArray()]
+## The cards that pass all four groups, as indices into [member
+## _kept_order], and a number that moves whenever they are worked out anew.
+var _base := PackedInt32Array()
+var _base_serial := 0
+## The last needle walked, the base and rules-text switch it was walked
+## under, and the cards it left (indices into [member _kept_order]).
+var _typed := ""
+var _typed_base := -1
+var _typed_rules := false
+var _typed_hits := PackedInt32Array()
+
+
+## Bring the four groups' answers up to date for [param ordered]. Each
+## group's stamp is its STATE ITSELF, hashed — not [member revision],
+## which a caller writing `filter.sets[code] = false` does not move.
+func _keep_groups(ordered: Array[CardData]) -> void:
+	var count := ordered.size()
+	if not is_same(_kept_order, ordered) or _kept_registry != CardRegistry.revision \
+			or _kept_names.size() != count:
+		_kept_order = ordered
+		_kept_registry = CardRegistry.revision
+		_kept_names.resize(count)
+		for i in count:
+			_kept_names[i] = _facts_for(ordered[i])[FACT_NAME]
+		_group_stamps = [null, null, null, null]
+	var stamps: Array = [
+		[sets, completion_pack_on, original_cards_on].hash(),
+		[colors, gold, gold_mode].hash(),
+		[types, land_mode, artifact_creatures, artifact_noncreatures, creature_summon,
+			creature_artifact, creature_list_on, creature_types, enchantments].hash(),
+		[cost_mode, cost_value, power_mode, power_value, toughness_mode, toughness_value,
+			rarity_on, rarities, ban_list, artist_on, artists, ability_on, ability_native,
+			ability_gives, abilities].hash(),
+	]
+	var moved := false
+	for group in 4:
+		if _group_stamps[group] == stamps[group] and _group_passes[group].size() == count:
+			continue
+		moved = true
+		_group_stamps[group] = stamps[group]
+		var passes := PackedByteArray()
+		passes.resize(count)
+		match group:
+			0:
+				for i in count:
+					passes[i] = 1 if matches_set(ordered[i]) else 0
+			1:
+				for i in count:
+					passes[i] = 1 if matches_color(ordered[i]) else 0
+			2:
+				for i in count:
+					passes[i] = 1 if matches_type(ordered[i]) else 0
+			3:
+				if cost_mode == Cost.OFF and power_mode == Rank.OFF and toughness_mode == Rank.OFF \
+						and not rarity_on and not artist_on and not ability_on:
+					passes.fill(1)
+				else:
+					for i in count:
+						var d := ordered[i]
+						passes[i] = 1 if matches_cost(d) and matches_power(d) and matches_toughness(d) \
+							and matches_rarity(d) and matches_artist(d) and matches_ability(d) else 0
+		_group_passes[group] = passes
+	if not moved:
+		return
+	var in_sets := _group_passes[0]
+	var in_colors := _group_passes[1]
+	var in_types := _group_passes[2]
+	var in_others := _group_passes[3]
+	var base := PackedInt32Array()
+	for i in count:
+		if in_sets[i] & in_colors[i] & in_types[i] & in_others[i]:
+			base.append(i)
+	_base = base
+	_base_serial += 1
 
 
 ## THE POOL IN [member sort_mode] ORDER, sorted once and kept.

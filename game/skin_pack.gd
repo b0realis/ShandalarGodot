@@ -1163,10 +1163,10 @@ static func _write_retired(names: Array[String]) -> void:
 		DirAccess.remove_absolute(RETIRED)
 		return
 	DirAccess.make_dir_recursive_absolute(USER_DIR)
-	var file := FileAccess.open(RETIRED, FileAccess.WRITE)
-	if file != null:
-		file.store_string("\n".join(names) + "\n")
-		file.close()
+	# Whole or not at all (campaign of 2026-11-26): written in place, a
+	# kill or a full disk in that moment left the list cut, and the zips
+	# whose names were lost were never deleted.
+	Settings.write_atomically(RETIRED, ("\n".join(names) + "\n").to_utf8_buffer())
 
 
 ## AT THE NEXT START, before anything is mounted: every retired zip
@@ -1584,7 +1584,7 @@ func pick(kind: String) -> void:
 	box.access = FileDialog.ACCESS_FILESYSTEM
 	box.filters = PackedStringArray(["*.zip, *.tar.gz, *.tgz, *.tar ; Skin and card packs",
 		"*.zip ; Zip files", "*.tar.gz, *.tgz, *.tar ; Tar archives"])
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.size = Vector2i(760, 520)
 	box.current_dir = pick_start_dir()
 	box.file_selected.connect(func(path: String) -> void:

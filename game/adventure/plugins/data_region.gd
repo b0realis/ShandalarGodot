@@ -875,6 +875,15 @@ func generate(seed_value: int, color: int, difficulty: int) -> ShandalarWorld:
 	return IslandGenerator.generate(recipe, seed_value, color, difficulty) if not recipe.is_empty() else null
 
 
+## What makes the island on a worker ([method AdventureExpansions.generator]):
+## the recipe copied whole, so the worker reads nothing the game holds.
+func generator(seed_value: int, color: int, difficulty: int) -> Callable:
+	var recipe := _part("world").duplicate(true)
+	if recipe.is_empty():
+		return Callable()
+	return func() -> ShandalarWorld: return IslandGenerator.generate(recipe, seed_value, color, difficulty)
+
+
 ## Stable world/slot choice, never hero strength, cards or concealed
 ## information. The creature keeps its identity and its announced 1997
 ## gifts; only roaming encounters take these decks. Named hunts and

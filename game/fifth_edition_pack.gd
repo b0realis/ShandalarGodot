@@ -108,35 +108,9 @@ static func inspect(path: String, art_trusted := false) -> Dictionary:
 ## Inspect declared uncompressed lengths before ZIPReader allocates them.
 ## Our builder produces ordinary, single-disk ZIPs, never ZIP64 archives.
 static func _bounded_zip(path: String) -> bool:
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null or file.get_length() < 22 or file.get_length() > 256 * 1024 * 1024: return false
-	var tail_size := mini(65557, file.get_length())
-	file.seek(file.get_length() - tail_size)
-	var tail := file.get_buffer(tail_size)
-	var end := tail.size() - 22
-	while end >= 0:
-		if tail.decode_u32(end) == 0x06054b50 and end + 22 + tail.decode_u16(end + 20) == tail.size(): break
-		end -= 1
-	if end < 0 or tail.decode_u16(end + 4) != 0 or tail.decode_u16(end + 6) != 0: return false
-	var count := tail.decode_u16(end + 10)
-	if count > MAX_ENTRIES or count != tail.decode_u16(end + 8): return false
-	var directory_end := file.get_length() - tail_size + end
-	var offset := tail.decode_u32(end + 16)
-	if offset + tail.decode_u32(end + 12) != directory_end: return false
-	file.seek(offset)
-	var total := 0
-	for n in count:
-		if file.get_position() + 46 > directory_end: return false
-		var header := file.get_buffer(46)
-		if header.decode_u32(0) != 0x02014b50 or header.decode_u16(34) != 0: return false
-		var unpacked := header.decode_u32(24)
-		if unpacked > 8 * 1024 * 1024: return false
-		total += unpacked
-		if total > 256 * 1024 * 1024: return false
-		var next := file.get_position() + header.decode_u16(28) + header.decode_u16(30) + header.decode_u16(32)
-		if next > directory_end: return false
-		file.seek(next)
-	return file.get_position() == directory_end
+	# The one shared guard (campaign of 2026-11-26): this was a copy of it,
+	# with the same bounds, and missed what the shared one learned.
+	return PortalPack.bounded_zip(path, MAX_ENTRIES)
 
 static func _inspect(reader: ZIPReader, art_trusted := false, path := "") -> Dictionary:
 	var core := [PREFIX + "manifest.json", PREFIX + "catalog.json",

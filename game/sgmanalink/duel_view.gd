@@ -208,6 +208,28 @@ func _computer_seat(pid: int) -> bool:
 	return config != null and config.is_ai(pid)
 
 
+## THE TABLE IS KEPT HERE TOO (campaign 2026-11-26). The projection hands a
+## card the same object for as long as the referee's handle stands
+## ([method SgDuelProjection._face] over [method SgCardPresentation.make]),
+## so the slots' names hold from one received table to the next; until now
+## every table received built all of it again (51 ms at 32 permanents, 73 ms
+## at 52, measured).
+func _keeps_table_widgets() -> bool:
+	return keep_table_widgets
+
+
+## ...and a handle whose card became another one — a masked creature turned
+## up, a hidden card shown — is a slot built anew: what it is called is
+## part of the slot's name here, where the definition can change under the
+## same object.
+func _slot_key(cards: Array) -> Array:
+	var key := super._slot_key(cards)
+	for card: CardInstance in cards:
+		key.append(card.data.card_name)
+		key.append(card.face_down)
+	return key
+
+
 ## Every table received rebuilds the chain's objects; the referee's handle
 ## ([member StackItem.id] here) is what stays the same object to object.
 func _chain_key(item: StackItem) -> int:

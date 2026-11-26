@@ -7,7 +7,9 @@ variants are available. Card pictures and card packs remain separate: put
 your own `cardart.zip` in `skin/` and the `Pack-*.zip` files in
 `cardpacks/`, both beside the executable (see
 [card-art-and-packs.md](card-art-and-packs.md)); Options → Skin can import
-the card pictures too.
+the card pictures too. Since 0.70.9 the game also builds them itself:
+**Options → Get Card Packs...** downloads the pictures and makes each pack
+into the card folder, on every package here (not in the browser).
 
 The Steam Deck package has been through three owner playtests; the ArkOS
 package has been run by a tester on an R36 Ultra (2026-10-02, 2026-10-08)
@@ -66,8 +68,54 @@ used in turn without a switch.
 | Back | Duel log |
 | Right stick press (R3) | Read the card: the sidebar's card full-size; the same press closes it |
 
+On the adventure's world map the same pointer plays the whole adventure,
+and the D-pad walks:
+
+| Control | On the world map and in its panes |
+| --- | --- |
+| D-pad | Walks the hero as the arrow keys do: held, a tile at a time; two directions a diagonal; let go, the hero stops on the next tile. In a dungeon it steps as the arrow keys do there |
+| D-pad, with a town, pane, menu, question or the map open | Hops from button to button, as everywhere else |
+| Left stick, then A | Point at a place and walk there; the way is found around water. A presses any button or icon of the panel |
+| LB | Right click: the options where the pointer is; a card full-size where a card shows |
+| Right stick | Scroll wheel: zooms the world, scrolls a list |
+| Y | The map (M); closes it too, and opens it over a town |
+| Back | Your hero's pane: stats, journal, tasks (F5) |
+| Start | The options menu: save, load, the panes, the main menu |
+| RB | Stops the walk and brings the view back to the hero (Space) |
+| X | First choice: puts the pointer on the open pane's first choice; pressed again there, takes it. In the field for a save's name it takes the name as it stands |
+| B | Closes what is open (Escape); with nothing open asks Ready to Quit?, with Save and Load |
+| Right stick press (R3) | Reads the card under the pointer in a pane, as LB does |
+
+The D-pad walks only on the free world — no pane, menu, question, map or
+text field open — and on a dungeon's board while the hero is free to step;
+everywhere else it hops. Nothing needs typing: a hero's name is prefilled,
+a save's name is taken as it stands with X (the Quickslot row saves with one
+click), and the search fields are optional. Exporting and importing a saved
+adventure open the game's own file window when the pad asks for them (see
+below).
+With the pad pointer switched off the D-pad moves the focus ring and walks
+no one.
+
+On every other screen — the title, Options, Help, the Deck Builder, the
+setup screens, the lobby — the pointer does what a mouse does, and:
+
+| Control | On the menus and screens |
+| --- | --- |
+| B | Closes or cancels, on every screen (Escape) |
+| Start | The screen's menu where it has one: the Deck Builder's menu (Q), a duel's pause menu, the world's options |
+| LB, RB | In Help: the page before and the next page (LB is no right click there) |
+| D-pad on a page of text | Hops onto a summary or a long explanation that scrolls, then scrolls it up and down; at its end it hops on. The right stick scrolls it too |
+| A on a text field | Brings up the on-screen keyboard where the system has none of its own (Options → Display → On-screen keyboard on `Auto`); a field clicked with the mouse never shows it |
+| A file window | Opened by the pad it is the game's own, inside the window: the left stick points and RT clicks, LT is the right click, the right stick scrolls; the D-pad and A walk its list and B cancels. Opened by the mouse it is the system's, as before (and always on Android) |
+
+Options → Controls says the same in three groups: *Controls* (the duel),
+*World map* and *Menus and screens*.
+
 While a mini-menu is open the D-pad walks its entries and A picks one. RB,
-X, B, Y, Start, Back and R3 can be rebound in Options → Controls; A, LB, the
+X, B, Y, Start, Back and R3 can be rebound in Options → Controls — the
+duel's under *Controls*, the adventure's under *World map* (Y, Back, Start,
+RB, X, and a Quicksave button of your choice); a button may serve both, as
+the two are pressed on different screens. A, LB, the
 triggers, the D-pad and the sticks belong to the pointer while it is on.
 With the pointer off, the D-pad and the left stick move the engine's focus
 ring over the menus' buttons and A presses the focused one; the shell,
@@ -413,7 +461,7 @@ told to trust this computer — put it on and answer the prompt.
    never replaced by half a zip. They talk to the one headset `adb
    devices` lists as ready even with a phone or an emulator plugged
    in beside it. They copy the card packs only under the names the
-   game reads (`Pack-1-DotP-complete.zip` … `Pack-9-Tempest-Block.zip`);
+   game reads (`Pack-1-DotP-complete.zip` … `Pack-10-Urza-Block.zip`);
    a browser's second download, `Pack-9-Tempest-Block (1).zip`, is
    named on screen with the name to give it.
 

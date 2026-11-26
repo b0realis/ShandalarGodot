@@ -126,6 +126,9 @@ var player: AdventurePlayer
 var sell_site := -1
 ## Opened outdoors with the spellbook (F1): the decks to look at only.
 var looking := false
+## The opener's word on leaving with a deck slot on show: see [method
+## _refused_leave]. Unset, nothing is asked.
+var can_leave := Callable()
 var _gold: Label
 var _written := false
 var _sell_button: Button
@@ -868,6 +871,8 @@ func _save_deck(then := Callable()) -> void:
 ## about first — the Extra Cards box: Remove Extra Cards takes the extras
 ## out and goes on, Edit Deck stays ([method _ask_extra_cards]).
 func _exit() -> void:
+	if _refused_leave():
+		return
 	if _ask_extra_cards(_exit_now):
 		return
 	_exit_now()
@@ -879,6 +884,8 @@ func _exit_now() -> void:
 
 
 func _quit_game() -> void:
+	if _refused_leave():
+		return
 	if _ask_extra_cards(_quit_now):
 		return
 	_quit_now()
@@ -887,6 +894,42 @@ func _quit_game() -> void:
 func _quit_now() -> void:
 	write_back()
 	exit_requested.emit()
+
+
+## THE OPENER MAY REFUSE THE DECK ON SHOW (campaign 2026-11-26, bugs3 #1:
+## an empty slot left on show became the deck in use, and the next creature
+## ended the adventure). [member can_leave], when the opener set one, is
+## asked `can_leave.call(slot) -> String` on every way out that writes the
+## decks back — Done, Exit game, the window's close — with the slot on show
+## (0 to 2; [method slot_model] gives any slot's deck as it stands now). ""
+## lets the builder go; any other text is shown in a house window and the
+## builder stays (with a window already up, on the status line). A builder
+## that only looks changes nothing and is never asked.
+func _refused_leave() -> bool:
+	if looking or not can_leave.is_valid():
+		return false
+	var refusal := String(can_leave.call(_slot))
+	if refusal == "":
+		return false
+	if _dialog_busy():
+		_say(refusal, true)
+		return true
+	var dialog := OriginalDialog.create("Your deck", Vector2(520, 200))
+	var text := OriginalDialog.label(refusal, 14)
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.custom_minimum_size.x = 460
+	dialog.body().add_child(text)
+	dialog.add_button("Edit Deck").pressed.connect(dialog.dismiss)
+	_show_dialog(dialog)
+	return true
+
+
+## The deck in [param slot] (0 to 2) as the builder holds it now, the one
+## on show included — for [member can_leave]'s judge.
+func slot_model(slot: int) -> DeckModel:
+	if slot == _slot:
+		return deck
+	return _slots[slot] as DeckModel if slot >= 0 and slot < _slots.size() else null
 
 
 ## True when the deck on show has too many copies of a card and the Extra
@@ -905,6 +948,8 @@ func _ask_extra_cards(then: Callable) -> bool:
 ## after the next load). With a window already up the box cannot open — one
 ## dialog at a time — so the status line says what to do.
 func _on_window_close_request() -> void:
+	if _refused_leave():
+		return
 	if looking or deck.over_duplicate_limit(_with_tome(), _copy_rule()).is_empty():
 		_end_process()
 		return

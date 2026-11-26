@@ -143,6 +143,73 @@ The game reads this folder when it starts. Add files, then restart.
 static var _cache: Array[Dictionary] = []
 static var _textures: Dictionary = {}
 
+## A PHOTO IS WORN SMALL, AND ONLY SO MANY ARE KEPT (campaign of
+## 2026-11-26). The README says "Any size", and a phone's photo (12
+## megapixels and up) was kept at its full size for the whole run — 34 MB
+## of memory a face, and as much again on the graphics card — for a frame
+## that shows it some 120 x 150 across. A face read from a file whose
+## longer side is over [constant MAX_SIDE] is scaled down to it, keeping
+## its shape, before its texture is made ([method bounded]); a face with a
+## 1x file of its own beside it (a skin's 2x face) is left as it is, its
+## size being what its slot goes by. And the faces read from files are
+## kept up to [constant KEPT_BYTES] of pixels: past it, the ones shown
+## longest ago are let go and read again when next shown. The 1997 faces
+## are some 60 KB each and never come near it.
+const MAX_SIDE := 1024
+const KEPT_BYTES := 64 * 1024 * 1024
+## id -> the bytes of pixels its kept texture holds, and when it was last
+## asked for (a count, not a time).
+static var _kept: Dictionary = {}
+static var _used: Dictionary = {}
+static var _clock := 0
+
+
+## [param job]'s decoded picture ([method GameSkin.decode_picture]) scaled
+## down in place when it is a photo; see [constant MAX_SIDE].
+static func bounded(job: Dictionary) -> void:
+	var img: Image = job.get("img")
+	var own := String(job.get("own", ""))
+	if img == null or img.is_empty() or (own != "" and own != String(job.get("path", ""))):
+		return
+	var longer := maxi(img.get_width(), img.get_height())
+	if longer <= MAX_SIDE:
+		return
+	if img.is_compressed() and img.decompress() != OK:
+		return
+	# Halved while that still leaves it too big (cheap, and each pixel an
+	# average of four), then brought to the size.
+	while longer >= MAX_SIDE * 2:
+		img.shrink_x2()
+		longer = maxi(img.get_width(), img.get_height())
+	if longer > MAX_SIDE:
+		var factor := float(MAX_SIDE) / float(longer)
+		img.resize(maxi(1, roundi(img.get_width() * factor)), maxi(1, roundi(img.get_height() * factor)),
+			Image.INTERPOLATE_BILINEAR)
+
+
+## Keep [param made] as [param id]'s texture, a face read from a file,
+## and let the faces shown longest ago go while more than [constant
+## KEPT_BYTES] are kept — never the one just made.
+static func _keep_own(id: String, made: Texture2D) -> void:
+	_textures[id] = made
+	if made == null:
+		return
+	_clock += 1
+	_used[id] = _clock
+	_kept[id] = made.get_width() * made.get_height() * 4
+	var total := 0
+	for bytes: int in _kept.values():
+		total += bytes
+	while total > KEPT_BYTES and _kept.size() > 1:
+		var oldest := ""
+		for other: String in _kept:
+			if other != id and (oldest == "" or int(_used[other]) < int(_used[oldest])):
+				oldest = other
+		total -= int(_kept[oldest])
+		_kept.erase(oldest)
+		_used.erase(oldest)
+		_textures.erase(oldest)
+
 
 ## Every portrait found, as `{id, name, path}`, sorted by name. `id` is
 ## the file's base name and is what gets remembered in the settings file —
@@ -178,6 +245,8 @@ static func all() -> Array[Dictionary]:
 static func refresh() -> void:
 	_cache = []
 	_textures = {}
+	_kept = {}
+	_used = {}
 	_generation += 1
 
 
@@ -221,8 +290,9 @@ static func keep_face(job: Dictionary) -> Texture2D:
 		return _textures[id]
 	if not job.has("img") or int(job.get("generation", -1)) != _generation:
 		return null
+	bounded(job)
 	var made := GameSkin.picture_from(job)
-	_textures[id] = made
+	_keep_own(id, made)
 	return made
 
 
@@ -231,6 +301,9 @@ static func texture(id: String) -> Texture2D:
 	if id == "":
 		return null
 	if _textures.has(id):
+		if _used.has(id):
+			_clock += 1
+			_used[id] = _clock
 		return _textures[id]
 	var result: Texture2D = null
 	for entry in all():
@@ -249,8 +322,13 @@ static func texture(id: String) -> Texture2D:
 		# the way a skin picture is, so a 2x face is worn at its 1x one's
 		# size (GameSkin, THE CATALOGUE, THE 2x PICTURES).
 		var found := GameSkin.worn(path)
-		result = GameSkin.picture(String(found["path"]), "", String(found["own"]))
-		break
+		# Read as [method keep_face] reads a warmed face, a photo scaled
+		# down between the decode and the texture ([method bounded]).
+		var job := {"id": id, "key": "", "path": String(found["path"]), "own": String(found["own"])}
+		GameSkin.decode_picture(job)
+		bounded(job)
+		_keep_own(id, GameSkin.picture_from(job))
+		return _textures[id]
 	_textures[id] = result
 	return result
 

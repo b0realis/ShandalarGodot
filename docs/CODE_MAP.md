@@ -423,6 +423,22 @@ A player's reports on GitHub; the record is `docs/issues-7-10-2026-11-10.md`.
   `tests/ui/test_card_forge.gd`, `tests/unit/test_community_boosters.gd`,
   `tests/ui/test_sgmanalink_community_transfer.gd`.
 
+## 0.70.11 (2026-11-26): the robustness release
+
+Version 0.70.11, Android version code 70011; `docs/releases/0.70.11.md`,
+`docs/campaign-2026-11-26.md`.
+
+- `game/input/pad_controls.gd`: `dpad_walks()`; `game/input/controls.gd`:
+  the world's actions, `pad_hint`, `system_file_box`.
+- `game/adventure/deck_rescue.gd` (`DeckRescue`): the deck in use always
+  has a card to stake while the hero owns a spell.
+- `engine/ai/own_goal.gd`: the casts and payments the computer refuses
+  because they would cost it the game.
+- `game/portal_pack.gd` `one_list`: the one zip guard; `game/settings.gd`
+  `safe_text`, `sweep_pending`; `game/records/mpn_archive.gd`: the bound
+  and the deletes.
+- Tests: `tests/**/test_c1126_*.gd`.
+
 ## 0.70.10 (2026-11-24): the builders in an exported game
 
 Version 0.70.10, Android version code 70010; `docs/releases/0.70.10.md`.

@@ -32,6 +32,14 @@ extends RefCounted
 ## Bytes read from the tar per step.
 const CHUNK := 4 << 20
 const BLOCK := 512
+## Compressed bytes handed to the inflater at a time, and how long one
+## [method step] of a gzipped tar may go on inflating before it returns.
+const FEED := 64 << 10
+const STEP_MSEC := 12
+## The most a GNU long name (`L`) or a pax header (`x`) may hold. Names
+## are a few hundred bytes; the size field allows 8 GB, and the entry is
+## gathered whole in memory.
+const MAX_META := 64 << 10
 ## Entry types: a regular file (two spellings), a directory, a GNU long
 ## name, a pax extended header.
 const TYPE_FILE := "0"
@@ -70,6 +78,9 @@ var _meta := PackedByteArray()
 ## A name handed down by an `L` or `x` entry for the entry after it.
 var _next_name := ""
 var _input_over := false
+## The compressed chunk being inflated and how far it has gone in.
+var _raw := PackedByteArray()
+var _raw_at := 0
 
 
 ## Whether the file at [param path] is a tar — gzipped (the two magic
@@ -147,7 +158,12 @@ func progress() -> float:
 func step() -> bool:
 	if done:
 		return false
-	if not _input_over:
+	if _gz != null and _raw_at < _raw.size():
+		# The rest of the last chunk first ([method _inflate] stops when
+		# its time for one step is up).
+		if not _inflate():
+			return false
+	elif not _input_over:
 		var raw := _in.get_buffer(CHUNK)
 		if _in.get_position() >= _size or raw.is_empty():
 			_input_over = true
@@ -155,10 +171,15 @@ func step() -> bool:
 			_buf.append_array(raw)
 			if not _consume():
 				return false
-		elif not _inflate(raw):
-			return false
+		else:
+			_raw = raw
+			_raw_at = 0
+			if not _inflate():
+				return false
 	elif not _consume():
 		return false
+	if _gz != null and _raw_at < _raw.size():
+		return not done      # more of this chunk to inflate, next step
 	if _input_over and not done:
 		if _remaining > 0 or _pad > 0:
 			_finish(false, "ends before its last file does")
@@ -167,24 +188,32 @@ func step() -> bool:
 	return not done
 
 
-## A chunk of the gzipped tar through the inflater. Its ring buffer is
-## [const CHUNK] wide, and a chunk of compressed bytes may come out
-## many times wider (a tar of small files is mostly zero blocks), so
-## the chunk goes in as much at a time as the buffer has room for
-## (`put_partial_data`), and what comes out is consumed between the
-## puts — the buffer never has to hold a whole chunk's worth of output.
+## A chunk of the gzipped tar ([member _raw], from [member _raw_at])
+## through the inflater. Its ring buffer is [const CHUNK] wide, and a
+## chunk of compressed bytes may come out many times wider (a tar of small
+## files is mostly zero blocks), so the chunk goes in as much at a time as
+## the buffer has room for (`put_partial_data`), and what comes out is
+## consumed between the puts — the buffer never has to hold a whole
+## chunk's worth of output.
+##
+## AND NO LONGER THAN [const STEP_MSEC] A STEP (campaign of 2026-11-26): a
+## chunk that packs a thousandfold (zeros) was inflated and consumed whole
+## before the step returned — 1.3 s for a 408 KB file, the window frozen
+## instead of showing its progress. The chunk is fed [const FEED] bytes at
+## a time and the step ends when its time is up; [method step] comes back
+## for the rest.
 ## False once the job is over, done or failed.
-func _inflate(raw: PackedByteArray) -> bool:
-	var at := 0
-	while at < raw.size():
-		var put: Array = _gz.put_partial_data(raw.slice(at) if at > 0 else raw)
+func _inflate() -> bool:
+	var started := Time.get_ticks_msec()
+	while _raw_at < _raw.size():
+		var put: Array = _gz.put_partial_data(_raw.slice(_raw_at, mini(_raw_at + FEED, _raw.size())))
 		if put[0] != OK:
 			return _finish(false, "is not a gzip file the game can read")
 		var sent := int(put[1])
 		var available := _gz.get_available_bytes()
 		if sent <= 0 and available <= 0:
 			return _finish(false, "is not a gzip file the game can read")
-		at += sent
+		_raw_at += sent
 		if available > 0:
 			var got: Array = _gz.get_data(available)
 			if got[0] != OK:
@@ -192,6 +221,11 @@ func _inflate(raw: PackedByteArray) -> bool:
 			_buf.append_array(got[1])
 		if not _consume():
 			return false
+		if Time.get_ticks_msec() - started >= STEP_MSEC:
+			break
+	if _raw_at >= _raw.size():
+		_raw = PackedByteArray()
+		_raw_at = 0
 	return true
 
 
@@ -276,6 +310,8 @@ func _begin_entry(header: PackedByteArray) -> bool:
 				files += 1
 			# else a directory in the old spelling: skipped with its body
 		TYPE_LONG_NAME, TYPE_PAX:
+			if size > MAX_META:
+				return _finish(false, "has a header the game cannot read")
 			_meta_type = type
 		_:
 			pass   # a directory, a link, a device: skipped with its body
@@ -372,6 +408,8 @@ func _finish(succeeded: bool, reason: String) -> bool:
 	_gz = null
 	_buf = PackedByteArray()
 	_off = 0
+	_raw = PackedByteArray()
+	_raw_at = 0
 	if not ok and dest != "" and FileAccess.file_exists(dest):
 		DirAccess.remove_absolute(dest)
 	return false

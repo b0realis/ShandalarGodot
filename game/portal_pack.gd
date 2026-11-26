@@ -125,6 +125,7 @@ static func bounded_zip(path: String, max_entries: int, max_bytes := 256 * 1024 
 		if tail.decode_u32(end) == 0x06054b50 and end + 22 + tail.decode_u16(end + 20) == tail.size(): break
 		end -= 1
 	if end < 0 or tail.decode_u16(end + 4) != 0 or tail.decode_u16(end + 6) != 0: return false
+	if not one_list(file, tail, end): return false
 	var count := tail.decode_u16(end + 10)
 	if count > max_entries or count != tail.decode_u16(end + 8): return false
 	var directory_end := file.get_length() - tail_size + end
@@ -144,6 +145,31 @@ static func bounded_zip(path: String, max_entries: int, max_bytes := 256 * 1024 
 		if next > directory_end: return false
 		file.seek(next)
 	return file.get_position() == directory_end
+
+## ONE LIST, WHOEVER READS (campaign of 2026-11-26, the rule [method
+## PluginPackage.zip_entries] keeps since 2026-11-22). The engine's
+## [ZIPReader] takes the LAST end mark of a file, wherever it sits, and a
+## zip64 end record before any; the guard above takes the end record whose
+## comment reaches the file's end. A zip made with two lists showed the
+## guard one and the reader the other, and was unpacked past every bound.
+## True when the record at [param end] of [param tail] (the file's last
+## bytes) is the only one a reader can find: no end mark stands after it
+## and no zip64 locator in the tail leads to a zip64 end record.
+static func one_list(file: FileAccess, tail: PackedByteArray, end: int) -> bool:
+	var last := tail.size() - 4
+	while last > end and tail.decode_u32(last) != 0x06054b50:
+		last -= 1
+	if last != end: return false
+	var length := file.get_length()
+	var at64 := tail.find(0x07)
+	while at64 >= 0:
+		if at64 >= 3 and at64 + 13 <= tail.size() and tail.decode_u32(at64 - 3) == 0x07064b50:
+			var where := tail.decode_s64(at64 + 5)
+			if where >= 0 and where + 4 <= length:
+				file.seek(where)
+				if file.get_32() == 0x06064b50: return false
+		at64 = tail.find(0x07, at64 + 1)
+	return true
 
 static func _inspect(reader: ZIPReader, art_trusted := false, path := "") -> Dictionary:
 	var core := [PREFIX + "manifest.json", PREFIX + "catalog.json",

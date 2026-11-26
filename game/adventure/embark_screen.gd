@@ -1996,7 +1996,16 @@ func _process(delta: float) -> void:
 ## alive while the original's generator retries: most worlds take under a
 ## second, about one in a hundred several (`world-builder-adventure-notes.md`,
 ## "Never stuck").
+##
+## WHERE THE ENGINE HAS NO THREADS (the plain Web package) the world is made
+## in place, the hourglass already drawn a frame before ([method
+## _materialize]): the single-threaded template's `Thread` is a stub whose
+## `start` answers OK and runs nothing, so the wait below never ended and
+## no adventure could begin there (0.70.11 campaign, robust2 R2-1; the same
+## trap as [method CardRegistry.begin_load]'s).
 func _make_world_aside(record: Dictionary) -> ShandalarWorld:
+	if not world_threads_here():
+		return AdventureSetup.make_world(record)
 	_worker = Thread.new()
 	if _worker.start(func() -> ShandalarWorld: return AdventureSetup.make_world(record)) != OK:
 		_worker = null
@@ -2008,6 +2017,17 @@ func _make_world_aside(record: Dictionary) -> ShandalarWorld:
 	var made: ShandalarWorld = _worker.wait_to_finish()
 	_worker = null
 	return made
+
+
+## Tests: 1 a thread, 0 none, -1 by the rule ([method world_threads_here]).
+static var world_threads_forced := -1
+
+
+## Whether the world may be made on a thread: an engine with threads.
+static func world_threads_here() -> bool:
+	if world_threads_forced >= 0:
+		return world_threads_forced == 1
+	return OS.has_feature("threads")
 
 
 ## A world still being made is waited for when the screen goes: the thread

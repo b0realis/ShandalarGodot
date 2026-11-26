@@ -864,6 +864,10 @@ func _world_waits() -> bool:
 func _sync_rest() -> void:
 	if hud == null or _shield == null:
 		return
+	if player != null and player.deck_note != "":
+		# What [DeckRescue] did to the deck in use, said once.
+		hud.say(player.deck_note)
+		player.deck_note = ""
 	if (_town_aside == "hero" and not hud.hero_shown()) or (_town_aside == "map" and not _map.visible):
 		# What was opened over the town closed, however it was closed.
 		_town_back()
@@ -898,6 +902,11 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	_sync_rest()
+	var pad := event as InputEventJoypadButton
+	if pad != null and pad.pressed and _pad_in_pane(pad):
+		# A controller's button over a town or a pane ([method _pad_in_pane]).
+		get_viewport().set_input_as_handled()
+		return
 	var mouse := event as InputEventMouse
 	if mouse != null:
 		_pointer_seen = (make_input_local(mouse) as InputEventMouse).position
@@ -1246,7 +1255,13 @@ func _notification(what: int) -> void:
 			autosave()
 		AdventurePlayer.finish_saves()
 		return
-	if what == NOTIFICATION_WM_CLOSE_REQUEST and player != null and not _leaving and not building() \
+	# THE APP PAUSED (a phone's Home, a headset taken off — 0.70.11
+	# campaign, robust2 R2-5): there is no window to close there, and the
+	# system may end a paused app with no further word, so a world at rest
+	# is saved as the window's close saves it; nothing is closed out and
+	# the game goes on when it comes back.
+	if what in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED] and player != null \
+			and not _leaving and not building() \
 			and not meeting() and not _duel_held and not _lost and not rewarding() and not news_shown() \
 			and not on_board():
 		autosave()
@@ -1348,7 +1363,25 @@ func _arrive_in_town(slot: int) -> Dictionary:
 		Quests.arrive(player, slot)
 	CardShop.offers(player, slot)
 	CardHints.arrive(player, slot)
+	# The shop's cards decoded while the town's pane is read (0.70.11
+	# campaign, smooth2 #6: the shop's first opening read each new card's
+	# picture on the thread that draws, 35-50 ms for its five).
+	if is_inside_tree():
+		CardArtWarmer.warm(self, shop_cards_to_warm(slot), true)
 	return arrived
+
+
+## The cards town [param slot]'s shop has drawn, for [CardArtWarmer] — read
+## off the shop's record, never drawn here ([method CardShop.offers] rolls
+## the adventure's dice).
+func shop_cards_to_warm(slot: int) -> Array[String]:
+	var names: Array[String] = []
+	var shop: Variant = player.shops.get(str(slot)) if player != null else null
+	if shop is Dictionary and (shop as Dictionary).get("cards") is Array:
+		for card: Variant in (shop as Dictionary)["cards"]:
+			if card is String and card != "" and not names.has(card):
+				names.append(card)
+	return names
 
 
 ## Whether a place's pane, or a pane over the world (the shop, the trade, a
@@ -1464,13 +1497,29 @@ func town_on_top() -> bool:
 ## Ctrl+S quicksaves in place. Any other key goes on — to the town's pane,
 ## whose letters answer its choices, or to the world, which holds it.
 func _town_key(key: InputEventKey) -> bool:
+	var action := Controls.world_action(key)
 	if _town_aside == "hero":
-		if key.keycode == KEY_F5 or key.keycode == KEY_Q or key.is_action_pressed("ui_cancel"):
+		if (key.keycode == KEY_F5 and not Controls.world_key_retired(key)) or action == "world_hero" \
+				or key.keycode == KEY_Q or key.is_action_pressed("ui_cancel"):
 			hud.close_panels()
 			_town_back()
 			return true
 		return false
 	if not town_on_top():
+		return false
+	# The world map's actions as the player bound them ([constant
+	# Controls.WORLD_ACTIONS]); a key taken off one answers no more.
+	match action:
+		"world_quicksave":
+			quick_save()
+			return true
+		"world_map":
+			map_in_town()
+			return true
+		"world_hero":
+			hero_in_town()
+			return true
+	if Controls.world_key_retired(key):
 		return false
 	if key.keycode == KEY_S and key.ctrl_pressed:
 		quick_save()
@@ -2403,6 +2452,9 @@ func _reveal(before: Texture2D) -> void:
 	move_child(cover, view.get_index() + 1)
 
 
+## The builder's line after [DeckRescue]'s own, when it comes up again.
+const DECK_RESCUED := "Done keeps it."
+
 ## THE DECK (the frame's spellbook, F1, and Conjurer's Will): the
 ## adventure's deck builder over the world, which waits under it
 ## ([AdventureBuilder]); Done writes the decks back to the hero. As in 1997
@@ -2439,9 +2491,24 @@ func building() -> bool:
 ## The builder is done: the world again, its music, the deck's count — and
 ## the town again when the town's Edit deck/Sell cards opened it.
 func _deck_closed() -> void:
+	var edited := building() and not _builder.looking
+	var site := _builder.sell_site if building() else -1
 	if building():
 		_builder.queue_free()
 	_builder = null
+	# Left on a deck with no card to stake while the hero owns one
+	# (0.70.11 campaign, bugs3 #1): a playable deck is the deck in use
+	# ([DeckRescue]) and the builder is up again, saying so — Done once
+	# more keeps it, or the decks are changed first.
+	if edited and DeckRescue.needed(player):
+		var said := DeckRescue.rescue(player)
+		player.deck_note = ""
+		var again := show_deck(site)
+		if again != null:
+			again._say("%s %s" % [said, DECK_RESCUED], true)
+			_sync_rest()
+			return
+		hud.say(said)
 	_cover_world(false)
 	WorldDuels.world_music(self)
 	soundscape.rest(false)
@@ -3135,17 +3202,44 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_close_or_ask()
 		return
+	# The world map's actions ([constant Controls.WORLD_ACTIONS]): a key or
+	# a controller's button each, as the player bound them.
+	var action := Controls.world_action(event)
+	if event is InputEventJoypadButton:
+		if _map.visible:
+			# Over the map its own button closes it and the Quickslot saves.
+			if action == "world_map":
+				toggle_map()
+			elif action == "world_quicksave":
+				quick_save()
+			else:
+				return
+		elif not _world_act(action):
+			return
+		get_viewport().set_input_as_handled()
+		return
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return
 	if _map.visible:
-		_map_key(key)
+		if action == "world_map" and key.keycode != KEY_M:
+			# The map's key given another key closes it as M did.
+			toggle_map()
+			get_viewport().set_input_as_handled()
+		elif not Controls.world_key_retired(key):
+			_map_key(key)
 		return
 	if WALK_KEYS.has(key.keycode):
 		if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
 			return
 		get_viewport().set_input_as_handled()
 		_press_walk(key.keycode)
+		return
+	if _world_act(action):
+		get_viewport().set_input_as_handled()
+		return
+	if Controls.world_key_retired(key):
+		# A key the player took off its action answers no more.
 		return
 	match key.keycode:
 		KEY_M, KEY_F2:
@@ -3190,6 +3284,173 @@ func _unhandled_input(event: InputEvent) -> void:
 		_:
 			return
 	get_viewport().set_input_as_handled()
+
+
+# ------------------------------------------------------ the controller --
+
+## The group the pad layer asks about the D-pad ([constant
+## PadControls.WALK_GROUP]) — said here by its word so the world needs no
+## autoload to be read.
+const PAD_WALK_GROUP := "pad_dpad_walkers"
+## The board's steps on which its direction keys walk ([DungeonPane]).
+const BOARD_WALK_STEPS: Array[String] = ["idle", "walking"]
+
+
+func _enter_tree() -> void:
+	add_to_group(PAD_WALK_GROUP)
+
+
+## The pad layer (the `PadControls` autoload), or null.
+func _pad_layer() -> Node:
+	return get_node_or_null(^"/root/PadControls") if is_inside_tree() else null
+
+
+## THE D-PAD IS THE WORLD'S NOW (campaign 2026-11-26; the one rule the pad
+## layer asks, [method PadControls.dpad_walks]): true on the FREE world —
+## no pane, question, map, options, hero's pane, keys' help, card reader,
+## popup or text field has the buttons — and on a dungeon's or a castle's
+## board while the hero is free to step. There the D-pad types the arrow
+## keys, so the hero walks as the keys walk them ([method _press_walk],
+## [method DungeonPane._held_way]); everywhere else it hops the pointer
+## from button to button.
+func pad_dpad_walks() -> bool:
+	if not is_inside_tree() or not is_visible_in_tree() or _leaving or _lost \
+			or player == null or walk == null or hud == null:
+		return false
+	var held := get_viewport().gui_get_focus_owner()
+	if held is LineEdit or held is TextEdit:
+		return false
+	for window in get_viewport().get_embedded_subwindows():
+		if window.visible:
+			return false
+	if reader != null and reader.is_open():
+		return false
+	if on_board():
+		return _board.visible and VisitPane.on_top(_board) and _board.get(&"_done") != true \
+			and str(_board.get(&"step")) in BOARD_WALK_STEPS
+	if _world_waits():
+		return false
+	return not (hud.options_shown() or hud.hero_shown() or hud.help_shown())
+
+
+## One of the world map's actions done on the free world ([constant
+## Controls.WORLD_ACTIONS]): the map, the hero's pane, the walk stopped,
+## the options, the Quickslot. False for none of them (`First choice` is a
+## pane's, [method _pad_in_pane]).
+func _world_act(action: String) -> bool:
+	match action:
+		"world_map":
+			toggle_map()
+		"world_hero":
+			toggle_hero()
+		"world_stop":
+			stop_and_back()
+		"world_menu":
+			hud.hide_place()
+			hud.toggle_options()
+		"world_quicksave":
+			quick_save()
+		_:
+			return false
+	return true
+
+
+## A CONTROLLER'S BUTTON [param pad] (pressed) WHILE A PANE HOLDS THE SCREEN
+## — heard before the pane ([method _input]), as a town's keys are ([method
+## _town_key]). Over a town's own pane the map's and the hero's buttons
+## open over it and the Quickslot saves; the hero's pane over a town closes
+## on its own button or on cancel (B). In any pane `First choice` ([method
+## _pad_confirm]) and the card reader's button (R3: the card under the
+## pointer, as a right click reads it). Not in the deck builder, a duel or
+## the reader, which hear their own. True when it was taken.
+func _pad_in_pane(pad: InputEventJoypadButton) -> bool:
+	if _leaving or hud == null:
+		return false
+	var action := Controls.world_action(pad)
+	if _town_aside == "hero":
+		if action == "world_hero" or pad.is_action_pressed("ui_cancel"):
+			hud.close_panels()
+			_town_back()
+			return true
+		return false
+	if town_on_top():
+		match action:
+			"world_map":
+				map_in_town()
+				return true
+			"world_hero":
+				hero_in_town()
+				return true
+			"world_quicksave":
+				quick_save()
+				return true
+	if building() or _duel_held or not modal() or (reader != null and reader.is_open()):
+		return false
+	if action == "world_confirm":
+		return _pad_confirm()
+	if action == "" and Controls.pressed(pad, "duel_read"):
+		var layer := _pad_layer()
+		return layer != null and layer.tap(MOUSE_BUTTON_RIGHT)
+	return false
+
+
+## FIRST CHOICE (X): in a text field of a pane, its Enter (a save's name
+## taken as it stands — a pad types none); else the pad's pointer put on
+## the first choice of the pane on top ([method _first_choice]), and with
+## the pointer already there, that choice taken. Only with the pad pointer
+## on. True when something was done.
+func _pad_confirm() -> bool:
+	var layer := _pad_layer()
+	if layer == null or not layer.is_active():
+		return false
+	var held := get_viewport().gui_get_focus_owner() as LineEdit
+	if held != null and is_ancestor_of(held):
+		held.text_submitted.emit(held.text)
+		return true
+	var first := _first_choice()
+	if first == null:
+		return false
+	if layer.is_on(first):
+		return layer.tap()
+	return layer.point_at(first)
+
+
+## The pane on top of the world: its last shown child that stops the
+## pointer, the world's own parts aside; null on the free world.
+func _top_pane() -> Control:
+	var own: Array = [_shield, hud, view, _map, reader, paths, guides, _arrival]
+	for i in range(get_child_count() - 1, -1, -1):
+		var pane := get_child(i) as Control
+		if pane == null or not pane.visible or pane.is_queued_for_deletion() \
+				or pane.mouse_filter != Control.MOUSE_FILTER_STOP or own.has(pane):
+			continue
+		return pane
+	return null
+
+
+## The first choice of the pane on top: the first button of its choices'
+## row where it has one, else its first button; null for none.
+func _first_choice() -> BaseButton:
+	var pane := _top_pane()
+	if pane == null:
+		return null
+	var choices: Variant = pane.get(&"_choices")
+	if is_instance_valid(choices) and choices is Control and (choices as Control).is_visible_in_tree():
+		var chosen := _first_button(choices as Node)
+		if chosen != null:
+			return chosen
+	return _first_button(pane)
+
+
+static func _first_button(node: Node) -> BaseButton:
+	var button := node as BaseButton
+	if button != null and button.is_visible_in_tree() and not button.disabled:
+		return button
+	for child in node.get_children():
+		var found := _first_button(child)
+		if found != null:
+			return found
+	return null
 
 
 ## Whether [param event] is a walking key pressed anew ([constant

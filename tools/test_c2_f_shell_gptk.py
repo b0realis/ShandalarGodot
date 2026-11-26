@@ -34,7 +34,8 @@ class SelectIsTheMenuKeyTest(unittest.TestCase):
     def test_the_game_reads_f10_as_its_menu_key(self):
         controls = (ROOT / "game/input/controls.gd").read_text()
         self.assertRegex(controls, r"const MENU_KEY := KEY_F10\b")
-        self.assertIn('if action == "duel_pause" and is_menu_key(event):', controls,
+        # 0.70.11: the world's options answer it too.
+        self.assertIn('if (action == "duel_pause" or action == "world_menu") and is_menu_key(event):', controls,
                       "the duel's pause key answers F10")
         builder = (ROOT / "game/deck_builder/deck_builder_screen.gd").read_text()
         handler = builder[builder.index("func _unhandled_key_input"):]

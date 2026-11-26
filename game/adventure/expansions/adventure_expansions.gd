@@ -298,8 +298,51 @@ static func voyage(player: AdventurePlayer, destination: String) -> bool:
 	var seed_value := player.world.seed
 	var color := player.world.color
 	var difficulty := player.difficulty
-	var make := func() -> ShandalarWorld: return generate(destination, seed_value, color, difficulty)
+	var make := func() -> ShandalarWorld:
+		var ahead := take_made(destination, seed_value, color, difficulty)
+		return ahead if ahead != null else generate(destination, seed_value, color, difficulty)
 	return AdventureRegions.travel(player, destination, make)
+
+
+## A LAND MADE AHEAD of its first voyage (0.70.11 campaign, smooth2 #4: the
+## first sail made the island on the drawing thread, 250–290 ms): [method
+## generator] gives what makes it, on private data, for a worker; the world
+## it made is kept here ([method keep_made]) under what it was made from,
+## and the voyage takes it ([method take_made]) instead of making it again.
+## One land at a time; a world kept for another seed, color or difficulty is
+## never taken.
+static var _made_ahead := {}
+
+
+## What makes land [param id] for [param player]'s campaign, to be called
+## on any thread (it reads nothing shared); an invalid Callable when the
+## land cannot be made aside — it is then made in place, as ever.
+static func generator(player: AdventurePlayer, id: String) -> Callable:
+	if player == null or player.world == null:
+		return Callable()
+	var content := provider(id)
+	if content == null or not content.has_method("generator"):
+		return Callable()
+	return content.call("generator", player.world.seed ^ int(definition(id).get("salt", 0)),
+		player.world.color, player.difficulty)
+
+
+## [param made] kept as land [param id] of the campaign it was made for:
+## the mainland's [param seed_value], its [param color], the hero's [param
+## difficulty] as they stood when its making began.
+static func keep_made(id: String, seed_value: int, color: int, difficulty: int, made: ShandalarWorld) -> void:
+	_made_ahead = {}
+	if made != null:
+		_made_ahead = {"id": id, "seed": seed_value, "color": color, "difficulty": difficulty, "world": made}
+
+
+static func take_made(id: String, seed_value: int, color: int, difficulty: int) -> ShandalarWorld:
+	var kept := _made_ahead
+	_made_ahead = {}
+	if String(kept.get("id", "")) != id or int(kept.get("seed", 0)) != seed_value \
+			or int(kept.get("color", -1)) != color or int(kept.get("difficulty", -1)) != difficulty:
+		return null
+	return kept.get("world") as ShandalarWorld
 
 
 static func mana_links_allowed(world: ShandalarWorld) -> bool:

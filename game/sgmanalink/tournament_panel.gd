@@ -347,7 +347,7 @@ func _make_folder_picker() -> FileDialog:
 	picker.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	picker.access = FileDialog.ACCESS_FILESYSTEM
 	picker.title = "Choose the tournament save folder"
-	picker.use_native_dialog = true
+	picker.use_native_dialog = Controls.system_file_box()
 	picker.size = Vector2i(760, 520)
 	var folder := ProjectSettings.globalize_path(GamePaths.tournaments_folder())
 	picker.current_dir = folder if DirAccess.dir_exists_absolute(folder) else OS.get_user_data_dir()

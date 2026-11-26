@@ -215,6 +215,19 @@ func close_player() -> void:
 	closed.emit(cursor)
 	queue_free()
 
+## A controller's B is this viewer's Escape (campaign 2026-11-26): the card
+## looked at put away, else the viewer closed.
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_visible_in_tree() or not (event is InputEventJoypadButton) \
+			or not event.is_action_pressed("ui_cancel"):
+		return
+	get_viewport().set_input_as_handled()
+	if _table.inspection_open():
+		_table.dismiss_inspection()
+	else:
+		close_player()
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not is_visible_in_tree() or not event is InputEventKey or not event.pressed or event.echo: return
 	if _table.inspection_open():

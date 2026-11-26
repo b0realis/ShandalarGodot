@@ -22,6 +22,8 @@ var _timer: Timer
 var _export: Button
 var _watch: Button
 var _moves: Button
+var _delete: Button
+var _delete_all: Button
 var _move_list: Control
 var _player: MpnPlayer
 var _library: VBoxContainer
@@ -71,6 +73,13 @@ func _ready() -> void:
 	_moves = _button("Move list", show_move_list)
 	_moves.disabled = true
 	bar.add_child(_moves)
+	_delete = _button("Delete", ask_delete)
+	_delete.name = "DeleteRecording"
+	_delete.disabled = true
+	bar.add_child(_delete)
+	_delete_all = _button("Delete all", ask_delete_all)
+	_delete_all.name = "DeleteAllRecordings"
+	bar.add_child(_delete_all)
 	bar.add_child(_button("Back", func() -> void:
 		if overlay: queue_free()
 		else: get_tree().change_scene_to_file("res://game/main.tscn")))
@@ -88,7 +97,7 @@ func _ready() -> void:
 	_games.custom_minimum_size.x = 230
 	_games.item_selected.connect(_choose_game)
 	library.add_child(_games)
-	var folder := _light("Local duels are kept here. Both LAN players can export the same public MPN from the result screen.\nOpen a saved file to view it.", 15)
+	var folder := _light("Local duels are kept here. Both LAN players can export the same public MPN from the result screen.\nOpen a saved file to view it.\n" + kept_words(), 15)
 	folder.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	library.add_child(folder)
 	var right := VBoxContainer.new()
@@ -181,6 +190,97 @@ func refresh() -> void:
 		_games.add_item(label)
 	if _paths.is_empty(): _games.add_item("No games recorded yet")
 	if _paths.is_empty(): _games.set_item_disabled(0, true)
+	_delete_all.disabled = _paths.is_empty()
+	_delete.disabled = not _paths.has(current_path)
+	if _paths.has(current_path): _games.select(_paths.find(current_path))
+
+## What the screen says of the folder's bound ([constant
+## MpnArchive.KEEP_RECORDS], [constant MpnArchive.KEEP_BYTES]).
+static func kept_words() -> String:
+	return "The newest %d recordings are kept, up to %d MB; older ones are removed as new duels are recorded." \
+		% [MpnArchive.KEEP_RECORDS, MpnArchive.KEEP_BYTES >> 20]
+
+## DELETE (campaign of 2026-11-26): the open recording, asked first; only
+## one of the list — a file opened from elsewhere (Open MPN…) is not this
+## screen's to remove. Cancel holds the focus when the question opens.
+func ask_delete() -> Control:
+	if not _paths.has(current_path): return null
+	_stop()
+	return UiChrome.action_popup(self, "Delete this recording?",
+		"%s will be removed from your recordings. This cannot be undone." % _games.get_item_text(_paths.find(current_path)), [
+		{"label": "Cancel", "name": "Cancel", "cancel": true},
+		{"label": "Delete", "name": "Delete", "callable": delete_current}])
+
+func ask_delete_all() -> Control:
+	if _paths.is_empty(): return null
+	_stop()
+	return UiChrome.action_popup(self, "Delete all recordings?",
+		"All %d of your recordings will be removed. This cannot be undone." % _paths.size() if _paths.size() != 1 \
+			else "Your one recording will be removed. This cannot be undone.", [
+		{"label": "Cancel", "name": "Cancel", "cancel": true},
+		{"label": "Delete all", "name": "DeleteAll", "callable": delete_all}])
+
+func delete_current() -> bool:
+	if not _paths.has(current_path) or not MpnArchive.delete(current_path, _folder()):
+		_notice.text = "The recording could not be deleted."
+		return false
+	_closed_record("The recording was deleted.")
+	return true
+
+func delete_all() -> int:
+	var removed := MpnArchive.delete_all(_folder())
+	var left := MpnArchive.files(archive_directory).size()
+	var words := "%d recording%s deleted." % [removed, "" if removed == 1 else "s"]
+	if left > 0: words += " %d could not be deleted." % left
+	if _paths.has(current_path) and not FileAccess.file_exists(current_path): _closed_record(words)
+	else:
+		_notice.text = words
+		refresh()
+	return removed
+
+func _folder() -> String:
+	return GamePaths.records_folder() if archive_directory == "" else archive_directory
+
+## The open recording is gone: the screen back to "Choose a recording",
+## the list read again, the focus on a button that is still live.
+func _closed_record(words: String) -> void:
+	close_move_list()
+	document = {}
+	current_path = ""
+	cursor = 0
+	_state.clear()
+	_checkpoints.clear()
+	_events.clear()
+	_export.disabled = true
+	_watch.disabled = true
+	_moves.disabled = true
+	_title.text = "Choose a recording"
+	_notice.text = words
+	_position.text = "0 / 0"
+	_details.text = "Select a public card to read its recorded details."
+	_changing = true
+	_slider.max_value = 0
+	_slider.value = 0
+	_changing = false
+	_draw_table()
+	refresh()
+	_focus_after_delete()
+
+func _focus_after_delete() -> void:
+	# Two frames on: the question has gone by then and handed the focus back
+	# to the button that asked, which may be dark now.
+	for frame in 2:
+		if not is_inside_tree(): return
+		await get_tree().process_frame
+	if not is_inside_tree() or UiChrome.open_popup(self) != null: return
+	var owner_now := get_viewport().gui_get_focus_owner()
+	if owner_now != null and owner_now.is_visible_in_tree() and not (owner_now is Button and (owner_now as Button).disabled): return
+	if _games.is_visible_in_tree() and not _paths.is_empty(): _games.grab_focus()
+	else:
+		for child in _delete.get_parent().get_children():
+			if child is Button and not (child as Button).disabled:
+				(child as Button).grab_focus()
+				break
 
 func _choose_game(index: int) -> void:
 	if index >= 0 and index < _paths.size(): open_record(_paths[index])
@@ -196,6 +296,7 @@ func open_record(path: String) -> bool:
 	_export.disabled = false
 	_watch.disabled = false
 	_moves.disabled = false
+	_delete.disabled = not _paths.has(path)
 	var headers: Dictionary = document.headers
 	_title.text = "%s  vs  %s" % [String(headers["Player.P1"]).left(80), String(headers["Player.P2"]).left(80)]
 	_notice.text = "%s · %s\nPublic observations, not a complete rules replay. %s" % [headers.Started,
@@ -515,6 +616,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if is_instance_valid(_move_list) and not event is InputEventKey and event.is_action_pressed("ui_cancel"):
 		close_move_list()
 		get_viewport().set_input_as_handled()
+	elif event is InputEventJoypadButton and event.is_action_pressed("ui_cancel"):
+		# A controller's B (campaign 2026-11-26): the popup over the viewer
+		# closed, else Back.
+		get_viewport().set_input_as_handled()
+		var popup := UiChrome.open_popup(self)
+		if popup != null:
+			if popup.has_meta(&"cancel_button"):
+				UiChrome.dismiss_popup(popup)
+			else:
+				popup.queue_free()
+		elif overlay:
+			queue_free()
+		else:
+			get_tree().change_scene_to_file("res://game/main.tscn")
 
 
 ## [param read] ([method MpnMoveList.read_game]) as the view's text: the tags,

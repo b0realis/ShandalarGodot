@@ -1,5 +1,10 @@
 # Generate card artwork and optional card packs
 
+From 0.70.9 the game builds all of this itself, with nothing else to
+install: see [The short way: in the game](#the-short-way-in-the-game). The
+Python tools below make the same ZIPs and remain for older versions, for
+the browser build's `cardart.zip` made on a computer, and for scripted use.
+
 Packages from 0.32.0 on for every platform include the Python tools,
 their helper modules and the trusted card metadata. No source checkout,
 Godot editor or pip packages are needed. Install Python 3.10 or newer and
@@ -19,8 +24,9 @@ tools stop at once with `TypeError: unsupported operand type(s) for |`.
 Then run **Install Certificates.command** from Applications → Python 3.x
 once; without it every download fails with `CERTIFICATE_VERIFY_FAILED`.
 
-New to command windows? [Getting Started](https://b0realis.github.io/ShandalarGodot/)
-walks from the download to the first duel, every set up to the Urza block included.
+New here? [Getting Started](https://b0realis.github.io/ShandalarGodot/)
+walks from the download to the first duel, every set up to the Urza block
+included, and has a chapter on iPad and web play.
 
 ## The short way: in the game
 
@@ -30,7 +36,9 @@ and press OK. The game downloads the pictures from Scryfall, builds each
 ZIP, checks it as it checks any pack and puts it in the card folder. What
 was downloaded is kept in `user://cardpack_build/`, so a build that was
 stopped goes on where it was. The ZIPs are the ones the commands below
-make. Not in the browser version.
+make. Not in the browser version. The base pictures land in the card folder
+as `cardart.zip` and the packs beside it; **Open Folder** on the Card Packs
+page shows them.
 
 ## Base card pictures: cardart.zip
 

@@ -64,11 +64,21 @@ var board_root: Node = null
 ## practice; s30 falls back the same way (`spellAnimationDestination`).
 var fallback: Callable = Callable()
 
-## instance id → the global rect that card occupied LAST FRAME. Sampled
-## every frame rather than at rebuild time because Godot lays containers
-## out after the rebuild returns — the same reason [TargetArrows] resolves
-## its positions in `_draw`.
+## instance id → the global rect that card occupied BEFORE THE REDRAW NOW
+## UNDER WAY. Sampled by [method note], which the duel screen calls before
+## it rebuilds anything — the last layout is still standing then — and
+## only by the first call of a frame: Godot lays containers out after a
+## rebuild returns, so a second redraw in the same frame would read cards
+## that have not been placed yet.
+##
+## IT WAS SAMPLED EVERY FRAME until the campaign of 2026-11-26: a walk of
+## every node under the duel screen, flights or not — 0.57 ms a frame at 32
+## permanents (1241 nodes), in every frame of every duel on a real display.
 var _rects: Dictionary = {}
+## The frame [member _rects] was last sampled in.
+var _sampled_frame := -1
+## Does [method note] sample at all? Not without a display: see [method _ready].
+var samples := DisplayServer.get_name() != "headless"
 ## instance id → the ghost [MiniCard] currently in the air.
 var _ghosts: Dictionary = {}
 ## Chain contents at the last [method note], id → [CardInstance] — the
@@ -100,8 +110,11 @@ func _ready() -> void:
 	# `DuelScreen._run_coin_toss` uses for the other animation in the duel.
 	# In `_ready` rather than `_init` because entering the tree is what
 	# turns processing on in the first place.
-	if DisplayServer.get_name() == "headless":
-		set_process(false)
+	#
+	# AND WITH A DISPLAY IT RUNS ONLY WHILE A FLIGHT WAITS TO START
+	# ([method _queue], [method _process]): a card in the air is carried
+	# by its tween and needs no frame of ours.
+	set_process(false)
 
 
 ## WHAT MOVED between two chain states, as s30's two loops read them: a
@@ -142,6 +155,7 @@ func is_flying(id: int) -> bool:
 ## [method DuelScreen._refresh], from game state alone, so it costs a
 ## couple of array walks and nothing else on a headless run.
 func note(game: MtgGame) -> void:
+	_sample()
 	var now: Dictionary = {}
 	for item in game.stack:
 		if item.kind != Mtg.StackKind.SPELL or item.card == null:
@@ -174,12 +188,23 @@ func _queue(id: int, inst: CardInstance) -> void:
 	if inst == null or from.size == Vector2.ZERO:
 		return
 	_pending[id] = {"from": from, "inst": inst, "wait": SETTLE_FRAMES}
+	if samples:
+		set_process(true)
 
 
 func _process(_delta: float) -> void:
-	var live := _scan()
 	if not _pending.is_empty():
-		_launch_pending(live)
+		_launch_pending(_scan())
+	if _pending.is_empty():
+		set_process(false)
+
+
+## Where every card stands now, read once a frame ([member _rects]).
+func _sample() -> void:
+	if not samples or _sampled_frame == Engine.get_process_frames():
+		return
+	_sampled_frame = Engine.get_process_frames()
+	var live := _scan()
 	_rects = {}
 	for id in live:
 		var rect: Rect2 = TargetArrows.anchor_rect(live[id])

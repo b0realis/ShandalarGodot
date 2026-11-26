@@ -932,6 +932,7 @@ static func is_kept(key: String) -> bool:
 static func font(key: String) -> Font:
 	if _font_cache.has(key):
 		return _font_cache[key]
+	_lend_glyphs(ThemeDB.fallback_font)
 	var result: Font = null
 	if OUR_FONTS.has(key):
 		result = _tightened(our_font(key))
@@ -940,9 +941,42 @@ static func font(key: String) -> Font:
 		if path != "":
 			var f := FontFile.new()
 			if f.load_dynamic_font(path) == OK:
+				_lend_glyphs(f)
 				result = f
 	_font_cache[key] = result
 	return result
+
+
+## OUR BODY FACE STANDS BEHIND [param face] FOR THE GLYPHS IT LACKS. The
+## 1997 title face has letters and little else (no dash, no accented
+## letter, no arrow), and the engine's own face has no arrows or dot; for
+## a glyph a face lacks the engine asks the operating system for another
+## font on EVERY shaping of the text, not once (measured 2026-11-26: 2.1 ms
+## for "Creature, dash, Goblin" in the title face, 0.06 ms with this; 12 ms
+## for a row of six arrows, 0.02 ms with this).
+##
+## THE LENT FACE IS A COPY THAT CLAIMS NO HEIGHT. [method Font.get_height]
+## answers the tallest of a face AND its fallbacks, used or not, and a
+## [Label] is never lower than that: with Spectral itself behind it every
+## title-face label stood taller (25 -> 35 px at 22 px, measured). So the
+## copy's ascent and descent are set to nothing for every size up to
+## [constant LENT_SIZES]; glyphs hang from the baseline and are drawn the
+## same, and text the face can letter alone measures exactly as before.
+static func _lend_glyphs(face: Font) -> void:
+	if face == null or not face.fallbacks.is_empty():
+		return
+	var body := our_font("font_body")
+	if body == null or body == face:
+		return
+	if _lent == null:
+		_lent = body.duplicate() as FontFile
+		for size in range(1, LENT_SIZES + 1):
+			_lent.set_cache_ascent(0, size, 0.0)
+			_lent.set_cache_descent(0, size, 0.0)
+	face.fallbacks = [_lent]
+
+const LENT_SIZES := 200
+static var _lent: FontFile = null
 
 
 ## SPECTRAL'S LINE BOX, TRIMMED. Godot measures its own at 1.52 em

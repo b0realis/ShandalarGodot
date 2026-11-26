@@ -91,6 +91,9 @@ func test_the_autosave_round_trips_everything() -> void:
 	player.facing = 4
 	player.monster_timer = 999
 	player.deck_names[0] = "Goya's Fliers"
+	# Deck 2 holds cards, or the load would switch away from it ([DeckRescue]).
+	for card in player.cards:
+		card["decks"] = [0, 2]
 	player.current_deck = 2
 	player.next_duel_first_move = true
 	player.quickening = 40

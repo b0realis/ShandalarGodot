@@ -456,6 +456,7 @@ static func draw_stake(player: AdventurePlayer, duel: Dictionary) -> bool:
 	duel["hero_ante"] = [] as Array[String]
 	duel["hero_ante_at"] = [] as Array[int]
 	duel["no_ante"] = false
+	DeckRescue.rescue(player)
 	var usable := CreatureMeeting.usable_cards(player)
 	if usable.is_empty():
 		duel["no_ante"] = true

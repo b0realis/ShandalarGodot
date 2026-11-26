@@ -198,7 +198,14 @@ func _ready() -> void:
 	# The keyboard and the D-pad start on the first row (2026-09-27, the
 	# Steam Deck release): a screen with nothing focused has nothing for
 	# an arrow to move from. The mouse and the pad pointer are untouched.
-	_focus_first(content)
+	# Back from a room this screen sent the player to (Card Packs), the
+	# focus — and with it the scroll — returns to the button that led there.
+	var back_to := find_child(_return_to, true, false) as Control if _return_to != "" else null
+	_return_to = ""
+	if back_to != null:
+		back_to.grab_focus.call_deferred()
+	else:
+		_focus_first(content)
 
 
 ## The first thing on the panel that takes the keyboard.
@@ -424,6 +431,8 @@ func _add_controls_section(content: VBoxContainer) -> void:
 				slot.tooltip_text = "Not available yet."
 		_control_slots[action] = [key, pad]
 		content.add_child(row)
+	_add_world_controls(content)
+	_add_menu_controls(content)
 	var reset := UiChrome.menu_button("Reset controls", Vector2(180, 32), 14)
 	reset.name = "ResetControls"
 	reset.tooltip_text = "Every key and button back to the defaults."
@@ -432,6 +441,85 @@ func _add_controls_section(content: VBoxContainer) -> void:
 		_refresh_control_rows())
 	content.add_child(reset)
 	_refresh_control_rows()
+
+
+## What is always true of walking the world map, said above its rows — a
+## player looked here for it (2026-11-26) and found only the duel's keys.
+const WORLD_WALK_LINES: Array[String] = [
+	"Arrow keys or the keypad walk your hero while held; two keys walk a diagonal.",
+	"A click walks there and finds the way around water.",
+	"Controller: the D-pad walks your hero; the left stick moves the pointer and A walks there.",
+	"In a town, a menu or any other pane the D-pad jumps from button to button; B closes it.",
+]
+
+
+## `[QoL]` THE WORLD MAP'S GROUP (campaign 2026-11-26, [constant
+## Controls.WORLD_ACTIONS]): its own title, the walking said in plain
+## lines ([constant WORLD_WALK_LINES] — the arrows and the D-pad are not
+## rebindable and need no row), then a row an action like the duel's, the
+## same two slots, the same popup.
+func _add_world_controls(content: VBoxContainer) -> void:
+	var head := UiChrome.body_label("World map:")
+	head.name = "WorldControlsHead"
+	head.tooltip_text = "The adventure's keys and controller buttons. A " \
+		+ "button here and a button of the duel's may be the same one: " \
+		+ "they are pressed on different screens."
+	content.add_child(head)
+	for i in WORLD_WALK_LINES.size():
+		var line := UiChrome.body_label(WORLD_WALK_LINES[i])
+		line.name = "WorldWalkLine%d" % i
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.custom_minimum_size.x = 420
+		content.add_child(line)
+	for entry in Controls.WORLD_ACTIONS:
+		var action := String(entry["name"])
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var word := UiChrome.body_label(String(entry["label"]))
+		word.custom_minimum_size.x = 210
+		word.tooltip_text = String(entry["tip"])
+		row.add_child(word)
+		var key := UiChrome.menu_button("", Vector2(118, 28), 13)
+		key.name = "Key_" + action
+		key.tooltip_text = "The key for %s. Click, then press a key." % String(entry["label"]).to_lower()
+		key.pressed.connect(_listen.bind(action, "key"))
+		row.add_child(key)
+		var pad := UiChrome.menu_button("", Vector2(84, 28), 13)
+		pad.name = "Pad_" + action
+		pad.tooltip_text = "The controller button for %s. Click, then press a button." % String(entry["label"]).to_lower()
+		pad.pressed.connect(_listen.bind(action, "pad"))
+		row.add_child(pad)
+		_control_slots[action] = [key, pad]
+		content.add_child(row)
+
+
+## What a controller does on every other screen — the title, these
+## Options, Help, the Deck Builder, the setup screens, the lobby — said in
+## plain lines: none of it is rebindable (the pad pointer's own buttons).
+const MENU_PAD_LINES: Array[String] = [
+	"Controller: the left stick moves the pointer; A or RT clicks, LB or LT is the right click, the right stick scrolls.",
+	"The D-pad jumps from button to button; on a page of text it scrolls up and down.",
+	"B closes or cancels on every screen.",
+	"Start opens the screen's menu where it has one: the Deck Builder's menu, a duel's pause menu, the world's options.",
+	"In Help, LB and RB turn the pages.",
+	"Click a text field with A and a keyboard comes up on the screen (Screen keyboard: Auto).",
+	"In a file window the left stick points and RT clicks; the D-pad and A walk its list, B cancels.",
+]
+
+
+## `[QoL]` MENUS AND SCREENS (campaign 2026-11-26): the third title of the
+## Controls section, lines only ([constant MENU_PAD_LINES]).
+func _add_menu_controls(content: VBoxContainer) -> void:
+	var head := UiChrome.body_label("Menus and screens:")
+	head.name = "MenuControlsHead"
+	head.tooltip_text = "What a controller does outside a duel and the world map."
+	content.add_child(head)
+	for i in MENU_PAD_LINES.size():
+		var line := UiChrome.body_label(MENU_PAD_LINES[i])
+		line.name = "MenuPadLine%d" % i
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.custom_minimum_size.x = 420
+		content.add_child(line)
 
 
 ## Every row says what the map says.
@@ -460,6 +548,8 @@ func _listen(action: String, kind: String) -> void:
 	for entry in Controls.ACTIONS:
 		if String(entry["name"]) == action:
 			label = String(entry["label"])
+	if label == "":
+		label = String(Controls.entry_of(action).get("label", ""))
 	var now := Controls.key_text(action) if kind == "key" else Controls.pad_text(action)
 	var ask := "Press the key for %s (now %s)." % [label.to_lower(), now] if kind == "key" \
 		else "Press the controller button for %s (now %s)." % [label.to_lower(), now]
@@ -512,6 +602,7 @@ func _add_card_packs_section(content: VBoxContainer) -> void:
 	manage.tooltip_text = "See installed numbered card packs, validation " \
 		+ "errors, versions, and enabled state."
 	manage.pressed.connect(func() -> void:
+		_return_to = "CardPacks"
 		get_tree().change_scene_to_file("res://game/card_packs_screen.tscn"))
 	# GET CARD PACKS, PURPLE, BESIDE IT (the owner, 2026-11-23: a purple
 	# button; "the game would download the card art and generate card packs
@@ -1087,6 +1178,11 @@ func _portable_window(what: String, text: String, go: bool) -> void:
 
 
 func _close_portable() -> void:
+	# While the copy runs, Cancel and Escape stop it; the copy's own loop
+	# then says so and tidies up ([method _run_portable]).
+	if _portable_copying:
+		PortableMode.cancel_copies()
+		return
 	if is_instance_valid(_portable_dialog):
 		_portable_dialog.dismiss()
 	_portable_dialog = null
@@ -1098,7 +1194,9 @@ func _run_portable(what: String) -> void:
 	var problem: String = await _copy_portable(what)
 	if problem != "":
 		_close_portable()
-		_portable_window(what, "Nothing was changed. " + problem, false)
+		# A first copy is made aside and removed whole; the other ways copy
+		# into a folder that is already there, where what arrived stays.
+		_portable_window(what, ("Nothing was changed. " if what == "make" else "") + problem, false)
 		return
 	var system := PortableMode.platform()
 	match what:
@@ -1119,6 +1217,8 @@ func _run_portable(what: String) -> void:
 ## Whether the copy is running: Escape is swallowed until it is done
 ## ([method _unhandled_input]).
 var _portable_copying := false
+## The button to come back to ([method _ready]) after leaving for another room.
+static var _return_to := ""
 
 
 ## THE COPY of [method _run_portable], its progress on the window: "" when
@@ -1131,8 +1231,12 @@ var _portable_copying := false
 func _copy_portable(what: String) -> String:
 	var dialog := _portable_dialog
 	var words := dialog.find_child("PortableWords", true, false) as Label
+	# Cancel stays live while the copy runs (bug pass 2026-11-26): it stops
+	# the copy ([method _close_portable]).
 	for button in dialog.find_children("*", "Button", true, false):
-		(button as Button).disabled = true
+		(button as Button).disabled = (button as Button).text != "Cancel"
+		if (button as Button).text == "Cancel":
+			(button as Button).grab_focus()
 	var route := portable_route(what)
 	var to := String(route["to"])
 	var folder := PortableMode.folder()
@@ -1320,7 +1424,7 @@ func _choose_card_back() -> void:
 	# box may match the pattern as written.
 	box.filters = PackedStringArray(["*.png, *.PNG, *.jpg, *.JPG, *.jpeg, *.JPEG, "
 		+ "*.webp, *.WEBP ; Pictures"])
-	box.use_native_dialog = true
+	box.use_native_dialog = Controls.system_file_box()
 	box.size = Vector2i(760, 520)
 	box.current_dir = card_back_start_dir()
 	box.file_selected.connect(func(path: String) -> void:
@@ -1723,6 +1827,8 @@ static func _flush_when_the_drag_ends(slider: HSlider) -> void:
 
 func _exit_tree() -> void:
 	Settings.flush()
+	if _portable_copying:
+		PortableMode.stop_copies()
 	if SkinPack.changed.is_connected(_on_skin_changed):
 		SkinPack.changed.disconnect(_on_skin_changed)
 	if SkinPack.fetch_progressed.is_connected(_on_skin_transfer):
@@ -1744,8 +1850,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# is its Cancel/Close, and nothing while the copy runs (leaving then
 	# dropped the restart, the copy going on unseen).
 	if is_instance_valid(_portable_dialog) and not _portable_dialog.is_queued_for_deletion():
-		if not _portable_copying:
-			_close_portable()
+		_close_portable()
 		return
 	var popup := UiChrome.open_popup(self)
 	if popup != null:

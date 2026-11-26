@@ -41,17 +41,8 @@ static func act(region: DataRegion, screen: WorldScreen, action: String, place: 
 		"reward":
 			show_place(screen, region.reward_place(player))
 		"sail":
-			if region.travel(player):
-				screen._visit_tile = Vector2i(-1, -1)
-				screen.show_player(player)
-				screen.autosave()
-				var arrival := region.describe(player, player.tile())
-				if not arrival.is_empty():
-					show_place(screen, arrival)
-				else:
-					# The card pack turned off on the island: the ship still
-					# sails home, and no mainland pane opens on arrival.
-					screen._after_leaving()
+			if not _sail_aside(region, screen, place):
+				_sail(region, screen)
 		"quest":
 			var index := region.quest_at(int(place.get("slot", -1)))
 			if index >= 0: show_place(screen, region.quest_place(player, index))
@@ -80,6 +71,86 @@ static func act(region: DataRegion, screen: WorldScreen, action: String, place: 
 	return true
 
 
+## THE SHIP SAILS: the hero on the other land, the world shown, the
+## adventure saved, the arrival's pane.
+static func _sail(region: DataRegion, screen: WorldScreen) -> void:
+	var player := screen.player
+	if region.travel(player):
+		screen._visit_tile = Vector2i(-1, -1)
+		screen.show_player(player)
+		screen.autosave()
+		var arrival := region.describe(player, player.tile())
+		if not arrival.is_empty():
+			show_place(screen, arrival)
+		else:
+			# The card pack turned off on the island: the ship still
+			# sails home, and no mainland pane opens on arrival.
+			screen._after_leaving()
+
+
+## The harbor's words while the island is made.
+const SETTING_SAIL := "Setting sail..."
+## Tests: 1 the island is made aside headless too, 0 never, -1 by the rule
+## ([method sails_aside]).
+static var sail_aside_forced := -1
+
+
+## Whether a first voyage's island may be made on a worker: an engine with
+## threads, a screen, not the web — the house rule ([method
+## SkinWarmer.runs_here]); elsewhere it is made in place, as before.
+static func sails_aside() -> bool:
+	if sail_aside_forced >= 0:
+		return sail_aside_forced == 1
+	return OS.has_feature("threads") and not OS.has_feature("web") and DisplayServer.get_name() != "headless"
+
+
+## THE FIRST VOYAGE TO AN ISLAND (0.70.11 campaign, smooth2 #4): its world
+## is made on a worker — as the Embark makes the mainland — while the
+## harbor's pane says [constant SETTING_SAIL], its buttons gone; made, it is
+## kept for the voyage ([method AdventureExpansions.keep_made]) and the ship
+## sails ([method _sail]). Escape on the waiting pane stays ashore: the
+## island is kept, and the next Sail leaves at once. False when nothing was
+## started — a voyage home, an island visited before, no worker here — and
+## the caller sails in place.
+static func _sail_aside(region: DataRegion, screen: WorldScreen, place: Dictionary) -> bool:
+	var player := screen.player
+	if not sails_aside() or region.on_island(player) or player.regions.has(region.id) \
+			or not AdventureExpansions.enabled_for(player, region.id):
+		return false
+	var make := AdventureExpansions.generator(player, region.id)
+	if not make.is_valid():
+		return false
+	var waiting := place.duplicate(true)
+	waiting["lines"] = [SETTING_SAIL]
+	waiting["actions"] = []
+	var pane := show_place(screen, waiting)
+	var box: Array = [null]
+	var task := WorkerThreadPool.add_task(func() -> void: box[0] = make.call(), true, "island")
+	# What it is made from, as it stands now: the adventure may be another
+	# by the time it is made (a quick load).
+	_sail_when_made(region, screen, pane, task, box,
+		[player.world.seed, player.world.color, player.difficulty])
+	return true
+
+
+static func _sail_when_made(region: DataRegion, screen: WorldScreen, pane: VisitPane, task: int, box: Array,
+		made_for: Array) -> void:
+	var tree := screen.get_tree()
+	while not WorkerThreadPool.is_task_completed(task):
+		await tree.process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	AdventureExpansions.keep_made(region.id, int(made_for[0]), int(made_for[1]), int(made_for[2]),
+		box[0] as ShandalarWorld)
+	if not is_instance_valid(screen) or not screen.is_inside_tree() or screen.player == null:
+		return
+	# The waiting pane left meanwhile (Escape): the hero stays ashore.
+	if not is_instance_valid(pane) or pane.leaving or screen._visit != pane:
+		return
+	pane.queue_free()
+	screen._visit = null
+	_sail(region, screen)
+
+
 static func show_place(screen: WorldScreen, place: Dictionary) -> VisitPane:
 	return screen.open_place(place)
 
@@ -103,6 +174,7 @@ static func duel_config(region: DataRegion, player: AdventurePlayer, quest: int)
 ## ([code]site_journey.gd[/code]) alike.
 static func foe_config(player: AdventurePlayer, foe: Dictionary, foe_deck: String) -> DuelConfig:
 	var config := DuelConfig.new()
+	DeckRescue.rescue(player)
 	config.decks = [CreatureMeeting.padded_deck(player, player.deck_cards()), DataRegion.deck_of(foe)]
 	config.player_names = [player.name if player.name != "" else HERO, String(foe.get("name", ""))]
 	var deck_name := player.deck_names[player.current_deck] if player.current_deck < player.deck_names.size() else ""

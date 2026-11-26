@@ -51,7 +51,7 @@ config/name="Shandalar"
 ; Keep integration tests separate from concurrent base and pack checkouts.
 ; This feature is never selected by exported player builds.
 config/name.shandalar_test="Shandalar Integration Tests"
-config/version="0.70.10"
+config/version="0.70.11"
 ; An Android back gesture is Escape (game/lifecycle.gd), never a quit.
 config/quit_on_go_back=false
 config/description="Open-source remake of MicroProse's 1997 Magic: The Gathering (Shandalar), with a modular GDScript MTG rules engine."
@@ -287,6 +287,48 @@ duel_choice_8={
 duel_choice_9={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":57,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+; THE WORLD MAP'S ACTIONS (campaign 2026-11-26, `Controls.WORLD_ACTIONS`): the
+; adventure's keys a controller needs a button for, a second group on the
+; Options list ("World map"). The keys are the world's own since 0.50
+; (M, F5, Space, Ctrl+S); the pad buttons mirror the duel's sense: Y the
+; map, Back the hero's pane and tasks, RB the one button (stop, back to the
+; hero), Start the options menu, X the pane's first choice. B closes what
+; is open through ui_cancel. A, LB, the triggers, the sticks and the D-pad
+; are the pad pointer's — on the free world the D-pad walks the hero
+; (`PadControls.dpad_walks`).
+world_map={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":77,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":3,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+world_hero={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194336,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":4,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+world_stop={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":32,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":10,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+world_menu={
+"deadzone": 0.5,
+"events": [Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":6,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+world_confirm={
+"deadzone": 0.5,
+"events": [Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"button_index":2,"pressure":0.0,"pressed":false,"script":null)
+]
+}
+world_quicksave={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":true,"meta_pressed":false,"pressed":false,"keycode":83,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 ]
 }
 

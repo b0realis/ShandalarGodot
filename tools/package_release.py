@@ -185,7 +185,7 @@ BUILDER_DATA = (adventure_plugin.SCHEMA_REL,) + tuple(f"cards/data/{code}.json" 
 # searches for plugins — holding the prototype plugin's zip (made here by
 # `adventure_plugin.py export`, validated), the players' README.txt and the
 # authors' guide GUIDE/ (every file it has at packaging time). The Web, the
-# Quest and Android get none; `--adventure-plugins DIR` writes the zip alone.
+# Quest and Android get none; `--adventure-plugins DIR` writes the shipped plugins' zips alone.
 PLUGIN_PLATFORMS = ("linux64", "windows64", "macos", "macos-arm64", "macos-intel", "raspberry-pi5-arm64",
                     "steam-deck", "arkos-rk3326-experimental")
 PLUGIN_FOLDER = adventure_plugin.FOLDER_NAME
@@ -732,7 +732,8 @@ def package(folder: Path, out: Path, platform: str, skin: Path, revision: str,
                   + (WEB_PLAY if platform in WEB_PLATFORMS else PLAY)
                   + ("Original skin included in skin/original_skin.zip. Leave it zipped.\n"
                      if included else "Original skin not included. The fallback appearance is fully playable.\n")
-                  + "Card pictures are NOT included. Import your own cardart.zip in Options > Skin.\n"
+                  + "Card pictures are NOT included. Build them in Options > Get Card Packs... (not in the browser),\n"
+                  "or import your own cardart.zip in Options > Skin.\n"
                   "On desktop it can also go in skin/ beside the game.\n"
                   "For a public web server, never include your personal card pack.\n\n"
                   "Four standard difficulties use fair information. The separate,\n"

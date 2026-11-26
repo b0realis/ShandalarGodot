@@ -69,6 +69,25 @@ extends Node
 ## one is skipped, and a pad button already down is not pressed again
 ## by another device ([member _pad_down]).
 ##
+## THE D-PAD WALKS WHERE A SCREEN WALKS (campaign 2026-11-26, a player:
+## *"All the controller configuration options seem to be related to the
+## actual games of Magic, not moving around the Shandalar world map"*; the
+## owner: *"lets implement full controller support"*). On the adventure's
+## free world, and on a dungeon's board while the hero is free to step, a
+## hop to the nearest button is not what a D-pad is for: there it TYPES THE
+## ARROW KEYS — down while the button is held, up when it is let go — so
+## the hero walks by the keys' own code (`WorldScreen._press_walk`,
+## `DungeonPane._held_way`): held is step by step, two directions a
+## diagonal, let go stops, the same pace, food and clocks; no second
+## walker exists. ONE PREDICATE decides, [method dpad_walks]: a screen
+## that walks joins [constant WALK_GROUP] and answers `pad_dpad_walks()`
+## — true only while nothing that takes buttons is open on it. As soon as
+## a pane, a menu or a question is up the D-pad hops again; a direction
+## held across that change is let go as a key whenever the pad lets it go
+## ([member _dpad_keys]), so no arrow key is ever left down. The left
+## stick stays the pointer and A the click (a click on the land walks
+## there, the way found).
+##
 ## Every other button passes through untouched to the duel's own
 ## actions: B cancels, X is Done, Y the hand, Start the pause menu, Back
 ## the log, and RB — [Controls] `duel_space`, "the one button" — presses
@@ -166,6 +185,8 @@ const TARGET_META := "pad_target"
 ## pointer stays put.
 const SNAP_CONE := 160.0
 const SNAP_TRIES := 6
+## The wheel notches one D-pad press turns a page of words by.
+const READ_NOTCHES := 3
 ## The canvas layer the arrow is drawn on: above the fullscreen card
 ## reader (100) and the skin's drop veil (128).
 const LAYER := 900
@@ -174,6 +195,23 @@ const HOPS := {
 	JOY_BUTTON_DPAD_UP: Vector2.UP, JOY_BUTTON_DPAD_DOWN: Vector2.DOWN,
 	JOY_BUTTON_DPAD_LEFT: Vector2.LEFT, JOY_BUTTON_DPAD_RIGHT: Vector2.RIGHT,
 }
+
+## The group of the screens that walk a hero by the arrow keys, and the
+## method each answers ([method dpad_walks]).
+const WALK_GROUP := "pad_dpad_walkers"
+const WALK_METHOD := "pad_dpad_walks"
+## The arrow key each D-pad button types while a screen walks.
+const WALK_KEYS := {
+	JOY_BUTTON_DPAD_UP: KEY_UP, JOY_BUTTON_DPAD_DOWN: KEY_DOWN,
+	JOY_BUTTON_DPAD_LEFT: KEY_LEFT, JOY_BUTTON_DPAD_RIGHT: KEY_RIGHT,
+}
+
+## The group of the screens that turn pages with the shoulder buttons
+## (the Help), and the method each answers ([method shoulders_page]):
+## there LB is no right click — nothing on a page has one — but "the page
+## before", as RB is "the next".
+const PAGE_GROUP := "pad_shoulder_pagers"
+const PAGE_METHOD := "pad_shoulders_page"
 
 ## Every event this layer pushes, in order — for tests and for anyone
 ## curious. Ours only.
@@ -211,6 +249,14 @@ var _last_click_ms := -1000000
 var _last_click_pos := Vector2.ZERO
 ## Fraction of a wheel notch the right stick has earned.
 var _wheel_accum := 0.0
+## The arrow keys this layer holds down for the D-pad, by pad button
+## ([method dpad_walks]): each is let go when its button is, whatever is on
+## the screen by then.
+var _dpad_keys := {}
+## The windows' watch ([method _watch_windows]) and whether the last frame
+## read the pad itself ([method _poll]).
+var _watch: Timer = null
+var _polled := false
 var _layer: CanvasLayer = null
 var _arrow: Arrow = null
 
@@ -281,6 +327,8 @@ func owns(event: InputEvent) -> bool:
 		return false
 	if event is InputEventJoypadButton:
 		var button := (event as InputEventJoypadButton).button_index
+		if button == MENU_BUTTON and shoulders_page():
+			return false
 		return button == CLICK_BUTTON or button == MENU_BUTTON or HOPS.has(button)
 	if event is InputEventJoypadMotion:
 		var axis := (event as InputEventJoypadMotion).axis
@@ -313,6 +361,11 @@ func set_active(on: bool) -> void:
 	_active = on
 	set_process_input(on)
 	set_process(false)          # on demand: `_take` starts it
+	_watch_windows(on)
+	# The board of keys watches the focus for the pad ([method _offer_keys]).
+	var board := get_node_or_null(^"/root/ScreenKeyboard")
+	if board != null and board.has_method(&"apply_settings"):
+		board.apply_settings()
 
 
 func _on_pads_changed(device: int, connected: bool) -> void:
@@ -371,6 +424,8 @@ func _input(event: InputEvent) -> void:
 			or HOPS.has(jb.button_index)
 		if not ours:
 			return              # the duel's own buttons: not ours to touch
+		if jb.button_index == MENU_BUTTON and not _pad_down.get(MENU_BUTTON, false) and shoulders_page():
+			return              # a screen of pages: LB turns one back there
 		if jb.pressed == _pad_down.get(jb.button_index, false):
 			if not (jb.pressed and _stale_press(jb)):
 				_take()         # a second pad's copy of a press, or a release owed nothing
@@ -385,6 +440,14 @@ func _input(event: InputEvent) -> void:
 			_queue.append({"kind": "click", "button": MOUSE_BUTTON_LEFT, "pressed": jb.pressed})
 		elif jb.button_index == MENU_BUTTON:
 			_queue.append({"kind": "click", "button": MOUSE_BUTTON_RIGHT, "pressed": jb.pressed})
+		elif _dpad_keys.has(jb.button_index):
+			if not jb.pressed:
+				# The arrow it typed, let go — whatever opened meanwhile.
+				_queue.append({"kind": "key", "code": _dpad_keys[jb.button_index], "pressed": false})
+				_dpad_keys.erase(jb.button_index)
+		elif jb.pressed and dpad_walks():
+			_dpad_keys[jb.button_index] = WALK_KEYS[jb.button_index]
+			_queue.append({"kind": "key", "code": WALK_KEYS[jb.button_index], "pressed": true})
 		elif jb.pressed:
 			_queue.append({"kind": "hop", "dir": HOPS[jb.button_index]})
 		_take()
@@ -400,14 +463,15 @@ func _input(event: InputEvent) -> void:
 ## A trigger crossing [constant TRIGGER_PULL] on the way in is a mouse
 ## button going down, crossing [constant TRIGGER_LET] on the way out is
 ## it coming up; the rest of its travel is nothing, and stays nobody's.
-func _trigger(axis: int, value: float) -> void:
+func _trigger(axis: int, value: float, taken := true) -> void:
 	var was: bool = _trigger_down[axis]
 	var now := value > TRIGGER_LET if was else value >= TRIGGER_PULL
 	if now == was:
 		return
 	_trigger_down[axis] = now
 	_queue.append({"kind": "click", "button": TRIGGERS[axis], "pressed": now})
-	_take()
+	if taken:
+		_take()
 
 
 ## THE BACKSTOP FOR A RELEASE THIS LAYER NEVER SAW (bug campaign
@@ -463,18 +527,32 @@ func _process(delta: float) -> void:
 ## Spend everything recorded since the last frame, then the sticks.
 ## Tests call this to skip the frame's wait; the game never needs to.
 func flush(delta := 1.0 / 60.0) -> void:
+	# A window of the engine's own has the pad: read the sticks and the
+	# triggers off the pad itself ([method _poll]) — and once more as it
+	# closes, for the stick's way back to rest went to the window too.
+	var window := _focused_window() if _active else null
+	if window != null or _polled:
+		_polled = window != null
+		_poll()
 	var pending := _queue
 	_queue = []
 	for intent in pending:
 		_spend(intent)
 	_stick(delta)
 	_wheel_stick(delta)
-	if _queue.is_empty() and _sticks_rest():
+	if _queue.is_empty() and _sticks_rest() and window == null:
 		set_process(false)
 
 
 func _spend(intent: Dictionary) -> void:
 	match String(intent["kind"]):
+		"key":
+			_key(intent["code"], intent["pressed"])
+		"point":
+			var target: Variant = intent["target"]
+			if is_instance_valid(target) and (target as Control).is_visible_in_tree():
+				_wake()
+				_hover(_aim(target as Control))
 		"hop":
 			_wake()
 			_hop(intent["dir"])
@@ -502,6 +580,8 @@ func _spend(intent: Dictionary) -> void:
 				_button(button, true, _pointer, double)
 				if _window_took_press(open):
 					_hand_over(button)
+				if button == MOUSE_BUTTON_LEFT:
+					_offer_keys()
 			elif button == MOUSE_BUTTON_LEFT and _left_held:
 				_left_held = false
 				_button(button, false, _pointer, false)
@@ -587,6 +667,9 @@ func _sleep() -> void:
 
 ## Release whatever is held, so a screen never keeps a phantom press.
 func _let_go() -> void:
+	for button in _dpad_keys.keys():
+		_key(_dpad_keys[button], false)
+	_dpad_keys.clear()
 	if _left_held:
 		_left_held = false
 		_button(MOUSE_BUTTON_LEFT, false, _pointer, false)
@@ -612,6 +695,16 @@ func _let_go() -> void:
 func _hop(dir: Vector2) -> void:
 	var from := _pointer
 	var here: Control = get_tree().root.gui_get_hovered_control()
+	# On a page of words that scrolls, up and down turn it first ([method
+	# _reading]); at its end the hop goes on.
+	var page := _reading(here)
+	if page != null and dir.y != 0.0:
+		var bar := page.get_v_scroll_bar()
+		var room := bar.value > bar.min_value if dir.y < 0.0 else bar.value < bar.max_value - bar.page
+		if room:
+			for i in READ_NOTCHES:
+				_wheel(MOUSE_BUTTON_WHEEL_UP if dir.y < 0.0 else MOUSE_BUTTON_WHEEL_DOWN, _pointer)
+			return
 	var in_cone: Array = []
 	var ahead: Array = []
 	for target in _targets(get_tree().root, get_viewport().get_visible_rect()):
@@ -671,6 +764,8 @@ func _targets(node: Node, clip: Rect2) -> Array[Control]:
 static func _listens(control: Control) -> bool:
 	if control.has_meta(TARGET_META):
 		return true
+	if control is ScrollContainer:
+		return _is_reading(control as ScrollContainer)
 	if control is BaseButton:
 		return not (control as BaseButton).disabled
 	if control is Slider:
@@ -683,6 +778,40 @@ static func _listens(control: Control) -> bool:
 ## Where [param control] is drawn, in the viewport's own coordinates —
 ## through its [CanvasLayer]'s transform too, which `get_global_rect`
 ## leaves out (the test runner's scaled panel is where that shows).
+## A PAGE OF WORDS THAT SCROLLS (campaign 2026-11-26: a window's summary,
+## a "?" popup's text): a [ScrollContainer] taller inside than out with
+## nothing in it a hop could land on. It is a hop's target itself, so the
+## D-pad can reach it, and with the pointer on it up and down scroll it
+## ([method _hop]) as the right stick does.
+static func _is_reading(scroll: ScrollContainer) -> bool:
+	var bar := scroll.get_v_scroll_bar()
+	if bar == null or bar.max_value - bar.min_value <= bar.page + 1.0:
+		return false
+	return not _holds_a_target(scroll)
+
+
+static func _holds_a_target(node: Node) -> bool:
+	for child in node.get_children():
+		if child is ScrollBar:
+			continue
+		if child is Control and not (child is ScrollContainer) and (child as Control).visible \
+				and _listens(child as Control):
+			return true
+		if _holds_a_target(child):
+			return true
+	return false
+
+
+## The page of words [param here] is on or in ([method _is_reading]), or null.
+static func _reading(here: Control) -> ScrollContainer:
+	var node: Node = here
+	while node != null:
+		if node is ScrollContainer and _is_reading(node as ScrollContainer):
+			return node as ScrollContainer
+		node = node.get_parent()
+	return null
+
+
 static func _on_screen(control: Control) -> Rect2:
 	return control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, control.size)
 
@@ -754,6 +883,147 @@ static func _uncovered(rect: Rect2, cover: Rect2) -> Rect2:
 func _is_under(target: Control) -> bool:
 	var under: Control = get_tree().root.gui_get_hovered_control()
 	return under == target or (under != null and target.is_ancestor_of(under))
+
+
+# ------------------------------------------------- the D-pad that walks --
+
+## THE ONE RULE for the D-pad (see the class doc): true while a screen on
+## the stage says the D-pad is its own now — the adventure's free world, a
+## dungeon's board with the hero free to step — and the D-pad types the
+## arrow keys; false everywhere else, and it hops the pointer. A screen
+## says so by standing in [constant WALK_GROUP] and answering true from
+## [constant WALK_METHOD].
+func dpad_walks() -> bool:
+	if not is_inside_tree():
+		return false
+	for node in get_tree().get_nodes_in_group(WALK_GROUP):
+		if node.has_method(WALK_METHOD) and node.call(WALK_METHOD) == true:
+			return true
+	return false
+
+
+## A CLICK ON A TEXT FIELD BRINGS THE BOARD OF KEYS (campaign 2026-11-26):
+## a controller has no keys, so where the system has no on-screen keyboard
+## of its own and the player left the board on `auto`, the field the pad
+## just clicked gets it ([method ScreenKeyboard.pad_wants]). The mouse's
+## click never does.
+func _offer_keys() -> void:
+	var board := get_node_or_null(^"/root/ScreenKeyboard")
+	if board == null or not board.is_active() or not board.pad_wants():
+		return
+	var field := get_viewport().gui_get_focus_owner()
+	if (field is LineEdit or field is TextEdit) and _is_under(field):
+		board.show_for(field)
+
+
+# ------------------------------------------- a window of the engine's --
+
+## THE POINTER INSIDE A FILE BOX (campaign 2026-11-26). An embedded window
+## that holds the focus — the engine's own file box, opened inside the
+## game for a controller ([method Controls.system_file_box]) — is handed
+## every pad event before this layer hears one: its D-pad walks the box's
+## own focus, A presses what is focused, B cancels. Left at that, the
+## pointer froze over it and its buttons across the box (`Select Current
+## Folder`) were out of reach. So while such a window is up the layer
+## READS the pad instead of hearing it ([method Input.get_joy_axis]): the
+## left stick moves the pointer, the right stick is the wheel, and the
+## triggers click — RT the left button, LT the right; A stays the box's
+## own. A mini-menu (a [Popup]) is left alone, as ever: it walks itself.
+func _focused_window() -> Window:
+	for window: Window in get_tree().root.get_embedded_subwindows():
+		if window.visible and window.has_focus() and not (window is Popup):
+			return window
+	return null
+
+
+## The sticks and the triggers as the pads hold them now, the strongest
+## of every pad's.
+func _poll() -> void:
+	var pads := Input.get_connected_joypads()
+	if pads.is_empty():
+		pads = [0]
+	for axis in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y, JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y,
+			JOY_AXIS_TRIGGER_LEFT, JOY_AXIS_TRIGGER_RIGHT]:
+		var held := 0.0
+		for pad in pads:
+			var value := Input.get_joy_axis(pad, axis)
+			if absf(value) > absf(held):
+				held = value
+		if TRIGGERS.has(axis):
+			_trigger(axis, held, false)
+		else:
+			_axes[axis] = held
+
+
+## Five times a second while the layer is on: has a window of the engine's
+## taken the pad? Then the frames run ([method flush]) until it closes.
+func _watch_windows(on: bool) -> void:
+	if _watch == null:
+		_watch = Timer.new()
+		_watch.wait_time = 0.2
+		_watch.timeout.connect(func() -> void:
+			if _focused_window() != null:
+				set_process(true))
+		add_child(_watch)
+	if on:
+		_watch.start()
+	else:
+		_watch.stop()
+		_polled = false
+
+
+## Whether a screen on the stage turns its pages with LB and RB now
+## ([constant PAGE_GROUP]): LB is that screen's, not the right button.
+func shoulders_page() -> bool:
+	if not is_inside_tree():
+		return false
+	for node in get_tree().get_nodes_in_group(PAGE_GROUP):
+		if node.has_method(PAGE_METHOD) and node.call(PAGE_METHOD) == true:
+			return true
+	return false
+
+
+## An arrow key [param code] down or up, through the engine's own door
+## ([method Input.parse_input_event]): [method Input.is_key_pressed] says
+## so while it is held, which is what the walkers read every frame.
+func _key(code: int, pressed: bool) -> void:
+	var key := InputEventKey.new()
+	key.keycode = code as Key
+	key.physical_keycode = code as Key
+	key.pressed = pressed
+	Input.parse_input_event(key)
+	synthesized.emit(key)
+
+
+# ------------------------------------------------ asked for by a screen --
+
+## The pointer put on [param target], seen part and all, as a hop puts it
+## there — a screen's own shortcut to a choice (the world's `First
+## choice`). Nothing while the layer is off; true when it will be done.
+func point_at(target: Control) -> bool:
+	if not _active or target == null or not target.is_visible_in_tree():
+		return false
+	_queue.append({"kind": "point", "target": target})
+	set_process(true)
+	return true
+
+
+## A click of [param button] (left or right) where the pointer is, press
+## and release — a screen's own shortcut (the world's `First choice` taken,
+## R3 reading the card under the pointer). Nothing while the layer is off
+## or asleep; true when it will be done.
+func tap(button := MOUSE_BUTTON_LEFT) -> bool:
+	if not _active or not _awake or not _eat_release.has(button):
+		return false
+	_queue.append({"kind": "click", "button": button, "pressed": true})
+	_queue.append({"kind": "click", "button": button, "pressed": false})
+	set_process(true)
+	return true
+
+
+## Whether the pointer rests on [param target] (or a part of it) now.
+func is_on(target: Control) -> bool:
+	return _awake and target != null and _is_under(target)
 
 
 # ------------------------------------------------------ event synthesis --

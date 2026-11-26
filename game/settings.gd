@@ -43,6 +43,8 @@ static var _told := ""
 ## The copy aside was of a file changed under a running game
 ## ([method _merge_from_disk]), not of the one read at start.
 static var _kept_while_running := false
+## The start's sweep of old pending files has run ([method _load]).
+static var _swept := false
 
 
 static func _ensure() -> void:
@@ -73,10 +75,75 @@ static func _load() -> void:
 	_changed = {}
 	_told = ""
 	_seen = _read_quietly(PATH)
-	var err := _config.load(PATH)
+	# Parsed from the text made safe ([method safe_text]), never by
+	# [method ConfigFile.load], which reads the file as it is.
+	var err := ERR_FILE_NOT_FOUND
+	if FileAccess.file_exists(PATH):
+		if _seen.is_empty() and FileAccess.open(PATH, FileAccess.READ) == null:
+			err = ERR_FILE_CANT_OPEN      # there, and not to be read
+		else:
+			err = _config.parse(safe_text(_seen.get_string_from_utf8()))
 	if err != OK and FileAccess.file_exists(PATH):
 		_keep_aside(err)
 	_migrate_rules()
+	# Once a run, now that the folders' keys can be read: the pending files
+	# an interrupted write left behind ([method sweep_pending]).
+	if not _swept:
+		_swept = true
+		GamePaths.sweep_pending()
+
+
+## A SETTINGS FILE NEVER MAKES AN OBJECT (campaign of 2026-11-26). The
+## engine reads a ConfigFile's values with its Variant parser, and that
+## parser LOADS the file a value written as `Resource("path")` names, and
+## makes the object `Object(...)` names, while it reads — a resource file
+## may carry a script, which then runs. A settings.cfg taken from someone
+## else (a whole profile or portable folder, to reproduce a report) could
+## so run code at the title screen. No setting is of those kinds.
+##
+## So the text is changed before it is parsed: wherever the word
+## `Resource` (which `SubResource` and `ExtResource` end in) or `Object`
+## is followed by an opening parenthesis — spaces, line ends and `;`
+## comments between them skipped as the parser skips them — its first
+## letter is written as its `\u` escape. Inside a quoted string that
+## reads back as the very same letter, so a folder or a deck called
+## "Lost Object(s)" is untouched; outside one it is no word the parser
+## knows, the file does not parse, and it takes the road of any broken
+## file ([method _keep_aside], the title notice). Nothing here needs to
+## know where a string starts or ends, so no trick of quoting gets by.
+static func safe_text(text: String) -> String:
+	if not (text.contains("Resource") or text.contains("Object")):
+		return text
+	var out := ""
+	var at := 0
+	while at < text.length():
+		var found := -1
+		var word := ""
+		for needle: String in ["Resource", "Object"]:
+			var here := text.find(needle, at)
+			if here >= 0 and (found < 0 or here < found):
+				found = here
+				word = needle
+		if found < 0:
+			break
+		var next := found + word.length()
+		var look := next
+		while look < text.length():
+			var code := text.unicode_at(look)
+			if code <= 32:
+				look += 1
+			elif code == 59:    # ';' — a comment, to the line's end
+				var line_end := text.find("\n", look)
+				look = text.length() if line_end < 0 else line_end + 1
+			else:
+				break
+		out += text.substr(at, found - at)
+		if look < text.length() and text.unicode_at(look) == 40:    # '('
+			out += "\\u%04x" % text.unicode_at(found) + word.substr(1)
+		else:
+			out += word
+		at = next
+	return out + text.substr(at)
 
 
 ## The bytes of [param path], or none for a file that is missing or will
@@ -408,7 +475,7 @@ static func _merge_from_disk() -> void:
 	if bytes == _seen:
 		return
 	var fresh := ConfigFile.new()
-	var err := fresh.parse(bytes.get_string_from_utf8())
+	var err := fresh.parse(safe_text(bytes.get_string_from_utf8()))
 	if err != OK:
 		_keep_aside(err)
 		_kept_while_running = _kept_aside_as != ""
@@ -499,6 +566,57 @@ static func pending_path(path: String) -> String:
 
 static func _pending_beside(target: String) -> String:
 	return "%s%s.%d.%d" % [target, PENDING_TAIL, OS.get_process_id(), OS.get_thread_caller_id()]
+
+
+## HALF-WRITTEN FILES ARE CLEARED AWAY, A DAY LATER (campaign of
+## 2026-11-26). A game killed, crashed or cut from power in the moment
+## [method write_atomically] writes leaves its pending file beside the
+## real one — `x.json.tmp.12345.67` — and nothing ever removed it: its
+## name holds the process and thread that wrote it, and no later run has
+## those. A cut copy of a skin zip so left the zip's whole size behind.
+##
+## Removed here, and how many: the plain files of [param folder] itself
+## (no folder under it, no link) whose name ends as [method pending_path]
+## ends one — [constant PENDING_TAIL], a number, a number — and that were
+## last written more than [param older_than] seconds before [param now]
+## (the clock's time when negative). A day by default: no write lasts
+## that long, so a file another instance is writing this minute is never
+## touched, and no file of any other name ever is.
+const PENDING_STALE_SECONDS := 24 * 60 * 60
+
+static func sweep_pending(folder: String, now := -1.0, older_than := PENDING_STALE_SECONDS) -> int:
+	var dir := DirAccess.open(folder)
+	if dir == null:
+		return 0
+	if now < 0.0:
+		now = Time.get_unix_time_from_system()
+	var removed := 0
+	for name in dir.get_files():
+		if not is_pending_name(name) or dir.is_link(name):
+			continue
+		var at := folder.path_join(name)
+		var written := FileAccess.get_modified_time(at)
+		if written > 0 and now - written > older_than and DirAccess.remove_absolute(at) == OK:
+			removed += 1
+	return removed
+
+
+## Whether [param name] is a pending file's: `<file>.tmp.<digits>.<digits>`.
+static func is_pending_name(name: String) -> bool:
+	var at := name.rfind(PENDING_TAIL + ".")
+	if at <= 0:
+		return false
+	var numbers := name.substr(at + PENDING_TAIL.length() + 1).split(".")
+	if numbers.size() != 2:
+		return false
+	for number in numbers:
+		if number == "" or number.length() > 20:
+			return false
+		for i in number.length():
+			var code := number.unicode_at(i)
+			if code < 48 or code > 57:
+				return false
+	return true
 
 
 ## [param path], or the file it names when it is a link — through a chain

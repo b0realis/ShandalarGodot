@@ -2374,21 +2374,39 @@ func _refresh_inventory(keep_scroll := false) -> void:
 ## never less than one — so a card printed once counts one whatever the
 ## filter says, and only the cards with several printings are asked about
 ## the filter at all.
+##
+## Each card's count is kept ([member _printing_counts]) while the sets
+## shown and the pool stay as they are: with every pack on the whole list
+## asked 3,684 cards on every letter typed (9-15 ms; campaign 2026-11-26).
 func _count_printings(entries: Array) -> int:
+	var stamp := [CardRegistry.revision, filter.sets, filter.completion_pack_on,
+		filter.original_cards_on].hash()
+	if stamp != _printing_counts_stamp:
+		_printing_counts_stamp = stamp
+		_printing_counts.clear()
 	var total := 0
 	for entry in entries:
 		var card_name: String = (entry[0] as CardData).card_name
-		var sets := _printing_sets_of(card_name)
-		if sets.size() <= 1:
-			total += 1
-			continue
-		var count := 0
-		for code in sets:
-			if filter.set_on(code) and CardRegistry.card_in_set(card_name, code,
-					filter.completion_pack_on, filter.original_cards_on):
-				count += 1
-		total += maxi(1, count)
+		var kept: int = _printing_counts.get(card_name, 0)
+		if kept == 0:
+			kept = 1
+			var sets := _printing_sets_of(card_name)
+			if sets.size() > 1:
+				var count := 0
+				for code in sets:
+					if filter.set_on(code) and CardRegistry.card_in_set(card_name, code,
+							filter.completion_pack_on, filter.original_cards_on):
+						count += 1
+				kept = maxi(1, count)
+			_printing_counts[card_name] = kept
+		total += kept
 	return total
+
+
+## card name -> its printings in the sets shown, for [method
+## _count_printings]; let go when the sets shown or the pool change.
+var _printing_counts: Dictionary = {}
+var _printing_counts_stamp := -1
 
 
 ## EVERY CARD'S PRINTINGS, KEPT BY NAME FOR ONE REGISTRY LOAD (adventure
@@ -5011,7 +5029,7 @@ func _fill_load_rows(column: VBoxContainer, dialog: OriginalDialog,
 		var row := HBoxContainer.new()
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_theme_constant_override("separation", 6)
-		var list := DeckList.load_file(path, false)
+		var list := DeckList.load_file(path, false, true)
 		# [QoL] COLOUR PIPS before the title — the 1997 symbols, one per
 		# colour the deck plays, in WUBRG order. Titles like "Dracur" and
 		# "Sultan of Sand" do not say what they cast; the pips do, and a
@@ -6006,14 +6024,18 @@ func _stats_page_hand(page: VBoxContainer) -> void:
 		_sample.new_hand()
 	var sample := _sample
 	var lands := sample.lands_in_hand()
-	page.add_child(_stats_head("Turn %d%s" % [sample.turn,
-		"" if sample.mulligans == 0 else "  —  after %d mulligan%s" % [
-			sample.mulligans, "" if sample.mulligans == 1 else "s"]]))
-	page.add_child(OriginalDialog.label(
-		"%d card%s in hand, %d land%s;  %d in the library." % [
-			sample.hand.size(), "" if sample.hand.size() == 1 else "s",
-			lands, "" if lands == 1 else "s", sample.library_size()], 12))
-	if sample.is_mulligan_hand():
+	# The one hand's lines belong to the one hand: while the thousand are
+	# on the page its cards are not, and neither is what is said of them.
+	var counted := not _trials.is_empty()
+	if not counted:
+		page.add_child(_stats_head("Turn %d%s" % [sample.turn,
+			"" if sample.mulligans == 0 else "  —  after %d mulligan%s" % [
+				sample.mulligans, "" if sample.mulligans == 1 else "s"]]))
+		page.add_child(OriginalDialog.label(
+			"%d card%s in hand, %d land%s;  %d in the library." % [
+				sample.hand.size(), "" if sample.hand.size() == 1 else "s",
+				lands, "" if lands == 1 else "s", sample.library_size()], 12))
+	if not counted and sample.is_mulligan_hand():
 		var advice := OriginalDialog.label(
 			("No land in hand" if lands == 0 else "Nothing but land in hand")
 			+ " — the hand the 1997 rule offered a mulligan for.", 12)
@@ -6716,6 +6738,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _fullscreen_card != null and _fullscreen_card.is_open():
 		_fullscreen_card._input(event)
+	elif event.is_action_pressed("ui_cancel"):
+		# A CONTROLLER'S B IS ESCAPE HERE TOO (campaign 2026-11-26): the menu,
+		# a dialog, the search box, then the menu itself ([method _on_escape]).
+		_on_escape()
+		accept_event()
+	elif Controls.pressed(event, "duel_pause"):
+		# Start opens and closes the menu, as Q does.
+		_toggle_deck_menu()
+		accept_event()
 	elif not _dialog_busy():
 		_read_card(event)
 

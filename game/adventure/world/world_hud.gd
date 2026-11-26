@@ -138,6 +138,8 @@ const KEYS := [["Click", "walk there; the way is found"],
 	["Click a creature", "go for it (the sword pointer); walking into one meets it too"],
 	["Right click", "the options"],
 	["Arrows", "walk your hero while held; two at once walk a diagonal"],
+	["D-pad", "walk your hero (a controller); in a pane it jumps from button to button"],
+	["Y, Back, Start, RB", "a controller: the map, your hero, the options, stop"],
 	["Home, PgUp, PgDn, End", "walk the diagonals; the keypad walks every way"],
 	["Drag or W A S D", "look around"],
 	["Wheel", "zoom (+ and - too)"],
@@ -1573,12 +1575,15 @@ func tip_for(tip: String) -> Array[String]:
 		"button":
 			match key:
 				"Options":
-					return ["Options", "Save, load, the panel, the panes and the guide arrows, the pace, music and sound, the main menu, exit."]
+					return ["Options" + Controls.pad_hint("world_menu"), "Save, load, the panel, the panes and the guide arrows, the pace, music and sound, the main menu, exit."]
 				"Help":
 					return ["Keys (H)", "How to walk, look and the keys."]
 			for button_row in BUTTONS:
 				if button_row[0] == key:
-					return ["%s (%s)" % [key, button_row[2]], String(button_row[3])]
+					# A controller's button beside the key, while one is connected.
+					var pad_action := String({"Map": "world_map", "Hero": "world_hero"}.get(key, ""))
+					return ["%s (%s)%s" % [key, button_row[2], Controls.pad_hint(pad_action) if pad_action != "" else ""],
+						String(button_row[3])]
 	return []
 
 
