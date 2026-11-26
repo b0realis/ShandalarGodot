@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Getting Started with Shandalar</title>
-<meta name="description" content="Step by step from download to your first duel: the game, card pictures and every card set up to the Urza block.">
+<meta name="description" content="Step by step from download to your first duel: the game, card pictures and every card set up to the Urza block. With a chapter on iPad and web play.">
 <style>
 /* Layout: a dark hero, a sticky bar (your computer + progress), then one column of numbered steps on a rail; every step pairs plain text with a drawn picture of what you will see. */
 :root {
@@ -298,11 +298,6 @@ kbd {
 }
 .term.big pre { font-size: 0.86rem; line-height: 1.75; }
 .term .ln { display: block; }
-.term-tools {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin: 0 0 0.75rem;
-}
-.copied { font-weight: 700; color: var(--ok); min-height: 1.4em; font-size: 0.95rem; }
-.paste-keys { font-size: 0.95rem; }
 
 /* windows smartscreen + mac dialogs */
 .smart { background: var(--win-blue); color: var(--win-blue-fg); padding: 1rem 1.1rem; font-size: 0.85rem; min-height: 100%; }
@@ -322,12 +317,31 @@ kbd {
 }
 .settings-row .mbtn { border-radius: 6px; background: var(--sunk); padding: 0.35rem 0.75rem; font-weight: 700; }
 
-/* python.org mock */
-.pyorg { padding: 1.25rem; display: grid; gap: 0.6rem; justify-items: start; }
-.pyorg .yellow {
-  background: #ffd343; color: #1d1b26; font-weight: 700; padding: 0.7rem 1.1rem; border-radius: 6px;
-  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.15);
+/* drawn game buttons and tick lists */
+.opt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.8rem 0.9rem; font-size: 0.9rem; }
+.opt-row.end { justify-content: flex-end; border-top: 1px solid var(--line); }
+.opt-row .lbl { flex-basis: 100%; color: var(--muted); }
+.gbtn { border: 1px solid var(--line); border-radius: 5px; background: var(--sunk); padding: 0.4rem 0.9rem; font-weight: 700; }
+.gbtn.purple { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.ticks { list-style: none; margin: 0; padding: 0.5rem 0.9rem; display: grid; gap: 0.35rem; font-size: 0.9rem; }
+.ticks li::before {
+  content: "✓"; display: inline-grid; place-items: center; width: 1.1rem; height: 1.1rem; margin-right: 0.55rem;
+  border-radius: 3px; background: var(--ok); color: var(--surface); font-size: 0.75rem; font-weight: 700;
 }
+.ticks li.more { color: var(--muted); }
+.ticks li.more::before { visibility: hidden; }
+details.lines .plain { padding: 0 1rem 0.4rem; }
+.assets li.pick { background: var(--accent-soft); box-shadow: inset 4px 0 0 var(--gold); font-weight: 600; }
+.assets li.pick .this { display: inline-block; }
+
+/* a chapter after the steps */
+.chapter { border-top: 1px solid var(--line); margin-top: 1rem; }
+.chapter > h2 { font-size: 2rem; margin: 1rem 0 0.75rem; }
+.chapter .intro { margin-bottom: 1.25rem; }
+.chapter > .note { margin-bottom: 2rem; }
+.step h3 { font-size: 1.6rem; margin: 0.15rem 0 0.6rem; }
+.faq.inner { padding-block: 0 1rem; }
+.faq.inner h3 { font-size: 1.3rem; margin: 0 0 0.9rem; }
 
 /* screenshots with drawn highlights */
 .shot { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); }
@@ -391,15 +405,15 @@ footer p { margin: 0; }
   <div class="col">
     <div>
       <h1>Getting Started with Shandalar</h1>
-      <p>From download to your first duel: the game with its original 1997 look, a picture on every card, and every card set up to the Urza block. You won't write any code. You copy one line into a command window and wait.</p>
+      <p>From download to your first duel: the game with its original 1997 look, a picture on every card, and every card set up to the Urza block. Nothing else to install: the game fetches the card pictures itself, and you wait.</p>
       <ul class="facts">
-        <li>About <b>1¾ hours</b>, mostly waiting</li>
+        <li>About <b>45 minutes</b>, mostly waiting</li>
         <li>About <b>3 GB</b> of free space</li>
         <li>An Internet connection</li>
       </ul>
     </div>
     <figure>
-      <img src="img/menu.jpg" width="1280" height="800" alt="The Shandalar main menu: a castle under a stormy sky, with the Magic Battle, Gauntlet, Deck Builder, Options, Help and Exit buttons.">
+      <img src="img/menu.jpg" width="1280" height="800" alt="The Shandalar main menu: a castle under a stormy sky, with the Magic Battle, Gauntlet, Shandalar, Save / Load, Deck Builder, Options, Help and Exit buttons.">
       <figcaption>Where you'll be at the end: the main menu.</figcaption>
     </figure>
   </div>
@@ -417,14 +431,14 @@ footer p { margin: 0; }
     </div>
     <div class="progress">
       <div class="track" aria-hidden="true"><div class="fill" id="fill"></div></div>
-      <output id="count" aria-live="polite">0 of 8 steps done</output>
+      <output id="count" aria-live="polite">0 of 6 steps done</output>
     </div>
   </div>
 </nav>
 
 <main class="gutter">
   <div class="col">
-    <p class="intro">Card pictures can't come with the game, because they aren't ours to hand out. So the game brings a small tool that downloads them from Scryfall onto your own computer. The packs that add the later sets are made the same way, because they carry those sets' pictures. Pick your computer in the bar above and this page shows only your steps.</p>
+    <p class="intro">Card pictures can't come with the game, because they aren't ours to hand out. So the game downloads them itself, from Scryfall, onto your own computer. The packs that add the later sets are made the same way, because they carry those sets' pictures. Pick your computer in the bar above and this page shows only your steps. For an iPad or a web browser, see <a href="#ipad-web">iPad and web play</a> further down.</p>
 
     <ol class="steps">
 
@@ -461,7 +475,7 @@ footer p { margin: 0; }
           <p class="lead" data-os="win">Right-click the zip and choose <b>Extract All…</b>, then <b>Extract</b>. The game won't run from inside the zip.</p>
           <p class="lead" data-os="mac">Double-click the zip. A folder appears next to it.</p>
           <p class="lead" data-os="linux">Right-click the zip and choose <b>Extract Here</b>.</p>
-          <p>Move the folder somewhere easy to find, such as Documents. The <b>game folder</b> is the one with <b data-os="win">Shandalar.exe</b><b data-os="mac">Shandalar.app</b><b data-os="linux">run.sh</b> and a folder called <b>tools</b> in it. You'll come back to it in step 5.</p>
+          <p>Move the folder somewhere easy to find, such as Documents. The <b>game folder</b> is the one with <b data-os="win">Shandalar.exe</b><b data-os="mac">Shandalar.app</b><b data-os="linux">run.sh</b> in it.</p>
           <p data-os="win">Windows makes a folder named after the zip and puts the game folder inside it. Go one folder deeper.</p>
           <figure class="fig">
             <div class="win">
@@ -471,7 +485,7 @@ footer p { margin: 0; }
                 <li class="dir">decks</li>
                 <li class="dir">packaging</li>
                 <li class="dir">skin</li>
-                <li class="dir hl">tools</li>
+                <li class="dir">tools</li>
                 <li>README.txt</li>
                 <li data-os="mac linux">run.sh</li>
                 <li class="hl" data-os="win">Shandalar.exe</li>
@@ -521,220 +535,82 @@ footer p { margin: 0; }
           <div data-os="linux">
             <p class="lead">Double-click <b>run.sh</b> (if your file manager asks, choose <b>Run</b>), or start it from a terminal with <code>./run.sh</code>.</p>
           </div>
-          <p>You'll see the main menu. You can already play the 897 original cards; they just have no pictures yet. <b>Close the game for now.</b></p>
+          <p>You'll see the main menu. You can already play the 897 original cards; they just have no pictures yet. Leave the game open for the next step.</p>
           <label class="check"><input type="checkbox" data-step="3"><span class="tick"></span>Done</label>
         </div>
       </li>
 
       <!-- 4 -->
-      <li class="step" id="step-4">
+      <li class="step emph-step" id="step-4">
         <div class="badge"><span>4</span></div>
         <div>
-          <h2>Install Python</h2>
-          <p class="lead">Python is free, and the download tool is written in it. You install it once and never have to open it.</p>
-          <div data-os="win mac">
-            <p>Go to <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a>, click the yellow button, open the file it downloads and keep the default choices.</p>
-            <figure class="fig">
-              <div class="win" style="max-width: 26rem">
-                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>python.org/downloads</div>
-                <div class="pyorg"><span>Download the latest version<span data-os="win"> for Windows</span><span data-os="mac"> for macOS</span></span><span class="yellow hl-ring">Download Python 3.x</span></div>
+          <h2>Get the card pictures and the card sets <span class="tag">Key step</span></h2>
+          <p class="lead">In the main menu click <b>Options</b>, scroll down to <b>Card packs</b> and click the purple <b>Get Card Packs...</b> button. Tick what you want and press <b>OK</b>. The game does the rest.</p>
+          <figure class="fig frames stack">
+            <div class="frame">
+              <p>Under <b>Card packs</b> in <b>Options</b>, click the purple button</p>
+              <div class="shot" style="max-width: 462px">
+                <img src="img/options-get-card-packs.jpg" width="462" height="80" alt="The Card packs row of the Options screen: the Card Packs... button and, beside it, the purple Get Card Packs... button.">
               </div>
-            </figure>
-          </div>
-          <div data-os="mac">
-            <div class="note"><b>One more click on a Mac.</b> When it has installed, open <b>Applications → Python 3.x</b> and double-click <b>Install Certificates.command</b>. Without this, the downloads stop with a “certificate” error.</div>
-            <figure class="fig">
+            </div>
+            <div class="frame">
+              <p>Tick the <b>1997 card pictures</b> and every pack you want, then press <b>OK</b></p>
               <div class="win" style="max-width: 30rem">
-                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Applications › Python 3.x</div>
-                <ul class="files">
-                  <li>IDLE.app</li>
-                  <li class="hl">Install Certificates.command</li>
-                  <li>Python Launcher.app</li>
-                  <li>ReadMe.rtf</li>
-                  <li>Update Shell Profile.command</li>
+                <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Card Packs</div>
+                <ul class="ticks">
+                  <li>1997 card pictures</li>
+                  <li>Pack 1: DotP Complete</li>
+                  <li>Pack 2: Fallen Empires</li>
+                  <li>Pack 3: Ice Age</li>
+                  <li class="more">… and so on, to Pack 10: The Urza Block</li>
                 </ul>
+                <div class="opt-row end"><span class="gbtn hl-ring">OK</span><span class="gbtn">Stop</span><span class="gbtn">Close</span></div>
               </div>
-            </figure>
-          </div>
-          <div data-os="linux">
-            <p>You very likely have it already. In a terminal, type <code>python3 --version</code>: it should say 3.10 or newer. If it isn't there, install the <code>python3</code> package from your software centre.</p>
-            <figure class="fig"><div class="term" style="max-width: 26rem"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">$</span> <span class="you">python3 --version</span>
-Python 3.12.3</pre></div></figure>
-          </div>
+            </div>
+          </figure>
+          <p>The <b>1997 card pictures</b> put a picture on each of the 897 original cards. <b>Packs 1 to 10</b> add the later sets, up to the Urza block, with their pictures. The window says how much each one downloads and how much free space it needs.</p>
+          <p><b>Now wait.</b> Everything together is about 1 GB to download and takes about half an hour: the pictures come from Scryfall, one at a time, at a pace that is kind to its servers. A bar shows how far it is and how much time is left. You can use your computer meanwhile.</p>
+          <p><b>Stopped early, or the connection dropped?</b> Nothing is lost. Open <b>Get Card Packs...</b> again, tick the same packs and press <b>OK</b>: what was already downloaded is kept, and it goes on from there.</p>
+          <p>At the end the window lists what was installed. The game keeps the finished zip files in its own card folder; you don't have to move, unzip or rename anything.</p>
+          <div class="note"><b>No purple button?</b> It comes with version 0.70.11 or later. The version number is in the bottom right corner of the main menu. On an older version, download the newest one (step 1), or use the other way below.</div>
+          <details class="lines">
+            <summary>The other way: the Python tools</summary>
+            <div class="plain">
+              <p>The game folder has a <b>tools</b> folder with small programs that make the very same zip files from a command window. They need Python 3.10 or newer (free, from python.org). You only need them on an older version of the game, or if you like the command line.</p>
+              <p>The commands for each pack, and where the zip files go, are in <a href="https://github.com/b0realis/ShandalarGodot/blob/main/docs/card-art-and-packs.md" target="_blank" rel="noopener">the card art and packs guide</a>. Then go on with step 5 here.</p>
+            </div>
+          </details>
           <label class="check"><input type="checkbox" data-step="4"><span class="tick"></span>Done</label>
         </div>
       </li>
 
       <!-- 5 -->
-      <li class="step emph-step" id="step-5">
+      <li class="step" id="step-5">
         <div class="badge"><span>5</span></div>
         <div>
-          <h2>Open a command window in the game folder <span class="tag">Key step</span></h2>
-          <p class="lead">A command window is a plain text window where you paste instructions for your computer. It has to be opened <b>in the game folder</b>, so the tool finds its files.</p>
-
-          <div data-os="win">
-            <figure class="fig frames">
-              <div class="frame">
-                <p>Open the game folder and click the <b>address bar</b> at the top</p>
-                <div class="win">
-                  <div class="addr"><span class="crumbs">This PC › Documents › Shandalar-…-windows64</span></div>
-                  <ul class="files"><li class="dir">cards</li><li class="dir">tools</li><li>Shandalar.exe</li></ul>
-                </div>
-              </div>
-              <div class="frame">
-                <p>Type <b>cmd</b> over the path and press <kbd>Enter</kbd></p>
-                <div class="win">
-                  <div class="addr typing"><span class="typed">cmd</span><span class="cursor" style="background: var(--fg)"></span></div>
-                  <div class="ghost-rows"><i></i><i></i><i></i></div>
-                </div>
-              </div>
-              <div class="frame">
-                <p>A black window opens, already in the game folder</p>
-                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Command Prompt</div><pre><span class="d">C:\Users\you\Documents\</span><span class="p">Shandalar-…-windows64&gt;</span><span class="cursor"></span></pre></div>
-              </div>
-            </figure>
-          </div>
-
-          <div data-os="mac">
-            <p>Open <b>Terminal</b>: it's in <b>Applications → Utilities</b>, or press <kbd>⌘</kbd> <kbd>Space</kbd>, type <b>Terminal</b> and press <kbd>Enter</kbd>. Open it after Python is installed.</p>
-            <figure class="fig frames">
-              <div class="frame">
-                <p>Type <b>cd</b> and a space. Don't press Enter yet</p>
-                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">~ %</span> <span class="you">cd </span><span class="cursor"></span></pre></div>
-              </div>
-              <div class="frame">
-                <p>Drag the game folder from Finder onto the window</p>
-                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">~ %</span> <span class="you">cd /Users/you/Documents/Shandalar-…-macos</span><span class="cursor"></span></pre></div>
-              </div>
-              <div class="frame">
-                <p>Press <kbd>Enter</kbd>. The prompt now shows the folder's name</p>
-                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">Shandalar-…-macos %</span> <span class="cursor"></span></pre></div>
-              </div>
-            </figure>
-          </div>
-
-          <div data-os="linux">
-            <figure class="fig frames">
-              <div class="frame">
-                <p>Right-click an empty spot inside the game folder</p>
-                <div class="win"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Shandalar-…-linux64</div>
-                  <ul class="menu-mock"><li>New Folder</li><li>Paste</li><li class="hl">Open in Terminal</li><li>Properties</li></ul></div>
-              </div>
-              <div class="frame">
-                <p>A terminal opens, already in the game folder</p>
-                <div class="term"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Terminal</div><pre><span class="p">~/Documents/Shandalar-…-linux64$</span> <span class="cursor"></span></pre></div>
-              </div>
-            </figure>
-          </div>
-
-          <p><b>How to tell it worked:</b> the line with the blinking cursor ends with the game folder's name.</p>
+          <h2>Switch the packs on</h2>
+          <p class="lead">In <b>Options</b>, click <b>Card Packs...</b> (beside the purple button), and click <b>Enable</b> under each pack.</p>
+          <figure class="fig">
+            <div class="shot" style="max-width: 620px">
+              <img src="img/card-packs.jpg" width="620" height="650" alt="The Card Packs page: an Open Folder and a Rescan button at the top, then each pack with its status and an Enable and a Disable button.">
+              <span class="box many" style="left: 26.8%; top: 13.7%; width: 19%; height: 6.2%"></span>
+              <span class="pin" style="left: 46.8%; top: 16.8%">Rescan finds new zips</span>
+              <span class="box many" style="left: 2.6%; top: 41.8%; width: 20.6%; height: 6.5%"></span>
+              <span class="box many" style="left: 2.6%; top: 64.5%; width: 20.6%; height: 6.5%"></span>
+            </div>
+            <figcaption>Click <b>Enable</b> under each pack, and scroll down for the rest. Newer versions also have an <b>Add pack...</b> button at the top, for a pack zip made on another computer.</figcaption>
+          </figure>
+          <p>The card pictures need nothing more: they show by themselves, at the latest after the next start of the game. If a pack is missing from the list, click <b>Rescan</b>.</p>
           <label class="check"><input type="checkbox" data-step="5"><span class="tick"></span>Done</label>
         </div>
       </li>
 
       <!-- 6 -->
-      <li class="step emph-step" id="step-6">
+      <li class="step" id="step-6">
         <div class="badge"><span>6</span></div>
         <div>
-          <h2>Paste the commands and let them run <span class="tag">Key step</span></h2>
-          <p class="lead">Click <b>Copy the commands</b>. Click in the command window, paste, and press <kbd>Enter</kbd>.</p>
-          <div class="term-tools">
-            <button class="btn" type="button" id="copy-cmds">Copy the commands</button>
-            <span class="paste-keys">Paste with
-              <span data-os="win"><kbd>Ctrl</kbd> <kbd>V</kbd> or a right-click</span>
-              <span data-os="mac"><kbd>⌘</kbd> <kbd>V</kbd></span>
-              <span data-os="linux"><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>V</kbd></span>
-            </span>
-            <span class="copied" id="copied" role="status" aria-live="polite"></span>
-          </div>
-
-          <figure class="fig">
-            <div class="term big">
-              <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span><span data-os="win">Command Prompt</span><span data-os="mac linux">Terminal</span></div>
-<pre data-os="win" class="cmds"><span class="ln">py -3 tools/fetch_card_art.py --out cache/cardart</span><span class="ln">py -3 tools/mtg_assets.py --from-cardart cache/cardart --out skin/cardart.zip</span><span class="ln">py -3 tools/pack_1_dotp_complete.py fetch-art</span><span class="ln">py -3 tools/pack_1_dotp_complete.py build cardpacks/Pack-1-DotP-complete.zip</span><span class="ln">py -3 tools/pack_2_fallen_empires.py fetch-art</span><span class="ln">py -3 tools/pack_2_fallen_empires.py build cardpacks/Pack-2-Fallen-Empires.zip</span><span class="ln">py -3 tools/pack_3_ice_age.py fetch-art</span><span class="ln">py -3 tools/pack_3_ice_age.py build cardpacks/Pack-3-Ice_Age.zip</span><span class="ln">py -3 tools/pack_4_homelands.py fetch-art</span><span class="ln">py -3 tools/pack_4_homelands.py build cardpacks/Pack-4-Homelands.zip</span><span class="ln">py -3 tools/pack_5_alliances.py fetch-art</span><span class="ln">py -3 tools/pack_5_alliances.py build cardpacks/Pack-5-Alliances.zip</span><span class="ln">py -3 tools/pack_6_portal.py fetch-art</span><span class="ln">py -3 tools/pack_6_portal.py build cardpacks/Pack-6-Portal.zip</span><span class="ln">py -3 tools/pack_7_fifth_edition.py fetch-art</span><span class="ln">py -3 tools/pack_7_fifth_edition.py build cardpacks/Pack-7-Fifth-Edition.zip</span><span class="ln">py -3 tools/pack_8_mirage_block.py fetch-art</span><span class="ln">py -3 tools/pack_8_mirage_block.py build cardpacks/Pack-8-Mirage-Block.zip</span><span class="ln">py -3 tools/pack_9_tempest_block.py fetch-art</span><span class="ln">py -3 tools/pack_9_tempest_block.py build cardpacks/Pack-9-Tempest-Block.zip</span><span class="ln">py -3 tools/pack_10_urza_block.py fetch-art</span><span class="ln">py -3 tools/pack_10_urza_block.py build cardpacks/Pack-10-Urza-Block.zip</span></pre>
-<pre data-os="mac linux" class="cmds"><span class="ln">python3 tools/fetch_card_art.py --out cache/cardart</span><span class="ln">python3 tools/mtg_assets.py --from-cardart cache/cardart --out skin/cardart.zip</span><span class="ln">python3 tools/pack_1_dotp_complete.py fetch-art</span><span class="ln">python3 tools/pack_1_dotp_complete.py build cardpacks/Pack-1-DotP-complete.zip</span><span class="ln">python3 tools/pack_2_fallen_empires.py fetch-art</span><span class="ln">python3 tools/pack_2_fallen_empires.py build cardpacks/Pack-2-Fallen-Empires.zip</span><span class="ln">python3 tools/pack_3_ice_age.py fetch-art</span><span class="ln">python3 tools/pack_3_ice_age.py build cardpacks/Pack-3-Ice_Age.zip</span><span class="ln">python3 tools/pack_4_homelands.py fetch-art</span><span class="ln">python3 tools/pack_4_homelands.py build cardpacks/Pack-4-Homelands.zip</span><span class="ln">python3 tools/pack_5_alliances.py fetch-art</span><span class="ln">python3 tools/pack_5_alliances.py build cardpacks/Pack-5-Alliances.zip</span><span class="ln">python3 tools/pack_6_portal.py fetch-art</span><span class="ln">python3 tools/pack_6_portal.py build cardpacks/Pack-6-Portal.zip</span><span class="ln">python3 tools/pack_7_fifth_edition.py fetch-art</span><span class="ln">python3 tools/pack_7_fifth_edition.py build cardpacks/Pack-7-Fifth-Edition.zip</span><span class="ln">python3 tools/pack_8_mirage_block.py fetch-art</span><span class="ln">python3 tools/pack_8_mirage_block.py build cardpacks/Pack-8-Mirage-Block.zip</span><span class="ln">python3 tools/pack_9_tempest_block.py fetch-art</span><span class="ln">python3 tools/pack_9_tempest_block.py build cardpacks/Pack-9-Tempest-Block.zip</span><span class="ln">python3 tools/pack_10_urza_block.py fetch-art</span><span class="ln">python3 tools/pack_10_urza_block.py build cardpacks/Pack-10-Urza-Block.zip</span></pre>
-            </div>
-            <figcaption>The button copies all twenty-two lines joined into one, so they run in order and stop at the first problem.</figcaption>
-          </figure>
-
-          <details class="lines">
-            <summary>What these lines do</summary>
-            <dl>
-              <dt>lines 1–2</dt><dd>Download the pictures of the 897 original cards and pack them into <code>skin/cardart.zip</code>.</dd>
-              <dt>lines 3–4</dt><dd>Pack 1: completes the original sets' checklists.</dd>
-              <dt>lines 5–6</dt><dd>Pack 2: Fallen Empires.</dd>
-              <dt>lines 7–8</dt><dd>Pack 3: Ice Age.</dd>
-              <dt>lines 9–10</dt><dd>Pack 4: Homelands.</dd>
-              <dt>lines 11–12</dt><dd>Pack 5: Alliances.</dd>
-              <dt>lines 13–14</dt><dd>Pack 6: Portal and Portal Second Age.</dd>
-              <dt>lines 15–16</dt><dd>Pack 7: Fifth Edition.</dd>
-              <dt>lines 17–18</dt><dd>Pack 8: Mirage, Visions and Weatherlight.</dd>
-              <dt>lines 19–20</dt><dd>Pack 9: Tempest, Stronghold and Exodus.</dd>
-              <dt>lines 21–22</dt><dd>Pack 10: Urza's Saga, Urza's Legacy and Urza's Destiny.</dd>
-            </dl>
-          </details>
-
-          <p><b>Now wait.</b> It takes about an hour and three quarters: the pictures come from Scryfall at the steady pace Scryfall asks for. You can use your computer meanwhile; just leave the window open. Lines like these scroll by:</p>
-          <figure class="fig">
-            <div class="term">
-              <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>while it works</div>
-<pre><span class="d">  50/897 processed...
-  100/897 processed...
-  …</span>
-card art: 1794 fetched, 0 already present, <span class="g">0 failed</span> -&gt; cache/cardart
-<span class="d">…</span>
-<span class="d">Fallen Empires artwork: 10/102 names
-Fallen Empires artwork: 20/102 names
-…</span>
-Pack 2: 102 unique cards · 187 printings -&gt; cardpacks/Pack-2-Fallen-Empires.zip
-<span class="d">…</span>
-Pack 10: 621 unique cards · 636 printings -&gt; cardpacks/Pack-10-Urza-Block.zip</pre>
-            </div>
-            <figcaption>When the cursor is back on a new empty line, it's done.</figcaption>
-          </figure>
-          <p><b>Saw an error, or did it stop early?</b> Usually the connection dropped for a moment. Paste the same thing again and press <kbd>Enter</kbd>: pictures that already downloaded are kept, so it carries on where it stopped.</p>
-          <p>When it's done, the game folder has the card pictures in <code>skin/cardart.zip</code> and the ten packs in a new <code>cardpacks</code> folder. Leave those zip files as they are: don't unzip or rename them.</p>
-          <label class="check"><input type="checkbox" data-step="6"><span class="tick"></span>Done</label>
-        </div>
-      </li>
-
-      <!-- 7 -->
-      <li class="step" id="step-7">
-        <div class="badge"><span>7</span></div>
-        <div>
-          <h2>Switch the packs on</h2>
-          <p class="lead">Start the game. In the main menu click <b>Options</b>, then <b>Card Packs…</b>, and click <b>Enable</b> under each pack.</p>
-          <p>The first start after adding the packs takes a little longer, because the game checks their pictures once.</p>
-          <figure class="fig frames stack">
-            <div class="frame">
-              <p>In <b>Options</b>, scroll to the bottom and click <b>Card Packs…</b></p>
-              <div class="shot" style="max-width: 462px">
-                <img src="img/options-card-packs.jpg" width="462" height="80" alt="The bottom of the Options screen: the words Card packs and a Card Packs button.">
-                <span class="box" style="left: 2.8%; top: 41%; width: 94%; height: 48%"></span>
-              </div>
-            </div>
-            <div class="frame">
-              <p>Click <b>Enable</b> under each pack, and scroll down for the rest</p>
-              <div class="shot" style="max-width: 620px">
-                <img src="img/card-packs.jpg" width="620" height="650" alt="The Card Packs page: an Open Folder and a Rescan button at the top, then each pack with its status and an Enable and a Disable button.">
-                <span class="box many" style="left: 26.8%; top: 13.7%; width: 19%; height: 6.2%"></span>
-                <span class="pin" style="left: 46.8%; top: 16.8%">Rescan finds new zips</span>
-                <span class="box many" style="left: 2.6%; top: 41.8%; width: 20.6%; height: 6.5%"></span>
-                <span class="box many" style="left: 2.6%; top: 64.5%; width: 20.6%; height: 6.5%"></span>
-              </div>
-            </div>
-          </figure>
-          <p>The card pictures need nothing more: they show by themselves. If a pack is missing from the list, click <b>Rescan</b>.</p>
-          <label class="check"><input type="checkbox" data-step="7"><span class="tick"></span>Done</label>
-        </div>
-      </li>
-
-      <!-- 8 -->
-      <li class="step" id="step-8">
-        <div class="badge"><span>8</span></div>
-        <div>
           <h2>Play</h2>
-          <p class="lead"><b>Magic Battle</b> starts a duel against the computer: pick a deck for each seat and click <b>Go!</b></p>
+          <p class="lead"><b>Magic Battle</b> starts a duel against the computer: pick a deck for each seat and click <b>Go!</b> <b>Shandalar</b> starts the adventure.</p>
           <p>To play with the new sets, make a deck that uses them:</p>
           <ol class="flow" aria-label="Making a deck with the new sets">
             <li>Deck Builder</li><li class="sep" aria-hidden="true">→</li>
@@ -744,70 +620,223 @@ Pack 10: 621 unique cards · 636 printings -&gt; cardpacks/Pack-10-Urza-Block.zi
             <li>Deck → Save deck</li><li class="sep" aria-hidden="true">→</li>
             <li>Done</li>
           </ol>
-          <p><b>Extras</b> picks which sets the Deck Builder shows: <b>1997</b> at its top shows the original cards alone, <b>All</b> switches every set on (or, when all are on, off), and each set's <b>Only</b> shows that set alone. <b>AutoDeck</b>, the gold line at the top of the <b>Deck</b> menu, builds a deck for you from the sets and colours you choose; you can also build one card by card. Then pick your deck in Magic Battle.</p>
-          <label class="check"><input type="checkbox" data-step="8"><span class="tick"></span>Done</label>
+          <p><b>Extras</b> picks which sets the Deck Builder shows: <b>1997</b> at its top shows the original cards alone, <b>All</b> switches every set on (or, when all are on, off), and each set's <b>Only</b> shows that set alone. <b>AutoDeck</b>, the gold line at the top of the <b>Deck</b> menu, builds a deck for you from the sets and colors you choose; you can also build one card by card. Then pick your deck in Magic Battle.</p>
+          <p><b>Rather play with a controller?</b> From version 0.70.11 the whole game answers one: the left stick moves the pointer, <b>A</b> presses, <b>B</b> closes or goes back, and the D-pad walks your hero on the adventure map and jumps from button to button in menus. <b>Options → Controls</b> shows every button and lets you change it. With no controller connected, nothing changes.</p>
+          <label class="check"><input type="checkbox" data-step="6"><span class="tick"></span>Done</label>
         </div>
       </li>
     </ol>
+  </div>
+
+  <div class="col chapter" id="ipad-web">
+    <h2>iPad and web play</h2>
+    <p class="intro">The game also runs in a web browser, and so on an iPad, with no app store. It works like a small website of your own: you put the game's <b>web download</b> on a web host, open its address in Safari on the iPad, and add it to the Home Screen. From then on it has its own icon, opens full screen and can play without a connection.</p>
+    <div class="note"><b>Keep it to your household.</b> The 1997 skin inside the <b>-with-skin</b> downloads is offered with the release for your own play: put it on a host that only you and your household use, not on a public site for other people. Card pictures and card packs are never part of any download; they are yours alone to add, and never belong on an address other people can reach. On any other host, upload the game without the skin and add skin and card pictures on the iPad itself (step 6 below).</div>
+
+    <ol class="steps">
+
+      <li class="step" id="web-1">
+        <div class="badge"><span>1</span></div>
+        <div>
+          <h3>Download the web version</h3>
+          <p class="lead">On the downloads page, under <b>Assets</b>, take the file that ends in <b>-web-offline.zip</b>, and unzip it on your computer.</p>
+          <p><a class="btn" href="https://github.com/b0realis/ShandalarGodot/releases/latest" target="_blank" rel="noopener">Open the downloads page</a></p>
+          <figure class="fig">
+            <div class="win assets">
+              <div class="win-bar"><span class="dots"><i></i><i></i><i></i></span>Assets</div>
+              <ul>
+                <li class="pick"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-web-offline.zip</span><span class="tag this">This one</span></li>
+                <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-web-offline-with-skin.zip</span></li>
+                <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-web.zip</span></li>
+                <li><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3 1h7l3 3v11H3zM9 2v3h3"/></svg><span class="n">Shandalar-…-web-threaded.zip</span></li>
+              </ul>
+            </div>
+            <figcaption>The web downloads. Each kind comes plain and as -with-skin.</figcaption>
+          </figure>
+          <ul>
+            <li><b>web-offline</b> is the one for an iPad: it saves the game on the iPad, so it starts without a connection.</li>
+            <li><b>web-offline-with-skin</b> is the same with the 1997 look already inside, for your own play. Use it on a host that only you and your household use.</li>
+            <li><b>web</b> is the same game without the offline saving: it plays only while the iPad can reach your host.</li>
+            <li><b>web-threaded</b> needs a specially set up web server. Skip it.</li>
+          </ul>
+          <p>The unzipped folder is a complete little website: <code>index.html</code> and the game's files beside it. Keep them all together.</p>
+        </div>
+      </li>
+
+      <li class="step" id="web-2">
+        <div class="badge"><span>2</span></div>
+        <div>
+          <h3>Try it on your computer first</h3>
+          <p class="lead">A browser plays the game only from a web address. Double-clicking <code>index.html</code> shows an error, or nothing. One line turns your computer into a tiny web server for a test.</p>
+          <p>It needs Python, which is free. <span data-os="win mac">Get it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a> and keep the default choices.</span><span data-os="linux">You very likely have it already.</span> Then open a command window <b>in the unzipped web folder</b>:</p>
+          <p data-os="win">Open the folder in File Explorer, click the address bar at the top, type <b>cmd</b> and press <kbd>Enter</kbd>.</p>
+          <p data-os="mac">Open <b>Terminal</b> (in <b>Applications → Utilities</b>), type <b>cd</b> and a space, drag the folder from Finder onto the window, and press <kbd>Enter</kbd>.</p>
+          <p data-os="linux">Right-click an empty spot inside the folder and choose <b>Open in Terminal</b>.</p>
+          <p>Type this line and press <kbd>Enter</kbd>:</p>
+          <figure class="fig">
+            <div class="term" style="max-width: 30rem"><div class="win-bar"><span class="dots"><i></i><i></i><i></i></span><span data-os="win">Command Prompt</span><span data-os="mac linux">Terminal</span></div><pre data-os="win"><span class="p">&gt;</span> <span class="you">py -3 -m http.server 8000</span></pre><pre data-os="mac linux"><span class="p">$</span> <span class="you">python3 -m http.server 8000</span></pre></div>
+          </figure>
+          <p>Now open <code>http://localhost:8000/</code> in the browser <b>on that same computer</b>. The game's main menu appears. To stop the server, close the command window.</p>
+          <div class="note"><b>This address is only for the computer itself.</b> An iPad can't use it, and it can't use your computer's home network address (one like <code>http://192.168.…</code>) either: browsers run the game only from an address that starts with <b>https://</b>. The one exception is <code>localhost</code>, on the computer that runs the server.</div>
+        </div>
+      </li>
+
+      <li class="step emph-step" id="web-3">
+        <div class="badge"><span>3</span></div>
+        <div>
+          <h3>Put the folder on a web host <span class="tag">Key step</span></h3>
+          <p class="lead">Upload the whole unzipped folder, as it is, to a web host of your own. Any host that serves plain files will do: the game needs no database, no login and no programs on the server.</p>
+          <p>What must be true of the host:</p>
+          <ul>
+            <li>Its address starts with <b>https://</b>.</li>
+            <li>The game has a folder of its own there, and every file of the download is in it, unchanged.</li>
+            <li>The address stays the same. Everything the iPad keeps (step 5 and after) belongs to that one address.</li>
+            <li>It hands out files as they are. Most hosts do. If yours has settings for it: <code>.wasm</code> files go out as <code>application/wasm</code>, a missing file is not answered with <code>index.html</code>, and <code>offline-sw.js</code> is not cached by the host (<code>Cache-Control: no-cache</code>).</li>
+          </ul>
+          <p>No special security headers are needed for <b>web-offline</b> and <b>web</b>. (Only the web-threaded download needs them, which is why this guide skips it.)</p>
+          <p>A server in your own home works as well, as long as it gives the game an https:// address. Whichever you use, remember the box at the top of this chapter: a download with the skin only on a host for you and your household, and card pictures never where other people can reach them.</p>
+        </div>
+      </li>
+
+      <li class="step" id="web-4">
+        <div class="badge"><span>4</span></div>
+        <div>
+          <h3>Open it on the iPad and add it to the Home Screen</h3>
+          <p class="lead">On the iPad, open <b>Safari</b> and go to your host's https:// address. The main menu appears, just as on the computer.</p>
+          <p>Now give it an icon: tap Safari's <b>Share</b> button, then <b>Add to Home Screen</b>. If you see an <b>Open as Web App</b> switch, leave it on. The game's own icon lands on the Home Screen. The wording may differ slightly between iPadOS versions.</p>
+          <p><b>From now on, always start the game from that icon.</b> It opens full screen, without Safari's bars, and turned sideways (landscape), the way the table is laid out. The icon keeps its own skin, decks and saves, apart from what a Safari tab keeps; so set everything up in the game you opened from the icon.</p>
+        </div>
+      </li>
+
+      <li class="step" id="web-5">
+        <div class="badge"><span>5</span></div>
+        <div>
+          <h3>Let it save itself for offline play</h3>
+          <p class="lead">Open the game from its icon while the iPad is still connected, and leave it open for a few minutes. In the background it saves its files on the iPad: about 50 MB, or about 130 MB with the skin.</p>
+          <p>Nothing on the screen says when this is finished, and seeing the main menu does not mean it is. So test it: close the game completely, switch on Airplane Mode, and open the icon again. If the main menu comes and a duel starts, the iPad has everything, and your host no longer needs to be reachable. If not, reconnect, open the game and give it more time.</p>
+          <p><b>A new version.</b> The iPad gets new versions from <b>your host</b>, not from the downloads page. Download the new <b>web-offline</b> zip, unzip it, and replace the files on your host, all of them together, at the same address. The next time the game is opened with a connection, it fetches the new version in the background. Close the game completely and open it again, and the new one starts. The version number is in the bottom right corner of the main menu. Your decks, saves, skin and card pictures stay.</p>
+          <p><b>Starting clean.</b> Clearing the website data for your host's address in the iPad's Safari settings removes the saved game <b>and everything else it kept there: skin, card pictures, decks and adventures.</b> Export your adventures first (step 7).</p>
+        </div>
+      </li>
+
+      <li class="step" id="web-6">
+        <div class="badge"><span>6</span></div>
+        <div>
+          <h3>Add the 1997 look and the card pictures</h3>
+          <p class="lead">Without them the game draws clean panels of its own and plain cards, and plays the same. To add them you need two zip files on the iPad, then <b>Options → Skin → Choose...</b></p>
+          <ul>
+            <li><b>The skin:</b> <code>original_skin.zip</code>, a download of its own on the downloads page, or the skin zip you made on your computer from your own 1997 game.</li>
+            <li><b>The card pictures:</b> <code>cardart.zip</code>. Make it on your computer with <b>Get Card Packs...</b> (step 4 at the top of this page; tick <b>1997 card pictures</b>). It is then in the game's card folder: <b>Options → Card Packs... → Open Folder</b> shows it.</li>
+          </ul>
+          <p>Copy both to the iPad, into the <b>Files</b> app, any way you like. In the game on the iPad, open <b>Options</b>; under <b>Skin</b> there is a <b>Choose...</b> button for the skin and one for the card art. Tap it, pick the zip, and wait until the game has read it in; the files are large (about 110 MB and 190 MB). Restart the game when it offers to. The game keeps its own copy, so the zips in Files can go afterwards, but keep them somewhere: you'll need them again if the iPad ever clears the game's data.</p>
+          <p><b>Forget my zips</b>, under Skin, removes the zips you added.</p>
+          <p><b>The browser version plays the 897 original cards.</b> The numbered packs with the later sets can't be added to it; they are for the computer and handheld versions.</p>
+          <details class="lines">
+            <summary>On a host only you and your household use: the zips beside the game</summary>
+            <div class="plain">
+              <p>There, the two zips may sit on the host instead: as <code>skin/original_skin.zip</code> and <code>skin/cardart.zip</code> in the game's folder, beside <code>index.html</code>. The game fetches them by itself and keeps them. For the web-offline download, run <code data-os="win">py -3 tools/package_web_offline.py --refresh .</code><code data-os="mac linux">python3 tools/package_web_offline.py --refresh .</code> in the folder after adding or changing a zip and before uploading, so the offline copy includes it. Never put card pictures on an address other people can reach.</p>
+            </div>
+          </details>
+        </div>
+      </li>
+
+      <li class="step" id="web-7">
+        <div class="badge"><span>7</span></div>
+        <div>
+          <h3>Look after your saves</h3>
+          <p class="lead">In a browser there are no folders. Your adventures, decks, options, skin and card pictures live in the browser's own storage for your host's address, on that one iPad.</p>
+          <p>That storage is not a safe place for the only copy. Clearing website data deletes it, an iPad that runs low on space may clear it by itself, and a Home Screen icon is not a backup. So now and then, and always before you clear anything or move the game to a new address:</p>
+          <p>Open <b>Save / Load</b> in the main menu, highlight a save of the adventure and press <b>Export</b>. The whole adventure, every save of it, downloads as one file. <b>Import</b> on the same screen brings it back, on this iPad or on any computer with the same version of the game or a newer one.</p>
+          <p>A duel that is under way is not kept when the game is closed. Finish it, or give it up, first.</p>
+        </div>
+      </li>
+
+      <li class="step" id="web-8">
+        <div class="badge"><span>8</span></div>
+        <div>
+          <h3>What is different on an iPad</h3>
+          <ul>
+            <li><b>You play by finger.</b> A tap is a click. Hold, then lift, is a right-click. Drag to drag, swipe to scroll a list, and tap the large card to see it full screen. <b>Options → Display → Touch controls</b> is Auto, On or Off; leave it on Auto.</li>
+            <li><b>No keyboard, mouse or controller is needed.</b> Touch always works, and text fields bring up an on-screen keyboard. A controller paired with the iPad should act as it does on other devices; this has not been tested on an iPad.</li>
+            <li><b>Hold the iPad sideways.</b> The table is laid out for landscape.</li>
+            <li><b>The 897 original cards</b>, the adventure, duels, the Deck Builder and Booster Draft are all there.</li>
+            <li><b>Not in the browser:</b> games over the local network (Host on LAN, Find LAN games), <b>Get Card Packs...</b>, <b>Build from a 1997 install...</b>, the numbered card packs, the adventure plugins that come with the computer downloads, and anything that opens a folder.</li>
+          </ul>
+          <p>The same steps work for an Android tablet or any computer's browser: open the address, and choose <b>Install app</b> or <b>Add to Home Screen</b> where the browser offers it.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="faq inner">
+      <h3>If something goes wrong on the iPad</h3>
+      <details>
+        <summary>A white or empty page, or an error instead of the game</summary>
+        <div><p>Check the address: it must start with <b>https://</b> (step 3). A file opened from the Files app, or an http:// address of a computer on your home network, does not run the game. Check that every file of the download is on the host, in one folder. Then give it a moment: the first load fetches the whole game. The game needs a browser with WebGL 2, which very old iPads lack.</p></div>
+      </details>
+      <details>
+        <summary>The old version still shows after an update</summary>
+        <div><p>Open the game with a connection and leave it open for a few minutes, then close it <b>completely</b> (swipe it away in the app switcher, and close any Safari tab that has it open) and open it again. A new version waits until no window of the old one is open. Also check that all the new files went to the host together, at the same address.</p></div>
+      </details>
+      <details>
+        <summary>It says to reconnect, or it won't start without a connection</summary>
+        <div><p>The offline copy is incomplete: it wasn't finished, or the iPad cleared part of it. Connect, open the game and leave it open until it has fetched the files again, then close it completely and reopen. Your saves are kept apart from the game's files and are not touched by this.</p></div>
+      </details>
+      <details>
+        <summary>The skin, the card pictures or my saves are gone</summary>
+        <div><p>The iPad cleared the game's storage: it was full, or website data was cleared. Make room, then add the zips again (step 6) and <b>Import</b> your exported adventures (step 7). If you started the game from a Safari tab instead of the icon, nothing is lost: the two keep separate storage, so open it the way you did before.</p></div>
+      </details>
+      <details>
+        <summary>Nothing is kept from one visit to the next</summary>
+        <div><p>Don't use Private Browsing: it forgets everything when the tab closes. Use the Home Screen icon.</p></div>
+      </details>
+      <details>
+        <summary>Choosing a zip seems to do nothing</summary>
+        <div><p>Large zips take a while to read in; a line under the buttons says how far it is. Only a skin zip and a card art zip are taken; a numbered pack zip is refused.</p></div>
+      </details>
+    </div>
   </div>
 </main>
 
 <section class="faq gutter" aria-labelledby="faq-title">
   <div class="col">
     <h2 id="faq-title">If something goes wrong</h2>
-    <p>Find the message your window showed. Most problems take one step to fix.</p>
+    <p>Most problems take one step to fix. For the iPad and the browser, see the end of the chapter above.</p>
 
-    <details data-os="win">
-      <summary><code>'py' is not recognized as an internal or external command</code></summary>
-      <div><p>Python isn't installed yet, or the command window was opened before it was. Install Python (step 4), close the command window, and open a new one (step 5).</p></div>
-    </details>
-    <details data-os="win">
-      <summary><code>The token '&amp;&amp;' is not a valid statement separator</code></summary>
-      <div><p>That window is PowerShell, not the Command Prompt. Type <code>cmd</code>, press <kbd>Enter</kbd>, and paste again.</p></div>
-    </details>
-    <details data-os="mac linux">
-      <summary><code>python3: command not found</code></summary>
-      <div><p data-os="mac">Python isn't installed yet. Install it (step 4), then open a new Terminal window.</p><p data-os="linux">Install the <code>python3</code> package from your software centre, or with your distribution's package manager.</p></div>
+    <details>
+      <summary>There is no purple <b>Get Card Packs...</b> button in Options</summary>
+      <div><p>The button comes with version 0.70.11 or later; the version number is in the bottom right corner of the main menu. Download the newest version (step 1), or use the Python tools (the other way, in step 4).</p></div>
     </details>
     <details>
-      <summary><code>can't open file … tools/fetch_card_art.py … No such file or directory</code></summary>
-      <div><p>The command window isn't in the game folder. Close it and open it again from the folder that has <b>tools</b> in it (step 5).</p></div>
-    </details>
-    <details data-os="mac">
-      <summary><code>CERTIFICATE_VERIFY_FAILED</code></summary>
-      <div><p>Open <b>Applications → Python 3.x</b>, double-click <b>Install Certificates.command</b>, and paste the commands again.</p></div>
-    </details>
-    <details data-os="win">
-      <summary><code>CERTIFICATE_VERIFY_FAILED</code> or <code>certificate has expired</code></summary>
-      <div><p>Windows couldn't check the download server's certificate. First check that the computer's date and time are right. Then, in the same Command Prompt, type <code>py -3 -m pip install --upgrade certifi</code>, then <code>for /f %i in ('py -3 -m certifi') do set SSL_CERT_FILE=%i</code>, and paste the commands again. A virus scanner that checks HTTPS traffic can also cause this.</p></div>
-    </details>
-    <details data-os="mac linux">
-      <summary><code>TypeError: unsupported operand type(s) for |</code></summary>
-      <div><p>The window is using an older Python. Type <code>python3 --version</code>: it must say 3.10 or newer. <span data-os="mac">Macs come with an older Python of their own: install the one from python.org (step 4), then open a new Terminal window, so it uses the new one.</span></p></div>
+      <summary>The download stopped, or the window says <b>Not finished</b> or <b>Not started</b></summary>
+      <div><p>The connection dropped, or the download server was busy. Check the connection, open <b>Get Card Packs...</b> again, tick the same packs and press <b>OK</b>: what was downloaded is kept, and it goes on from there.</p></div>
     </details>
     <details>
-      <summary><code>WARN: download failed</code>, or it stopped partway</summary>
-      <div><p>The connection dropped for a moment. Paste the same thing again: finished downloads are kept, and it carries on where it stopped.</p></div>
+      <summary><b>Not enough free disk space</b></summary>
+      <div><p>The window says how much the ticked packs need and how much is free. Make room, or tick fewer packs now and the rest another day.</p></div>
     </details>
     <details>
       <summary>A pack is missing on the Card Packs page</summary>
-      <div><p>Click <b>Rescan</b>. The <code>cardpacks</code> folder must be inside the game folder, next to <span data-os="win">Shandalar.exe</span><span data-os="mac">Shandalar.app (never inside it)</span><span data-os="linux">run.sh</span>, and the zips must keep their names.</p></div>
+      <div><p>Click <b>Rescan</b>. Packs made in the game are in the folder named at the top of that page. Packs made with the Python tools belong in a <code>cardpacks</code> folder inside the game folder, next to <span data-os="win">Shandalar.exe</span><span data-os="mac">Shandalar.app (never inside it)</span><span data-os="linux">run.sh</span>. Either way the zips must keep their names.</p></div>
     </details>
     <details>
       <summary>The cards still have no pictures</summary>
-      <div><p>Check that <code>cardart.zip</code> is in the game folder's <code>skin</code> folder, then start the game again.</p></div>
+      <div><p>Open <b>Get Card Packs...</b> and check that <b>1997 card pictures</b> was built; if not, tick it and press <b>OK</b>. Then start the game again.</p></div>
+    </details>
+    <details>
+      <summary>The game looks plain, or says <b>No 1997 skin</b></summary>
+      <div><p>You have the download without <b>-with-skin</b>. The game plays the same, in plain panels of its own. For the classic look, take <code>original_skin.zip</code> from the downloads page and pick it with <b>Choose...</b> under <b>Skin</b> in Options. Or, from version 0.70.11, make the skin from your own copy of the 1997 game: <b>Build from a 1997 install...</b>, under the skin in Options, reads the folder it was installed to, its CD or a CD image, and keeps the skin as <code>classic_no-video.zip</code>.</p></div>
     </details>
     <details data-os="linux">
       <summary><code>Permission denied</code> when starting run.sh</summary>
-      <div><p>Your unzip tool dropped the “executable” mark. In the game folder, run <code>chmod +x run.sh Shandalar.x86_64</code>.</p></div>
+      <div><p>Your unzip tool dropped the “executable” mark. In a terminal in the game folder, run <code>chmod +x run.sh Shandalar.x86_64</code>.</p></div>
     </details>
     <details id="saves">
       <summary>Where are my saves? Can I take them to another computer?</summary>
-      <div><p>Your adventures are in an <code>adventures</code> folder, beside your decks (<code>decks</code>) and options (<code>settings.cfg</code>):</p><p data-os="win"><code>%APPDATA%\Godot\app_userdata\Shandalar\adventures</code> — paste it into File Explorer's address bar. Started with <b>Shandalar-portable.bat</b>, it's <code>userdata\Godot\app_userdata\Shandalar\adventures</code> inside the game folder.</p><p data-os="mac"><code>~/Library/Application Support/Godot/app_userdata/Shandalar/adventures</code> — in Finder, choose <b>Go → Go to Folder…</b> and paste it.</p><p data-os="linux"><code>~/.local/share/godot/app_userdata/Shandalar/adventures</code> — the same on a Steam Deck.</p><p>Each adventure is a few files starting with the hero's name: its autosave, its Quickslot and its named slots, each with a <code>.bak</code> copy. To play it on another computer, copy them all into the same folder there, and use the same version of the game or a newer one, with the same card packs.</p><p>Easier, and the same everywhere: open <b>Save / Load</b>, highlight a save of the adventure and press <b>Export</b>. The whole adventure, every save of it, becomes one file, <code>Shandalar adventure - <i>hero</i> - <i>date</i>.zip</code>, wherever you choose; on a phone or a headset, choose Downloads. On the other computer or device, press <b>Import</b> on the same screen and choose that file. The game checks it all before it writes anything, and asks before it replaces an adventure that's already there.</p><p>On Android the saves are in <code>Android/data/com.b0realis.shandalar.android/files/adventures</code>, and on the Meta Quest in <code>Android/data/com.b0realis.shandalar/files/adventures</code>. With USB debugging on, <code>adb pull</code> copies that folder to a computer, as does a file manager that's allowed into <code>Android/data</code>. The browser version keeps its saves in the browser: Export downloads the file, and Import takes one from your computer.</p></div>
+      <div><p>Your adventures are in an <code>adventures</code> folder, beside your decks (<code>decks</code>) and options (<code>settings.cfg</code>):</p><p data-os="win"><code>%APPDATA%\Godot\app_userdata\Shandalar\adventures</code> — paste it into File Explorer's address bar. </p><p data-os="mac"><code>~/Library/Application Support/Godot/app_userdata/Shandalar/adventures</code> — in Finder, choose <b>Go → Go to Folder…</b> and paste it.</p><p data-os="linux"><code>~/.local/share/godot/app_userdata/Shandalar/adventures</code> — the same on a Steam Deck.</p><p>A portable game (<b>Options → Portable game</b><span data-os="win">, or started with <b>Shandalar-portable.bat</b></span>) keeps all of this in a <code>portable</code> folder inside the game folder instead.</p><p>Each adventure is a few files starting with the hero's name: its autosave, its Quickslot and its named slots, each with a <code>.bak</code> copy. To play it on another computer, copy them all into the same folder there, and use the same version of the game or a newer one, with the same card packs.</p><p>Easier, and the same everywhere: open <b>Save / Load</b>, highlight a save of the adventure and press <b>Export</b>. The whole adventure, every save of it, becomes one file, <code>Shandalar adventure - <i>hero</i> - <i>date</i>.zip</code>, wherever you choose; on a phone or a headset, choose Downloads. On the other computer or device, press <b>Import</b> on the same screen and choose that file. The game checks it all before it writes anything, and asks before it replaces an adventure that's already there.</p><p>On Android the saves are in <code>Android/data/com.b0realis.shandalar.android/files/adventures</code>, and on the Meta Quest in <code>Android/data/com.b0realis.shandalar/files/adventures</code>. With USB debugging on, <code>adb pull</code> copies that folder to a computer, as does a file manager that's allowed into <code>Android/data</code>. The browser version keeps its saves in the browser: Export downloads the file, and Import takes one from your device. See <a href="#ipad-web">iPad and web play</a>.</p></div>
     </details>
     <details>
       <summary>A new version is out</summary>
-      <div><p>Download and unzip it as in steps 1 and 2, then copy <code>skin/cardart.zip</code> and the <code>cardpacks</code> folder from your old game folder into the new one. If the Card Packs page says a pack needs rebuilding, run that pack's two lines again in the new folder.</p></div>
+      <div><p>Download and unzip it as in steps 1 and 2, and start the new one. Your decks, adventures and options are kept outside the game folder, and so are the card pictures and packs made with <b>Get Card Packs...</b>: there is nothing to copy. If you made them with the Python tools, copy <code>skin/cardart.zip</code> and the <code>cardpacks</code> folder from your old game folder into the new one. A portable game keeps everything in its <code>portable</code> folder: copy that folder into the new game folder. If the Card Packs page says a pack needs rebuilding, build it again with <b>Get Card Packs...</b></p></div>
     </details>
   </div>
 </section>
@@ -815,7 +844,7 @@ Pack 10: 621 unique cards · 636 printings -&gt; cardpacks/Pack-10-Urza-Block.zi
 <footer class="gutter">
   <div class="col">
     <p>Shandalar is a free, open-source remake of MicroProse's 1997 <i>Magic: The Gathering</i>: <a href="https://github.com/b0realis/ShandalarGodot" target="_blank" rel="noopener">github.com/b0realis/ShandalarGodot</a>.</p>
-    <p>Every option of the download tools, and where else the files can go: <a href="https://github.com/b0realis/ShandalarGodot/blob/main/docs/card-art-and-packs.md" target="_blank" rel="noopener">the card art and packs guide</a>.</p>
+    <p>The Python tools that make the same card packs from a command window, and where else the files can go: <a href="https://github.com/b0realis/ShandalarGodot/blob/main/docs/card-art-and-packs.md" target="_blank" rel="noopener">the card art and packs guide</a>.</p>
     <p>The card pictures come from Scryfall and stay on your computer. Please don't share or upload them.</p>
   </div>
 </footer>
@@ -824,7 +853,7 @@ Pack 10: 621 unique cards · 636 printings -&gt; cardpacks/Pack-10-Urza-Block.zi
 <script>
 (function () {
   var app = document.getElementById("app");
-  var STORE = "shandalar-getting-started";
+  var STORE = "shandalar-getting-started-2";
   function load() {
     try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; }
   }
@@ -882,27 +911,6 @@ Pack 10: 621 unique cards · 636 printings -&gt; cardpacks/Pack-10-Urza-Block.zi
     });
   });
   refresh();
-
-  var copied = document.getElementById("copied");
-  document.getElementById("copy-cmds").addEventListener("click", function () {
-    var os = app.getAttribute("data-os");
-    var pre = document.querySelector("pre.cmds[data-os~='" + os + "']");
-    var lines = Array.prototype.map.call(pre.querySelectorAll(".ln"), function (l) { return l.textContent.trim(); });
-    var text = lines.join(" && ");
-    function fallback() {
-      var range = document.createRange();
-      range.selectNodeContents(pre);
-      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-      copied.textContent = "Selected. Press " + (os === "mac" ? "⌘ C" : "Ctrl C") + " to copy.";
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () {
-        copied.textContent = "Copied. Now paste it into the command window.";
-      }, fallback);
-    } else {
-      fallback();
-    }
-  });
 })();
 </script>
 </body>
