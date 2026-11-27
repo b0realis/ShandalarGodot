@@ -8,10 +8,14 @@ const O := preload("res://cards/sets/hml/_oyster_redirect.gd")
 static func configure(c: CardData) -> bool:
 	match c.card_name:
 		"Fatal Lore", "Library of Lat-Nam", "Misfortune":
-			# SIMPLIFIED: opponent chooses at resolution, not announcement.
-			c.oracle_text += "\nSIMPLIFIED: the opponent chooses the mode as this spell resolves."
-			if c.card_name == "Fatal Lore": c.oracle_text += " Its creatures are chosen then, with normal targeting restrictions."
-			c.spell(F.Action.new(_opponent_choice, "opponent chooses this spell's outcome on resolution", null, true))
+			# "An opponent chooses one —": the mode is the opponent's, chosen
+			# as the spell is cast (CardData.opponent_modes, CR 601.2b).
+			c.opponent_modes = _opponent_modes(c.card_name)
+			c.opponent_mode_hint = _opponent_mode_hint
+			if c.card_name == "Fatal Lore":
+				# SIMPLIFIED (docs/simplified-cards.md, "Fatal Lore"): its zero to two creatures are chosen on resolution, not announcement.
+				c.oracle_text += "\nSIMPLIFIED: the creatures are chosen as this spell resolves, with normal targeting restrictions."
+			c.spell(F.Action.new(_opponent_choice, "the outcome the opponent chose as this spell was cast", null, true))
 		"Lim-Dûl's Vault": c.spell(F.Action.new(_vault, "look at five, optionally pay 1 life and repeat; shuffle the rest and order those five on top", null, true))
 		"Phyrexian Portal": c.activated(F._ability("{3}", false, F.Action.new(_portal, "opponent divides your top ten into two hidden piles; exile one and search the other", TargetSpec.opponent(), true)))
 		"Lodestone Bauble":
@@ -35,14 +39,33 @@ static func configure(c: CardData) -> bool:
 		_: return false
 	return true
 
+## The modes the opponent chooses between, in printed order, worded for
+## the chooser.
+static func _opponent_modes(card_name: String) -> Array[String]:
+	match card_name:
+		"Library of Lat-Nam": return ["Caster draws three next upkeep", "Caster searches for any card"]
+		"Misfortune": return ["Caster's creatures get +1/+1 counters; caster gains 4 life", "Your creatures get -1/-1 counters; take 4 damage"]
+	return ["Caster draws three cards", "Caster destroys up to two of your creatures; you may draw up to three cards"]
+
+## The chooser's default mode (public state only).
+static func _opponent_mode_hint(g: MtgGame, s: CardInstance, pid: int) -> int:
+	match s.data.card_name:
+		"Library of Lat-Nam": return 1
+		"Misfortune": return 0
+	return 0 if g.players[1 - pid].creatures().size() > 1 else 1
+
 static func _opponent_choice(g: MtgGame, s: CardInstance, pid: int, _t: TargetRef, _x: int) -> void:
 	var other := 1 - pid
+	# Chosen as the spell was cast and kept on its stack item (a copy has
+	# the original's). A spell put on the stack by no cast has none, and
+	# the opponent chooses now.
+	var choice := int(g.cost_paid("_opponent_mode", -1))
+	if choice < 0:
+		choice = g.agents[other].choose_option(g, other, s.data.opponent_modes, s.data.card_name + " — choose", _opponent_mode_hint(g, s, pid))
 	if s.data.card_name == "Library of Lat-Nam":
-		var choice := g.agents[other].choose_option(g, other, ["Caster draws three next upkeep", "Caster searches for any card"], "Library of Lat-Nam — choose", 1)
 		if choice == 0: DelayedDrawEffect.new(3).resolve(g, s, pid, null)
 		else: _tutor(g, pid, g.players[pid].library.duplicate(), "Search your library for a card", false)
 	elif s.data.card_name == "Misfortune":
-		var choice := g.agents[other].choose_option(g, other, ["Caster's creatures get +1/+1 counters; caster gains 4 life", "Your creatures get -1/-1 counters; take 4 damage"], "Misfortune — choose", 0)
 		var who := pid if choice == 0 else other
 		g.begin_simultaneous()
 		for i in g.players[who].battlefield.duplicate():
@@ -51,7 +74,6 @@ static func _opponent_choice(g: MtgGame, s: CardInstance, pid: int, _t: TargetRe
 		else: g.deal_damage(s, TargetRef.player(other), 4)
 		g.end_simultaneous()
 	else:
-		var choice := g.agents[other].choose_option(g, other, ["Caster draws three cards", "Caster destroys up to two of your creatures; you may draw up to three cards"], "Fatal Lore — choose", 0 if g.players[other].creatures().size() > 1 else 1)
 		if choice == 0:
 			g.draw_cards(pid, 3)
 			return

@@ -333,16 +333,15 @@ class WyvernRetarget extends EffectBase:
 
 
 ## Skeleton Scavengers: "Regenerate this creature. When it regenerates this
-## way, put a +1/+1 counter on it." The shield is the engine's ordinary one;
-## the "this way" half is a delayed trigger per shield (CR 603.7), keyed to
-## the creature's object (id + timestamp, CR 400.7) and expiring with the
-## shield at cleanup (CR 701.15) — Matopi Golem's shape
-## (vis/_creatures.gd ThisWayRegeneration).
-## SIMPLIFIED (docs/simplified-cards.md, "Debt of Loyalty; Matopi Golem"):
-## shields are interchangeable counts and CR 616.1's choice among them is
-## not asked. Here the rider is a GAIN, so the opposite of the Golem's
-## order is taken: while one of these shields is pending, the next
-## regeneration of the creature is taken to have used it (the oldest).
+## way, put a +1/+1 counter on it." The shield is the engine's ordinary one
+## and CARRIES its rider ([member CardInstance.regeneration_draws]): with
+## other shields up too, the controller chooses which one a destruction
+## uses (CR 616.1, [method MtgGame.destroy]) and the counter comes only
+## when it was this one. The "this way" half is a delayed trigger per
+## shield (CR 603.7), keyed to the creature's object (id + timestamp,
+## CR 400.7) and expiring with the shield at cleanup (CR 701.15) — Matopi
+## Golem's shape (vis/_creatures.gd ThisWayRegeneration). Here the rider is
+## a GAIN, so the default answer is this shield (`wanted`).
 class ScavengerRegeneration extends RegenerateEffect:
 	const RIDER := "scavengers"
 
@@ -354,6 +353,9 @@ class ScavengerRegeneration extends RegenerateEffect:
 		if source.regeneration_shields <= before:
 			return
 		var seq := game.continuous.next_timestamp()
+		game._rec(source, &"regeneration_draws")
+		source.regeneration_draws[source.regeneration_shields - 1] = {"rider": seq,
+			"label": "Regenerate; put a +1/+1 counter on it", "wanted": true}
 		var memory := {"regenerated_this_way": RIDER, "id": source.id, "stamp": source.layer_timestamp, "seq": seq}
 		var trigger := TriggeredAbility.new(Mtg.EventType.REGENERATED,
 			ScavengerRegeneration._grow.bind(source.id, source.layer_timestamp),
@@ -362,18 +364,13 @@ class ScavengerRegeneration extends RegenerateEffect:
 		var entry := game.schedule_delayed_trigger(trigger, controller, source, false, memory)
 		entry["expires_turn"] = game.turn_number
 
-	## The oldest pending entry of this object answers its regeneration.
-	static func _this_way(g: MtgGame, _s: CardInstance, e: GameEvent, id: int, stamp: int, seq: int) -> bool:
+	## Did this object regenerate through the shield carrying rider [param seq]?
+	static func _this_way(_g: MtgGame, _s: CardInstance, e: GameEvent, id: int, stamp: int, seq: int) -> bool:
 		var inst: CardInstance = e.data.get("instance")
 		if inst == null or inst.id != id or inst.layer_timestamp != stamp:
 			return false
-		var first := seq
-		for entry in g.delayed_triggers:
-			var memory: Dictionary = entry.get("memory", {})
-			if String(memory.get("regenerated_this_way", "")) == RIDER and int(memory.get("id", -1)) == id \
-					and int(memory.get("stamp", -1)) == stamp:
-				first = mini(first, int(memory.get("seq", seq)))
-		return first == seq
+		var shield: Dictionary = e.data.get("shield", {})
+		return int(shield.get("rider", -1)) == seq
 
 	static func _grow(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
 		var inst := g.find_instance(id)

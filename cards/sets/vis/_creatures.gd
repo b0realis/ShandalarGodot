@@ -229,16 +229,14 @@ class DelayedButterfly extends CreateTokenEffect:
 
 ## "Regenerate <it>. <Something> if/when it regenerates THIS WAY" — Matopi
 ## Golem's -1/-1 counter (a delayed trigger, CR 603.7) and Debt of Loyalty's
-## control change. The shield is the engine's ordinary one; the "this way"
-## half is a delayed entry per shield, keyed to the creature's object
-## (id + timestamp, CR 400.7) and expiring with the shield at cleanup
-## (CR 701.15). One regeneration answers one entry, the oldest.
-## SIMPLIFIED (docs/simplified-cards.md, "Matopi Golem"; "Debt of Loyalty"):
-## shields are interchangeable counts in the engine and CR 616.1's choice
-## among them is not asked — every "this way" rider is a price to the
-## creature's controller (a counter, a lost creature), so any OTHER shield
-## is taken as spent first: the rider applies only when the shields left
-## after this regeneration are fewer than this kind's pending entries.
+## control change. The shield is the engine's ordinary one and CARRIES its
+## rider ([member CardInstance.regeneration_draws]): when the creature has
+## other shields too, its controller chooses which one a destruction uses
+## (CR 616.1, [method MtgGame.destroy]) and the rider applies only when it
+## was this one. The "this way" half is a delayed entry per shield, keyed
+## to the creature's object (id + timestamp, CR 400.7) and expiring with
+## the shield at cleanup (CR 701.15). The default answer spends a
+## rider-free shield first — the rider is a price to the controller.
 class ThisWayRegeneration extends RegenerateEffect:
 	var kind: String
 	func _init(rider: String, spec: TargetSpec = null) -> void:
@@ -253,8 +251,12 @@ class ThisWayRegeneration extends RegenerateEffect:
 		super(game, source, controller, target, x)
 		if affected.regeneration_shields <= before: return
 		var seq := game.continuous.next_timestamp()
+		var label := "Regenerate; put a -1/-1 counter on it"
+		if kind == "debt": label = "Regenerate; %s gains control of it" % game.players[controller].player_name
+		game._rec(affected, &"regeneration_draws")
+		affected.regeneration_draws[affected.regeneration_shields - 1] = {"rider": seq, "label": label}
 		var memory := {"regenerated_this_way": kind, "id": affected.id, "stamp": affected.layer_timestamp, "seq": seq}
-		var condition := ThisWayRegeneration._this_way.bind(kind, affected.id, affected.layer_timestamp, seq)
+		var condition := ThisWayRegeneration._this_way.bind(affected.id, affected.layer_timestamp, seq)
 		var trigger: TriggeredAbility
 		if kind == "debt":
 			# Debt of Loyalty: the control change is part of the regeneration
@@ -267,18 +269,12 @@ class ThisWayRegeneration extends RegenerateEffect:
 				"When it regenerates this way, put a -1/-1 counter on it.", condition)
 		var entry := game.schedule_delayed_trigger(trigger, controller, source, false, memory)
 		entry["expires_turn"] = game.turn_number
-	static func _this_way(g: MtgGame, _s: CardInstance, e: GameEvent, rider: String, id: int, stamp: int, seq: int) -> bool:
+	## Did this object regenerate through the shield carrying rider [param seq]?
+	static func _this_way(_g: MtgGame, _s: CardInstance, e: GameEvent, id: int, stamp: int, seq: int) -> bool:
 		var inst: CardInstance = e.data.get("instance")
 		if inst == null or inst.id != id or inst.layer_timestamp != stamp: return false
-		var pending := 0
-		var first := seq
-		for entry in g.delayed_triggers:
-			var memory: Dictionary = entry.get("memory", {})
-			if String(memory.get("regenerated_this_way", "")) == rider and int(memory.get("id", -1)) == id \
-					and int(memory.get("stamp", -1)) == stamp:
-				pending += 1
-				first = mini(first, int(memory.get("seq", seq)))
-		return first == seq and inst.regeneration_shields < pending
+		var shield: Dictionary = e.data.get("shield", {})
+		return int(shield.get("rider", -1)) == seq
 	static func _shrink(g: MtgGame, _s: CardInstance, _e: GameEvent, id: int, stamp: int) -> void:
 		var inst := g.find_instance(id)
 		if inst != null and inst.zone == Mtg.Zone.BATTLEFIELD and inst.layer_timestamp == stamp: g.add_counters(inst, "-1/-1")

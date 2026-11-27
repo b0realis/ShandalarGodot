@@ -53,6 +53,12 @@ extends RefCounted
 ##    reward of ours (Ivory Tower) is read as the toll is, sign turned; a
 ##    land nothing will use stays in a hand that is paid for its size.
 ##    The last two sections.
+##  * THE OTHER LOCKS AND TAXES (the leftovers of 0.70.14, 2026-11-27): a
+##    lock a creature carries (Marble Titan), the untap of one chosen kind
+##    (Storage Matrix), the flip (Sands of Time), the land a cast sets
+##    back (Mana Breach), the drain (Mana Vortex); the weaker rungs under
+##    a hand toll; the stock under a land cap in the main phase and in an
+##    X. The file's last section.
 ##
 ## All of it behind [member AiProfile.forecasts_tactics], which every
 ## standard rung ships on: the gate off is the pilot as it was.
@@ -71,6 +77,8 @@ const CRYPT_LINE := "If you would draw a card, return a card from your graveyard
 const LASH_LINE := "cumulative upkeep, that player exiles all cards from their library"
 const PEACE_LINE := "Creatures can't attack."
 
+const TEMPEST_SPELLS := preload("res://engine/ai/tempest_spells.gd")
+
 static var _arrival_burn: RegEx = null
 static var _upkeep_wrath: RegEx = null
 
@@ -82,6 +90,11 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance, planning := fals
 	if not pilot.profile.forecasts_tactics:
 		return ""
 	var data: CardData = inst.data
+	# A toll the table takes for every cast ("the other locks and taxes").
+	if g.has_trigger_listener(Mtg.EventType.SPELL_CAST):
+		var tolled := cast_toll_refusal(g, pilot, inst)
+		if tolled != "":
+			return tolled
 	# Under a cap on the untap step the lands are a stock ("the lock").
 	if not planning and not g.untap_caps.is_empty():
 		var kept := stock_refusal(g, pilot, inst)
@@ -113,7 +126,7 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance, planning := fals
 		return "its upkeep ends in the whole library"
 	if stops_attacks(data) and not peace_wanted(g, pilot, null):
 		return "our attack is the bigger one"
-	if not data.static_abilities.is_empty() and text.contains("can't untap more than"):
+	if text.contains("untap") or text.contains("a land"):
 		var held := lock_refusal(g, pilot, inst)
 		if held != "":
 			return held
@@ -887,8 +900,10 @@ static func idle_dump(g: MtgGame, pilot) -> String:
 	if not pilot.profile.forecasts_tactics or g.rules.mana_burn:
 		return ""
 	var pid: int = pilot.pid
-	if g.active_player == pid or not g.stack.is_empty() \
-			or idle_land_toll(g, pid) <= 0 or _untap_is_held(g, pid):
+	if g.active_player == pid or not g.stack.is_empty():
+		return ""
+	# Under the flip a land tapped now is the land open next turn.
+	if not flips(g, pid) and (idle_land_toll(g, pid) <= 0 or _untap_is_held(g, pid)):
 		return ""
 	var src: Array = pilot._mana_sources(g)
 	var tapped := 0
@@ -1009,9 +1024,11 @@ static func untap_cap_of(data: CardData) -> Array:
 ## untap step, is not cast: "" for a card that caps nothing, a lock that
 ## holds nothing of ours, or one that holds them at least as hard.
 static func lock_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
-	var cap := untap_cap_of(inst.data)
+	var cap := lock_shape_of(inst.data)
 	if cap.is_empty():
 		return ""
+	if String(cap[0]) == "carried":
+		return _carried_refusal(g, pilot, inst)
 	var us: int = pilot.pid
 	var them := g.opponent_of(us)
 	var ours := _held_by_cap(g, pilot, inst, cap, us)
@@ -1073,6 +1090,8 @@ static func _held_by_cap(g: MtgGame, pilot, inst: CardInstance, cap: Array, who:
 			if taps:
 				working += 1
 		held += float(maxi(working - room, 0))
+	if kind == "choice" or kind == "flip" or kind == "drain" or kind == "breach":
+		held += _held_by_shape(g, pilot, inst, kind, who)
 	return held
 
 
@@ -1145,17 +1164,29 @@ static func stock_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 	var spent := clampi(price - (mana - open_lands), 0, open_lands)
 	if spent <= 0:
 		return ""
+	var them := g.opponent_of(pid)
+	if data.is_creature() and _attack_power(g, them, null) > _attack_power(g, pid, null):
+		return ""   # the body is wanted now
+	if _better_card_waits(g, pilot, inst, mana, spent, refill,
+			float(pilot._card_value(data)) * STOCK_EDGE):
+		return "the mana is kept for a better card"
+	return ""
+
+
+## Is a card in hand (not [param inst]) worth [param bar] or more out of
+## reach of [param mana] now, within [constant STOCK_TURNS] turns of the
+## stock at [param refill] lands a turn (one more with a land in hand),
+## and put a turn further off by [param spent] lands tapped now?
+static func _better_card_waits(g: MtgGame, pilot, inst: CardInstance, mana: int,
+		spent: int, refill: int, bar: float) -> bool:
+	var me = g.players[pilot.pid]
 	var rate := refill
 	for card in me.hand:
 		if card.is_land():
 			rate += 1
 			break
 	if rate <= 0:
-		return ""
-	var them := g.opponent_of(pid)
-	if data.is_creature() and _attack_power(g, them, null) > _attack_power(g, pid, null):
-		return ""   # the body is wanted now
-	var bar: float = float(pilot._card_value(data)) * STOCK_EDGE
+		return false
 	for card in me.hand:
 		if card == inst or card.is_land() or card.data.cost.has_x:
 			continue
@@ -1167,8 +1198,8 @@ static func stock_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 			continue
 		if cast_refusal(g, pilot, card, true) != "":
 			continue   # a card we would not cast is not saved for
-		return "the mana is kept for a better card"
-	return ""
+		return true
+	return false
 
 
 # =============================================================== the hand --
@@ -1224,7 +1255,7 @@ static func hand_reward_of_line(text: String) -> Dictionary:
 ## The life [param pid]'s next upkeep takes from it at a hand of [param
 ## size]: every hand toll on the table that beats at its upkeep, less
 ## every hand reward of its own. Negative is life gained.
-static func hand_beat(g: MtgGame, pid: int, size: int) -> int:
+static func hand_beat(g: MtgGame, pid: int, size: int, rewards := true) -> int:
 	var total := 0
 	for inst in g.all_battlefield():
 		if inst.phased_out:
@@ -1235,7 +1266,7 @@ static func hand_beat(g: MtgGame, pid: int, size: int) -> int:
 			var toll := EffectIntent.hand_toll_of_line(trig.text)
 			var reward := {}
 			if toll.is_empty():
-				if inst.controller_id != pid:
+				if inst.controller_id != pid or not rewards:
 					continue
 				reward = hand_reward_of_line(trig.text)
 				if reward.is_empty():
@@ -1280,6 +1311,14 @@ static func cast_relief(g: MtgGame, pilot, inst: CardInstance) -> float:
 		return relief
 	var pid: int = pilot.pid
 	var me = g.players[pid]
+	# Under the flip a land tapped now is a land open next turn.
+	if me.skips_untap_step and g.active_player == pid and flips(g, pid):
+		var open := 0
+		for land in me.battlefield:
+			if land.is_land() and not land.tapped and not land.phased_out:
+				open += 1
+		relief += FLIP_LAND * float(open if inst.data.cost.has_x \
+			else mini(open, inst.data.cost.mana_value()))
 	var size: int = me.hand.size()
 	var lost := 0
 	for perm in me.battlefield:
@@ -1297,3 +1336,440 @@ static func cast_relief(g: MtgGame, pilot, inst: CardInstance) -> float:
 			lost += EffectIntent.hand_toll_damage(reward, size) \
 				- EffectIntent.hand_toll_damage(reward, size - 1)
 	return relief - float(lost) * float(pilot._life_price(me.life))
+
+
+# ================================================ the other locks and taxes --
+#
+# THE LEFTOVERS OF 0.70.14 (2026-11-27). Five more printed shapes
+# ([method lock_shape_of]), each on both sides of the table:
+#   carried  a creature whose static keeps creatures from untapping
+#            ("Creatures with power 3 or greater don't untap during their
+#            controllers' untap steps" — Marble Titan). The noncreature
+#            statics of that kind are priced by the board put under the
+#            search journal (tempest_spells.gd `static_projection`); the
+#            creature is priced the same way ([method _carried_refusal]):
+#            not cast when it holds our side, and ours more than theirs.
+#   choice   "each player chooses artifact, creature, or land during their
+#            untap step" (Storage Matrix): a side keeps the biggest of its
+#            three — the land mana it wants a turn, its attackers' power,
+#            its working artifacts — and is held the other two. Under one
+#            the kind is chosen by what untapping it buys this turn
+#            ([method untap_kind]), the engine's default — the kind with
+#            most tapped — only on a tie.
+#   flip     "untaps each tapped … and taps each untapped …" at upkeep
+#            (Sands of Time): what a side leaves untapped is what it loses
+#            next turn — their open lands and attackers now, ours beyond
+#            the card's price and the bodies that cannot attack. Under one
+#            ([method flips]) a land tapped now is the land open next
+#            turn: the idle lands are tapped at their end step where that
+#            is free ([method idle_dump]), and a cast is worth half a
+#            point a land it taps where it is not ([method cast_relief]).
+#   drain    "each player's upkeep, that player sacrifices a land" (Mana
+#            Vortex): the mana a side still wants beyond what its
+#            shrinking lands make — ours a land shorter and a turn later.
+#   breach   "Whenever a player casts a spell, that player returns a land
+#            they control to its owner's hand" (Mana Breach): the spells a
+#            side still has to cast beyond the one a turn whose land the
+#            land drop puts back.
+# The verdict is the lock's ([method lock_refusal]): not cast when it
+# holds our side alone, or ours more than theirs — with the bigger attack
+# on the table a little more of ours is allowed.
+#
+# UNDER A TOLL ON EVERY CAST ([method cast_toll_refusal]), whoever owns
+# it: a cast that costs our last life is never made (Spellshock's two at
+# two life); a land set back is free when the land drop puts it back (no
+# other land in hand) or the lands left still make everything our cards
+# ask ([method land_ceiling]); otherwise a spell worth less than
+# [constant LAND_BACK] waits. A creature against the bigger attack, an X
+# and burn that ends the game are cast all the same.
+#
+# THE WEAKER RUNGS UNDER A HAND TOLL. [member AiProfile.minds_the_vise]
+# (the room, the relief at the reaper's rate, the price of the permanent)
+# is the Sorcerer's and the Wizard's by the ladder's design
+# (docs/ai-difficulty.md). A rung without it gets the two obvious parts:
+#   * over the limit of a squeeze its turn does not stop developing — the
+#     mistake roll is rolled as ever and not taken ([method
+#     fumble_spared]);
+#   * under a stretch a cast is charged a flat [constant STRETCH_PRICE] a
+#     point it hands the toll over [constant PUNISH_TURNS] upkeeps, in the
+#     main-phase ranking alone ([method stretch_charge]) — a Healing Salve
+#     stays in hand, a creature or a spell that takes a permanent is cast.
+# Nothing of the room, the wheel, the removal's aim: those stay off.
+#
+# THE STOCK, IN THE MAIN PHASE AND IN AN X (under a land cap, "the lock"):
+# a main-phase activation ([method main_sink_refused]) and a sized X spell
+# ([method x_refusal]) that tap capped lands are not made while a card in
+# hand worth [constant STOCK_EDGE] times as much is within [constant
+# STOCK_TURNS] turns of the stock and the taps would put it a turn
+# further off. What wins the game is never held.
+
+## What a land set back to hand costs: a spell worth less waits.
+const LAND_BACK := 3.0
+## The flat charge, a point of life, of the rungs that do not price it.
+const STRETCH_PRICE := 1.0
+## What a land tapped under the flip is worth: the mana of next turn.
+const FLIP_LAND := 0.5
+
+const CHOICE_LINE := "chooses artifact, creature, or land during their untap step"
+const BREACH_LINE := "that player returns a land they control to its owner's hand"
+const DRAIN_LINE := "each player's upkeep, that player sacrifices a land"
+const CARRIED_LINE := "don't untap during their controllers' untap steps"
+const CAST_TOLL_HEAD := "whenever a player casts a spell"
+
+static var _shapes: Dictionary = {}       # card name -> [kind, n] or []
+static var _cast_tolls: Dictionary = {}   # trigger line -> [land, life]
+
+
+## The lock or tax [param data] prints: an untap cap ([method
+## untap_cap_of]) or `["carried" | "choice" | "flip" | "drain" | "breach",
+## 0]` (the section's head); `[]` for any other card. Cached by card name.
+static func lock_shape_of(data: CardData) -> Array:
+	_toll_lock.lock()
+	var known: Variant = _shapes.get(data.card_name)
+	_toll_lock.unlock()
+	if known != null:
+		return known
+	var out: Array = untap_cap_of(data)
+	if out.is_empty():
+		for ability in data.static_abilities:
+			var line := String(ability.text).to_lower()
+			if line.contains(CHOICE_LINE):
+				out = ["choice", 0]
+			elif data.is_creature() and line.contains(CARRIED_LINE):
+				out = ["carried", 0]
+		for trig in data.triggered_abilities:
+			var line := String(trig.text).to_lower()
+			if trig.listens(Mtg.EventType.UPKEEP_START):
+				if _is_flip(line):
+					out = ["flip", 0]
+				elif line.contains(DRAIN_LINE):
+					out = ["drain", 0]
+			elif trig.listens(Mtg.EventType.SPELL_CAST) and int(cast_toll_of_line(trig.text)[0]) > 0:
+				out = ["breach", 0]
+	_toll_lock.lock()
+	_shapes[data.card_name] = out
+	_toll_lock.unlock()
+	return out
+
+
+static func _is_flip(lower: String) -> bool:
+	return lower.contains("untaps each tapped") and lower.contains("taps each untapped")
+
+
+## `[lands, life]` a printed "Whenever a player casts a spell, …" line
+## takes from the caster; `[0, 0]` for any other line.
+static func cast_toll_of_line(text: String) -> Array:
+	_toll_lock.lock()
+	var known: Variant = _cast_tolls.get(text)
+	_toll_lock.unlock()
+	if known != null:
+		return known
+	var out: Array = [0, 0]
+	var lower := text.to_lower()
+	if lower.begins_with(CAST_TOLL_HEAD):
+		if lower.contains(BREACH_LINE):
+			out[0] = 1
+		else:
+			var toll := life_toll_of_line(text)
+			if not toll.is_empty() and String(toll["whom"]) == "actor":
+				out[1] = int(toll["amount"])
+	_toll_lock.lock()
+	_cast_tolls[text] = out
+	_toll_lock.unlock()
+	return out
+
+
+## `[lands, life]` the table takes from a player for one cast: every such
+## line on the battlefield (a line with a condition of its own is not
+## guessed at).
+static func cast_tolls(g: MtgGame) -> Array:
+	var out: Array = [0, 0]
+	if not g.has_trigger_listener(Mtg.EventType.SPELL_CAST):
+		return out
+	for perm in g.all_battlefield():
+		if perm.phased_out:
+			continue
+		for trig in perm.cur_triggered_abilities:
+			if not trig.listens(Mtg.EventType.SPELL_CAST) or trig.text.is_empty() \
+					or trig.condition.is_valid():
+				continue
+			var toll := cast_toll_of_line(trig.text)
+			out[0] = int(out[0]) + int(toll[0])
+			out[1] = int(out[1]) + int(toll[1])
+	return out
+
+
+## Why [param inst] is not cast into the toll the table takes for every
+## cast ("under a toll on every cast"); "" with no such line in play.
+static func cast_toll_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
+	var toll := cast_tolls(g)
+	var back := int(toll[0])
+	if back <= 0 and int(toll[1]) <= 0:
+		return ""
+	var pid: int = pilot.pid
+	var me = g.players[pid]
+	if int(toll[1]) >= int(me.life):
+		return "the cast would cost our last life"
+	var data: CardData = inst.data
+	if back <= 0 or data.cost.has_x or data.is_land():
+		return ""
+	var lands := 0
+	for land in me.battlefield:
+		if land.is_land() and not land.phased_out:
+			lands += 1
+	if lands <= 0:
+		return ""
+	var held := 0
+	for card in me.hand:
+		if card.is_land():
+			held += 1
+	# The land drop puts the one land back: this turn's, or the next's.
+	if back == 1 and held == 0 and (g.active_player != pid or g.land_drop_available(pid)):
+		return ""
+	if int(pilot._mana_reach(g, null)) - back >= land_ceiling(g, pilot):
+		return ""   # lands in plenty: nothing of ours asks for the one set back
+	if float(pilot._card_value(data)) >= LAND_BACK * float(back):
+		return ""
+	var them := g.opponent_of(pid)
+	if data.is_creature() and _attack_power(g, them, null) > _attack_power(g, pid, null):
+		return ""   # the body is wanted now
+	if not data.is_permanent_type() and pilot._lethal_burn(g, pilot._intent_of(inst), 0):
+		return ""
+	return "the spell is not worth the land it sets back"
+
+
+## The creature that carries a lock ("carried"): the board with it on the
+## battlefield, each side priced before and after. Not cast when it costs
+## our side, and ours more than theirs.
+static func _carried_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
+	if inst.zone != Mtg.Zone.HAND:
+		return ""
+	var swing: Dictionary = TEMPEST_SPELLS.static_projection(g, pilot, inst)
+	var ours := float(swing["ours"])
+	if ours < -TEMPEST_SPELLS.STATIC_EPSILON \
+			and ours - float(swing["theirs"]) < -TEMPEST_SPELLS.STATIC_EPSILON:
+		return "the lock would hold more of ours than of theirs"
+	return ""
+
+
+## What a lock of [param kind] — "choice", "flip", "drain" or "breach" —
+## holds of [param who] (the section's head); [param inst] is the card in
+## the pilot's hand.
+static func _held_by_shape(g: MtgGame, pilot, inst: CardInstance, kind: String,
+		who: int) -> float:
+	var turns := float(PUNISH_TURNS)
+	var ours: bool = who == pilot.pid
+	var player = g.players[who]
+	var lands := 0
+	var open := 0
+	for land in player.battlefield:
+		if land.is_land() and not land.phased_out:
+			lands += 1
+			if not land.tapped:
+				open += 1
+	var free := _free_mana(g, who)
+	if kind == "breach":
+		var spells := float(PUNISH_TURNS) * (1.0 - LAND_SHARE)
+		if ours:
+			for card in player.hand:
+				if card != inst and not card.is_land():
+					spells += 1.0
+		else:
+			spells += float(player.hand.size()) * (1.0 - LAND_SHARE)
+		return maxf(spells - turns, 0.0) if lands > 0 else 0.0
+	var want := clampf(_mana_to_spend(g, pilot, inst, who) - free * turns, 0.0,
+		float(lands) * turns)
+	if kind == "drain":
+		# Their upkeep is the next one; ours follows the land the cast eats.
+		var left := lands - 1 if ours else lands
+		var made := 0
+		for turn in range(1, PUNISH_TURNS + 1):
+			made += maxi(left - turn, 0)
+		return maxf(want - float(made), 0.0)
+	var attack := 0.0
+	var home := 0.0   # the flip: bodies that stay untapped into the upkeep
+	var past_combat: bool = g.active_player != pilot.pid \
+		or g.current_step() > Mtg.Step.DECLARE_ATTACKERS
+	for body in player.creatures():
+		if not g.is_present(body) or body.cur_power <= 0 \
+				or body.has_keyword(Mtg.Keyword.DEFENDER):
+			continue
+		if not body.has_keyword(Mtg.Keyword.VIGILANCE):
+			attack += float(body.cur_power)
+		if not body.tapped and (not ours or body.summoning_sick or past_combat):
+			home += float(body.cur_power)
+	if kind == "flip":
+		if ours:
+			open -= clampi(inst.data.cost.mana_value() - int(free), 0, open)
+		return float(open) + home
+	# The choice: the biggest of the three is kept, the others are held.
+	var working := 0.0
+	for perm in player.battlefield:
+		if perm == inst or perm.phased_out or perm.is_land() or perm.is_creature() \
+				or not perm.is_type(Mtg.CardType.ARTIFACT):
+			continue
+		for ability in perm.cur_activated_abilities:
+			if ability.tap_cost:
+				working = working + 1.0
+				break
+	var mana := want / turns + free   # the nonland sources tap as well
+	return mana + attack + working - maxf(mana, maxf(attack, working))
+
+
+## Does an upkeep line on the table flip [param pid]'s permanents — untap
+## the tapped, tap the untapped?
+static func flips(g: MtgGame, pid: int) -> bool:
+	if not g.players[pid].skips_untap_step \
+			or not g.has_trigger_listener(Mtg.EventType.UPKEEP_START):
+		return false
+	for perm in g.all_battlefield():
+		if perm.phased_out:
+			continue
+		for trig in perm.cur_triggered_abilities:
+			if trig.listens(Mtg.EventType.UPKEEP_START) \
+					and _is_flip(String(trig.text).to_lower()):
+				return true
+	return false
+
+
+## The kind to untap under "chooses artifact, creature, or land"
+## ([method AiPlayer.answer_option]; [param options] the engine's three
+## labels, [param hint] its default): the one whose untapping buys most
+## this turn — mana the hand still asks for, power that attacks, an
+## artifact that works. -1 when the question is not that one, or nothing
+## tells the kinds apart.
+static func untap_kind(g: MtgGame, pilot, options: Array, hint: int) -> int:
+	if not pilot.profile.forecasts_tactics or g.untap_kind_choices.is_empty() \
+			or options.size() != g.UNTAP_KINDS.size():
+		return -1
+	for index in options.size():
+		if String(options[index]) != String(g.UNTAP_KIND_LABELS[index]):
+			return -1
+	var pid: int = pilot.pid
+	var me = g.players[pid]
+	var open_mana := 0
+	var mana_of := {"artifact": 0, "creature": 0, "land": 0}
+	var other_of := {"artifact": 0.0, "creature": 0.0, "land": 0.0}
+	var their_attack := _attack_power(g, g.opponent_of(pid), null)
+	for perm in me.battlefield:
+		if perm.phased_out:
+			continue
+		var made: int = pilot._mana_per_tap(perm.cur_mana_abilities)
+		if not perm.tapped:
+			open_mana += made
+			continue
+		if perm.cur_skips_untap or perm.skip_next_untap or perm.skip_untaps > 0:
+			continue
+		var works := false
+		for ability in perm.cur_activated_abilities:
+			if ability.tap_cost:
+				works = true
+		for kind in g._untap_kinds(perm):
+			if not mana_of.has(kind):
+				continue
+			mana_of[kind] = int(mana_of[kind]) + made
+			if kind == "creature":
+				# It attacks again, and blocks when they have an attack.
+				var worth := float(maxi(perm.cur_power, 0))
+				if their_attack > 0:
+					worth += 1.0
+				if works:
+					worth += 1.0
+				other_of[kind] = float(other_of[kind]) + worth
+			elif kind == "artifact" and works and not perm.is_creature():
+				other_of[kind] = float(other_of[kind]) + 1.5
+	var want := -open_mana
+	for card in me.hand:
+		if not card.is_land():
+			want += card.data.cost.mana_value()
+	if pilot._has_ability_wanting_mana(g):
+		want += 2
+	var best := -1
+	var best_score := 0.0
+	for index in g.UNTAP_KINDS.size():
+		var kind := String(g.UNTAP_KINDS[index])
+		var score: float = float(clampi(want, 0, int(mana_of[kind]))) + float(other_of[kind])
+		if score > best_score or (score == best_score and score > 0.0 and index == hint):
+			best = index
+			best_score = score
+	return best
+
+
+## Is the main-phase mistake roll not taken ([method
+## AiPlayer._main_phase_action]): a rung that does not price a hand toll,
+## its hand over the limit of a squeeze — one card fewer is a point less at
+## our next upkeep?
+static func fumble_spared(g: MtgGame, pilot) -> bool:
+	if not pilot.profile.forecasts_tactics or pilot.profile.minds_the_vise \
+			or not g.has_trigger_listener(Mtg.EventType.UPKEEP_START):
+		return false
+	var size: int = g.players[pilot.pid].hand.size()
+	return size > 0 and hand_beat(g, pilot.pid, size, false) > hand_beat(g, pilot.pid, size - 1, false)
+
+
+## What the main-phase ranking charges [param inst] at a rung that does
+## not price a hand toll ([method AiPlayer._try_cast_best]): [constant
+## STRETCH_PRICE] a point of damage the smaller hand takes at each of our
+## next [constant PUNISH_TURNS] upkeeps. 0.0 with no stretch on the table,
+## and at the rungs that mind it.
+static func stretch_charge(g: MtgGame, pilot, inst: CardInstance) -> float:
+	if not pilot.profile.forecasts_tactics or pilot.profile.minds_the_vise \
+			or inst.zone != Mtg.Zone.HAND \
+			or not g.has_trigger_listener(Mtg.EventType.UPKEEP_START):
+		return 0.0
+	var size: int = g.players[pilot.pid].hand.size()
+	var more := hand_beat(g, pilot.pid, size - 1, false) - hand_beat(g, pilot.pid, size, false)
+	return float(more * PUNISH_TURNS) * STRETCH_PRICE if more > 0 else 0.0
+
+
+## The mana open to the pilot under a land cap: `[mana, open lands,
+## refill]`, or `[]` with no land cap in force.
+static func _stock(g: MtgGame, pilot) -> Array:
+	var refill := land_refill(g, pilot.pid)
+	if refill < 0:
+		return []
+	var open_lands := 0
+	var mana := 0
+	for perm in g.players[pilot.pid].battlefield:
+		if perm.tapped or perm.phased_out:
+			continue
+		var made: int = pilot._mana_per_tap(perm.cur_mana_abilities)
+		mana += made
+		if perm.is_land() and made > 0:
+			open_lands += 1
+	return [mana, open_lands, refill]
+
+
+## In our main phase under a land cap: is an activation worth [param
+## worth], paid with [param plan], refused — the lands it taps are kept
+## for a much better card the stock is about to reach?
+static func main_sink_refused(g: MtgGame, pilot, plan: Array, worth: float) -> bool:
+	if g.untap_caps.is_empty() or plan.is_empty() or not pilot.profile.forecasts_tactics \
+			or worth >= pilot.LETHAL_WORTH:
+		return false
+	var stock := _stock(g, pilot)
+	if stock.is_empty():
+		return false
+	var spent := 0
+	for step in plan:
+		var land: CardInstance = step[0]
+		if land != null and land.is_land():
+			spent += 1
+	return spent > 0 and _better_card_waits(g, pilot, null, int(stock[0]), spent,
+		int(stock[2]), maxf(worth, 0.0) * STOCK_EDGE)
+
+
+## Under a land cap: is the X spell [param inst], sized as [param sized]
+## ([method SpellTiming.sized_refusal]'s row), refused — the lands its X
+## taps are kept for a much better card the stock is about to reach?
+static func x_refusal(g: MtgGame, pilot, inst: CardInstance, sized: Dictionary) -> bool:
+	if g.untap_caps.is_empty() or not inst.data.cost.has_x:
+		return false
+	var stock := _stock(g, pilot)
+	if stock.is_empty():
+		return false
+	var cost: ManaCost = inst.data.cost
+	var price: int = cost.mana_value() + int(sized.get("x", 0)) * maxi(int(cost.x_count), 1)
+	var spent := clampi(price - (int(stock[0]) - int(stock[1])), 0, int(stock[1]))
+	return spent > 0 and _better_card_waits(g, pilot, inst, int(stock[0]), spent,
+		int(stock[2]), maxf(float(sized.get("value", 0.0)), 0.0) * STOCK_EDGE)

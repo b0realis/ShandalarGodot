@@ -193,8 +193,15 @@ var marked_damage_by_source: Dictionary = {}
 ## RegenerateEffect, consumed by MtgGame.destroy, expired at cleanup.
 var regeneration_shields: int = 0
 var regenerations_this_turn := 0
-## Shield index -> {beneficiary, controller}; only the consumed shield's
-## delayed draw triggers. Other shields remain independently selectable.
+## What rides on a shield, by shield index (a plain shield has no entry);
+## the creature's controller chooses which shield a destruction uses
+## (CR 616.1, [method MtgGame.destroy]) and only that one's rider applies.
+## {beneficiary, controller}: Soldevi Sentry's delayed draw.
+## {rider, label[, wanted]}: a "regenerates this way" rider (Matopi Golem,
+## Debt of Loyalty, Skeleton Scavengers) — `rider` is the id its delayed
+## trigger answers to (the REGENERATED event carries the used entry as
+## "shield"), `label` what the choice shows, `wanted` that the default
+## answer prefers it.
 var regeneration_draws: Dictionary = {}
 
 ## "This creature can't be regenerated this turn" (Hurr Jackal,
@@ -675,6 +682,14 @@ var last_toughness: int = 0
 var last_types: int = 0
 var last_colors: int = 0
 var last_subtypes: Array[String] = []
+## LAST KNOWN INFORMATION for a SPELL that left the stack without resolving
+## (CR 608.2h): the colors it had as it left — countered, exiled or put
+## into a graveyard from the stack — and the id of the stack object it
+## was ([member StackItem.id]), so a reader knows it is describing that
+## cast and no other. Written by [method MtgGame._spell_leaves_stack];
+## read by "that spell's colors" (Opal Titan).
+var last_stack_colors: int = 0
+var last_stack_item: int = -1
 ## Attachment at departure, for simultaneous leaves-the-battlefield triggers.
 var last_attached_to: int = -1
 ## Pack 9 E1 — the live KEYWORDS it had as it left (CR 608.2h / 603.10a):

@@ -73,7 +73,7 @@ func test_every_pack_8_ledger_adaptation_has_a_plain_words_entry() -> void:
 	var text := _text(page)
 	# docs/simplified-cards.md (Pack 8 rows) and docs/ROADMAP.md (the three
 	# engine-wide Pack 8 rows), each by the card a player meets.
-	for phrase in ["Debt of Loyalty", "Matopi Golem", "uses the plain shield first",
+	for phrase in ["Debt of Loyalty", "Matopi Golem", "uses the plain shield first", "its controller chooses which shield",
 			"Mind Bend", "Magical Hack", "Sleight of Mind",
 			"Shadowbane", "Honorable Passage", "separately for each creature or player",
 			"phase out at the same moment", "Gravebane Zombie", "Forbidden Crypt"]:

@@ -4,8 +4,8 @@ extends CardScript
 ##         • You put a +1/+1 counter on each creature you control and gain 4 life.
 ##         • You put a -1/-1 counter on each creature that player controls and Misfortune deals 4 damage to that player.
 ## Trusted optional Pack 5 implementation; ZIPs never provide scripts.
-## SIMPLIFIED: the opponent chooses the mode on resolution, not announcement.
-## See docs/simplified-cards.md; the shared handler also exposes this in-game.
+## The opponent chooses the mode as the spell is cast (CR 601.2b):
+## CardData.opponent_modes, set by the shared handler (_choices.gd).
 
 func build() -> CardData:
 	var c := CardData.new("Misfortune", "{1}{B}{R}{G}", Mtg.CardType.SORCERY)

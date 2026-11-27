@@ -350,7 +350,8 @@ func _main_phase_action(game: MtgGame) -> String:
 	# fix-ai-c).
 	if profile.mistake_chance > 0.0 \
 			and game.rng.randf() < profile.mistake_chance \
-			and not _fumble_spares_the_pool(game) and not _fumble_spares_lethal(game):
+			and not _fumble_spares_the_pool(game) and not _fumble_spares_lethal(game) \
+			and not OWN_GOAL.fumble_spared(game, self):   # over a Vise's limit (own_goal.gd, 2026-11-27)
 		return ""
 	# THE LIFE ALREADY SOLD (2026-09-10, AiProfile.reads_lethal_x): a
 	# life-for-mana grant is open and the burn in hand ends the game with
@@ -1277,6 +1278,7 @@ func _try_cast_best(game: MtgGame) -> String:
 		# dormant Opals our spell wakes, the echo it commits next upkeep to
 		# (urza_spells.gd `cast_adjustment`).
 		value += URZA_SPELLS.cast_adjustment(game, self, inst, sources)
+		value -= OWN_GOAL.stretch_charge(game, self, inst)   # a rung that does not mind the Rack (own_goal.gd, 2026-11-27)
 		if profile.forecasts_tactics and _aims_at_own_fragile(game, targets):
 			continue   # our own Skulking Ghost would be sacrificed (Pack 8)
 		if not _cost_spares_targets(game, inst, targets, mode, x):
@@ -3001,6 +3003,8 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN,
 			if option.is_empty() \
 					or float(option["value"]) < float(option.get("bar", bar)):
 				continue
+			if moment == Moment.MAIN and OWN_GOAL.main_sink_refused(game, self, plan, float(option["value"])):
+				continue   # under a land cap the stock is kept for the better card (own_goal.gd, 2026-11-27)
 			if profile.forecasts_tactics and _aims_at_own_fragile(game, option.get("targets", [])):
 				continue   # our own Skulking Ghost would be sacrificed (Pack 8)
 			if not reserve.is_empty() and float(option["value"]) < float(reserve["value"]) * 1.5 \
@@ -3308,6 +3312,7 @@ func _ability_option(game: MtgGame, inst: CardInstance, index: int, moment: int)
 		expansion = MIRAGE_TACTICS.option(game, self, inst, index, Moment.keys()[moment])
 	if expansion == null:
 		expansion = preload("res://engine/ai/second_age_tactics.gd").option(game, self, inst, index)
+	expansion = COMBAT_READS.one_turn_option(game, self, inst, index, Moment.keys()[moment], expansion)   # a body for one turn, when it can be used (combat_reads.gd)
 	# THE RESPONSE MOMENT admits an expansion reading and, since 2026-09-26,
 	# the two prison readings whose only moment it is: the life that keeps
 	# us alive as their attack is declared ([member AiProfile.buys_life])
@@ -14762,7 +14767,7 @@ func _is_harmful(source: CardInstance, effect: EffectBase) -> bool:
 		return false
 	# A PRINTED GIFT the reader has no model for ("Target creature gets
 	# +0/+X …"; spell_timing.gd `trick_of`, forecasts_tactics).
-	if profile.forecasts_tactics and effect != null and SPELL_TIMING.trick_of(source.data) != 0:
+	if profile.forecasts_tactics and effect != null and SPELL_TIMING.aims_home(source.data):
 		return false
 	# Card-local custom effects: ask the READER, which knows the ones the
 	# CARD_LOCAL table names (a Twiddle taps, so it points across the
@@ -15444,6 +15449,11 @@ func answer_option(game: MtgGame, p_pid: int, prompt: String, options: Array[Str
 		var order := _damage_order_pick(game, options, hint)
 		if order >= 0:
 			return order
+		# The kind to untap under a Storage Matrix (own_goal.gd, 2026-11-27).
+		var kind: int = -1 if game.untap_kind_choices.is_empty() \
+			else OWN_GOAL.untap_kind(game, self, options, hint)
+		if kind >= 0:
+			return kind
 	if p_pid == pid and profile.forecasts_tactics and game.current_resolution_source() == "Deflection" \
 			and prompt == "Deflection: choose the spell's new target":
 		var refs := game.current_targets()

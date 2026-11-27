@@ -22287,6 +22287,73 @@ forecast, behind `AiProfile.forecasts_tactics`.
   cap main-phase activations and X spells are as before; activation
   timing of Zirilan, Echo Chamber and Balduvian Dead.
 
+## 2026-11-27 — Version 0.70.15
+
+Version 0.70.15 (Android version code 70015). Its notes are
+`docs/releases/0.70.15.md`. LAN stays protocol 32; saves stay v9. The
+"Left" list of 0.70.14 and the fidelity ledger, on the owner's word
+("fix all"; "examine the simplified card list. If we can move some of
+them to properly implemented cards").
+
+- **The ledger (`docs/simplified-cards.md`), three lifts:**
+  - Opal Titan's row is gone: a spell that leaves the stack unresolved
+    is read as it last existed there (`CardInstance.last_stack_colors`,
+    `last_stack_item`; `MtgGame._spell_leaves_stack`).
+  - "Regenerates this way" (Debt of Loyalty, Matopi Golem, Skeleton
+    Scavengers): each shield carries its rider and the creature's
+    controller chooses which shield a destruction uses ("Which
+    regeneration shield?"; identical shields are not asked about). The
+    row stays, narrowed: for lethal COMBAT damage a human seat is not
+    asked (no hold on the combat damage step's deaths). Soldevi Sentry
+    had the same gap unrecorded; it is marked and named in the row.
+  - "An opponent chooses one —" (Library of Lat-Nam, Misfortune, Fatal
+    Lore): the opponent chooses as the spell is cast
+    (`CardData.opponent_modes`, a cost-time question put to the other
+    seat; the answer rides the stack item, a copy keeps it). Fatal
+    Lore's row stays for its creatures, chosen on resolution.
+  - Examined and left: Illusionary Mask's colors of X (a record of what
+    paid, and a computer that taps the right colors), Game of Chaos's
+    cap, Timmerian Fiends' tokens, Shahrazad, Word of Command; by ruling
+    or by nature Balduvian Shaman, the text changes, Chaos Orb, Falling
+    Star.
+- **Spell timing (`SpellTiming`):** a shield for one creature is cast in
+  answer to a spell or ability on the stack that names the pilot's own
+  creature, when the stack resolves about a card better with it; a
+  death insurance likewise, or in a declared combat once blocks are
+  known; a power/toughness switch only where it changes who dies or
+  wins, and in the pilot's main phase only to kill a creature of no
+  power. The shield check read ". " as the only sentence end, so a
+  buyback line swallowed what followed it (Anoint).
+- **Combat (`CombatReads`):** a spell or ability that makes a creature
+  for one turn is read off its own line and a forecast (the body's
+  scheduled loss from the delayed triggers): in the pilot's first main
+  phase only for a body that can attack and is not stopped cold, in a
+  declared attack when the block it buys beats its costs. Corpse Dance
+  keeps its old price for the main-phase cast and gains the refusal and
+  the block; Zirilan of the Claw had no reading at all.
+- **Locks and taxes (`OwnGoal`):** a lock a creature carries (Marble
+  Titan), Storage Matrix (and its untap-step answer, `untap_kind`),
+  Sands of Time, Mana Breach, Mana Vortex and Spellshock are priced for
+  both sides; under a land cap a main-phase sink and an X spell wait
+  for a better card within two turns. The Apprentice and the Magician
+  do not take their main-phase mistake while over a Vise's limit and
+  charge a small spell under a Rack (`minds_the_vise` itself stays a
+  Sorcerer's, as `docs/ai-difficulty.md` has it).
+- **Left:**
+  - A human seat's shield choice on combat damage (a hold like
+    `_hold_draw_step`); Fatal Lore's creatures as real targets.
+  - The computer choosing an opponent's mode from the board, and a
+    shield worth saving.
+  - A Purelaced creature spell that is countered still reads white in
+    the graveyard (seen, not examined).
+  - Anoint and Temper in combat; Death Ward and Debt of Loyalty in
+    answer to removal; a switch at the other player's end step.
+  - Sneak Attack and Apprentice Necromancer as blockers; Varchild's
+    Crusader and Barbarian Guides are never activated.
+  - Casting its own Spellshock, Oppression, Nether Void, Bazaar of
+    Wonders; attacks under Sands of Time or Marble Titan; X permanents
+    under a land cap.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

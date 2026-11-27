@@ -3944,6 +3944,32 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 	_withdraw_caster(inst, owner_seat)
 	if not adverse_filled:
 		return ""
+	# "An opponent chooses one —" ([member CardData.opponent_modes]): the
+	# mode is the opponent's to choose during the announcement (CR 601.2b),
+	# asked like their target above — after every refusal, before anything
+	# is paid, a human opponent held on it and the cast re-issued.
+	var opponent_mode := -1
+	if not inst.data.opponent_modes.is_empty():
+		var mode_chooser := opponent_of(pid)
+		var mode_labels: Array[String] = []
+		mode_labels.assign(inst.data.opponent_modes)
+		var mode_hint := 0
+		if inst.data.opponent_mode_hint.is_valid():
+			mode_hint = clampi(int(inst.data.opponent_mode_hint.call(self, inst, pid)),
+				0, mode_labels.size() - 1)
+		var mode_q := _cost_question(mode_chooser, inst, PlayerChoice.Kind.OPTION,
+			"%s — choose" % inst.data.card_name)
+		mode_q.options = mode_labels
+		mode_q.adverse = true
+		mode_q.hint = mode_hint
+		if _hold_cost_choice(mode_q, {"kind": "cast", "pid": pid, "inst": inst,
+				"targets": targets, "x": x_value, "mode": mode}):
+			return ""
+		var outer_cost_source := _cost_source
+		_cost_source = inst.data.card_name
+		opponent_mode = clampi(agents[mode_chooser].choose_option(self, mode_chooser,
+			mode_labels, mode_q.prompt, mode_hint, true), 0, mode_labels.size() - 1)
+		_cost_source = outer_cost_source
 	var drought_groups: Array = []
 	if not extra_bodies.is_empty(): drought_groups.append({"bodies": extra_bodies, "count": 1})
 	var drought_picks := BLACK_SYMBOL_COST.choose(self, pid, inst, inst.data.cost,
@@ -4094,6 +4120,11 @@ func cast_spell(pid: int, inst: CardInstance, targets: Array = [], x_value := 0,
 		item.description += " (%s)" % find_instance(int(alternate["granted_by"])).data.card_name
 	if bool(alternate.get("buyback", false)):
 		item.description += " with buyback"
+	if opponent_mode >= 0:
+		# The opponent's mode is public from the announcement on.
+		item.cost_paid["_opponent_mode"] = opponent_mode
+		item.description += " — %s chose: %s" % [players[opponent_of(pid)].player_name,
+			inst.data.opponent_modes[opponent_mode]]
 	if undo_log != null:
 		_rec(self, &"stack")
 		_rec(self, &"_next_stack_id")
@@ -8205,13 +8236,33 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 		recalculate()
 		return
 	if can_regenerate and inst.regeneration_shields > 0:
+		# WHICH SHIELD (CR 616.1): several regeneration effects could each
+		# replace this destruction, and the creature's controller chooses
+		# the one that does. Shields differ only by what rides on them
+		# ([member CardInstance.regeneration_draws]: Soldevi Sentry's draw,
+		# a "regenerates this way" rider — Matopi Golem, Debt of Loyalty,
+		# Skeleton Scavengers), so shields that all carry the same rider
+		# are not asked about.
 		var selected := 0
-		if not inst.regeneration_draws.is_empty() and inst.regeneration_shields > 1:
+		if not inst.regeneration_draws.is_empty() and inst.regeneration_shields > 1 \
+				and not _regeneration_shields_alike(inst):
 			var labels: Array[String] = []
 			var hint := 0
+			var wanted := -1
+			var riders := false
+			for index in inst.regeneration_draws:
+				if (inst.regeneration_draws[index] as Dictionary).has("label"): riders = true
 			for index in inst.regeneration_shields:
-				labels.append("Regenerate; opponent may draw" if inst.regeneration_draws.has(index) else "Regenerate without a draw")
-				if not inst.regeneration_draws.has(index): hint = index
+				var entry: Dictionary = inst.regeneration_draws.get(index, {})
+				if entry.has("label"):
+					labels.append(String(entry["label"]))
+					if wanted < 0 and bool(entry.get("wanted", false)): wanted = index
+				elif not entry.is_empty():
+					labels.append("Regenerate; opponent may draw")
+				else:
+					labels.append("Regenerate; nothing more" if riders else "Regenerate without a draw")
+					hint = index
+			if wanted >= 0: hint = wanted
 			selected = agents[inst.controller_id].choose_option(self, inst.controller_id, labels, "Which regeneration shield?", hint)
 		var reward: Dictionary = inst.regeneration_draws.get(selected, {})
 		_rec(inst, &"regeneration_draws")
@@ -8242,10 +8293,12 @@ func destroy(inst: CardInstance, can_regenerate := true) -> void:
 		# no trample, deals no damage at all.
 		remove_from_combat(inst)
 		log_line("%s regenerates" % inst.data.card_name)
-		if not reward.is_empty():
+		if reward.has("beneficiary"):
 			var trigger := TriggeredAbility.new(Mtg.EventType.REGENERATED, _optional_regeneration_draw.bind(int(reward.beneficiary)), "That opponent may draw a card.")
 			schedule_delayed_trigger(trigger, int(reward.controller), inst)
-		dispatch_event(Mtg.EventType.REGENERATED, {"instance": inst, "controller": inst.controller_id})
+		# "shield": what rode on the shield that was used ({} for a plain
+		# one) — a "regenerates this way" rider answers only its own.
+		dispatch_event(Mtg.EventType.REGENERATED, {"instance": inst, "controller": inst.controller_id, "shield": reward})
 		# The tap must feed conditional statics (Castle) NOW, and it is a
 		# real "becomes tapped" event (CR 701.15c tap → 603.2).
 		recalculate()
@@ -8267,6 +8320,23 @@ func sacrifice_permanent(inst: CardInstance) -> void:
 	log_line("%s is sacrificed" % inst.data.card_name, inst)
 	_move_to_graveyard(inst, true, true)
 
+## Do all of [param inst]'s regeneration shields carry the same "this
+## way" rider (two activations of Matopi Golem)? Then which one is used
+## makes no difference and nobody is asked. Shields without a labelled
+## rider are asked about as before.
+func _regeneration_shields_alike(inst: CardInstance) -> bool:
+	var first := ""
+	for index in inst.regeneration_shields:
+		var entry: Dictionary = inst.regeneration_draws.get(index, {})
+		if not entry.has("label"):
+			return false
+		if index == 0:
+			first = String(entry["label"])
+		elif String(entry["label"]) != first:
+			return false
+	return true
+
+
 static func _optional_regeneration_draw(g: MtgGame, _s: CardInstance, _event: GameEvent, who: int) -> void:
 	if g.agents[who].choose_yes_no(g, who, "Draw a card after that creature regenerated?", not g.players[who].library.is_empty()): g.draw_cards(who, 1)
 
@@ -8283,6 +8353,17 @@ static func _optional_regeneration_draw(g: MtgGame, _s: CardInstance, _event: Ga
 func _forget_x(inst: CardInstance) -> void:
 	_rec(inst, &"memory")
 	inst.memory.erase("x_value")
+
+
+## A spell is leaving the stack WITHOUT resolving (countered, exiled, put
+## into a graveyard): keep what it last was there (CR 608.2h) — see
+## [member CardInstance.last_stack_colors]. Called while it is still the
+## stack object [param item], before anything about it is reset.
+func _spell_leaves_stack(inst: CardInstance, item: StackItem) -> void:
+	_rec(inst, &"last_stack_colors")
+	_rec(inst, &"last_stack_item")
+	inst.last_stack_colors = inst.cur_colors
+	inst.last_stack_item = item.id
 
 
 ## Counter a spell on the stack (CR 701.5a): its stack item vanishes, the
@@ -8315,6 +8396,7 @@ func counter_spell(inst: CardInstance, destination: int = Mtg.Zone.GRAVEYARD,
 	for i in range(stack.size() - 1, -1, -1):
 		if stack[i].kind == Mtg.StackKind.SPELL and stack[i].card == inst:
 			caster = stack[i].controller
+			_spell_leaves_stack(inst, stack[i])
 			stack.remove_at(i)
 			break
 	log_line("%s is countered" % inst.data.card_name, inst)
@@ -10421,7 +10503,9 @@ func card_to_graveyard_from_anywhere(inst: CardInstance) -> void:
 	if inst.zone == Mtg.Zone.STACK:
 		_rec(self, &"stack")
 		for index in range(stack.size() - 1, -1, -1):
-			if stack[index].kind == Mtg.StackKind.SPELL and stack[index].card == inst: stack.remove_at(index)
+			if stack[index].kind == Mtg.StackKind.SPELL and stack[index].card == inst:
+				_spell_leaves_stack(inst, stack[index])
+				stack.remove_at(index)
 		_forget_x(inst)
 		_spell_goes_home(inst)
 	_remove_from_zone(inst)
@@ -18962,6 +19046,7 @@ func exile_spell_from_stack(spell: CardInstance, counter_kind := "",
 	var snapshot := item.snapshot()
 	snapshot["memory"] = spell.memory.duplicate(true)
 	snapshot["incarnations"] = _p9e6_target_incarnations(item)
+	_spell_leaves_stack(spell, item)
 	_rec(self, &"stack")
 	stack.erase(item)
 	if spell.is_copy:

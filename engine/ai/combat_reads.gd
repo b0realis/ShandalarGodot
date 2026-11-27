@@ -43,6 +43,20 @@ extends RefCounted
 ##  * THE GANG A TRAMPLER INVITES ([method through_gangs]): a lethal push
 ##    counted with one blocker per attacker is counted again with as many
 ##    as the defender can put before a trampler.
+##  * THE ABILITY THAT MAKES SUCH A BODY ("{1}{R}{R}, {T}: Search your
+##    library for a Dragon permanent card, put that card onto the
+##    battlefield … Exile it at the beginning of the next end step.",
+##    "Create a 3/1 … Graveborn creature token with haste. Sacrifice it at
+##    the beginning of the next end step."): read off the ability's own
+##    line ([method one_turn_line]) and then off the engine — the
+##    activation is forecast under the search journal and the new body's
+##    scheduled loss is read as above. It is activated in our first main
+##    phase for a body that can attack and is not stopped cold ([method
+##    one_turn_option], a line of [method AiPlayer._ability_option]), or
+##    into their declared attack when the block it buys is worth its
+##    costs ([method ambush]), and at no other moment. A spell another
+##    reading owns the main-phase cast of (Corpse Dance) is given the cold
+##    stop and the ambush too ([method made_for_a_turn]).
 ##
 ## All of it behind [member AiProfile.forecasts_tactics], which every
 ## standard rung ships on: the gate off is the pilot as it was. A table
@@ -407,14 +421,18 @@ static func made_fleeting(data: CardData) -> Dictionary:
 	return made
 
 
+static func _maker_line() -> RegEx:
+	if _maker_rx == null:
+		_maker_rx = RegEx.create_from_string(
+			"(exile|sacrifice|destroy) (it|them|the tokens?|those tokens|that creature|those creatures) at the beginning of the next (end|cleanup) step")
+	return _maker_rx
+
+
 static func _read_maker(data: CardData) -> Dictionary:
 	if data.is_permanent_type() or data.is_modal() or data.oracle_text.is_empty():
 		return {}
 	var text := data.oracle_text.to_lower()
-	if _maker_rx == null:
-		_maker_rx = RegEx.create_from_string(
-			"(exile|sacrifice|destroy) (it|them|the tokens?|those tokens|that creature|those creatures) at the beginning of the next (end|cleanup) step")
-	if _maker_rx.search(text) == null:
+	if _maker_line().search(text) == null:
 		return {}
 	var token: CardData = null
 	var count := 0
@@ -432,6 +450,37 @@ static func _read_maker(data: CardData) -> Dictionary:
 	if text.contains("return the top creature card of your graveyard to the battlefield"):
 		return {"returns": true, "haste": text.contains("haste")}
 	return {}
+
+
+## [method made_fleeting], and also the spell of the same printed line
+## whose main-phase cast ANOTHER reading owns (an effect with a role, a
+## buyback row beside the printed one — Corpse Dance): that reading still
+## says what the cast is worth before our combat; this one adds the moment
+## it left out (their declared attack, [method ambush]) and the blocker
+## that stops the body cold. Such a row carries [code]owned[/code].
+static func made_for_a_turn(data: CardData) -> Dictionary:
+	var made := made_fleeting(data)
+	if not made.is_empty() or data.is_permanent_type() or data.oracle_text.is_empty():
+		return made
+	_makers_lock.lock()
+	var owned: Variant = _owned_makers.get(data.card_name)
+	if owned == null:
+		owned = {}
+		var text := data.oracle_text.to_lower()
+		var aimed := false
+		for e in data.spell_effects:
+			if e.target_spec != null:
+				aimed = true
+		if not aimed and _maker_line().search(text) != null \
+				and (not data.is_modal() or AiPlayer._payment_rows_only(data)) \
+				and text.contains("return the top creature card of your graveyard to the battlefield"):
+			owned = {"returns": true, "haste": text.contains("haste"), "owned": true}
+		_owned_makers[data.card_name] = owned
+	_makers_lock.unlock()
+	return owned
+
+
+static var _owned_makers: Dictionary = {}
 
 
 ## The body [param made] would put on [param pid]'s side now, as printed:
@@ -452,7 +501,7 @@ static func made_body(g: MtgGame, pid: int, made: Dictionary) -> CardData:
 ## can attack; on theirs it is their declared attack, before our blocks
 ## ([method ambush] asks what the blocks are worth).
 static func _maker_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
-	var made := made_fleeting(inst.data)
+	var made := made_for_a_turn(inst.data)
 	if made.is_empty():
 		return ""
 	var body := made_body(g, pilot.pid, made)
@@ -497,13 +546,14 @@ static func ambush(g: MtgGame, pilot) -> String:
 	var pid: int = pilot.pid
 	var candidates: Array[CardInstance] = []
 	for inst in g.players[pid].hand:
-		if inst.data.is_permanent_type() or made_fleeting(inst.data).is_empty():
+		if inst.data.is_permanent_type() or made_for_a_turn(inst.data).is_empty():
 			continue
 		if not g.casts_at_instant_speed(pid, inst) or pilot._refused.has(str(inst.id)) \
 				or pilot._cast_gate(g, inst) != "":
 			continue
 		candidates.append(inst)
-	if candidates.is_empty():
+	var makers := _block_makers(g, pilot)   # [permanent, ability index] rows
+	if candidates.is_empty() and makers.is_empty():
 		return ""
 	var sources: Array = pilot._mana_sources(g)
 	var base := defence_worth(g, pilot)
@@ -519,10 +569,31 @@ static func ambush(g: MtgGame, pilot) -> String:
 		if after <= LOST_GAME:
 			continue
 		var gain := after - base
-		if gain < maxf(AMBUSH_BAR, Evaluator.card_value(inst.data)) or gain <= best_gain:
+		# A card that comes back to the hand (its buyback row, paid by the
+		# pilot's own rule in [method AiPlayer._cast_response]) is not spent.
+		var bar := AMBUSH_BAR if inst.data.has_buyback() and pilot._buyback_row(g, inst.data) >= 0 \
+			else maxf(AMBUSH_BAR, Evaluator.card_value(inst.data))
+		if gain < bar or gain <= best_gain:
 			continue
 		best = inst
 		best_gain = gain
+	# The permanent whose ability makes the blocker: no card is spent, so
+	# the block answers to what the activation costs.
+	var best_maker: Array = []
+	for row in makers:
+		var source: CardInstance = row[0]
+		var ability: ActivatedAbility = source.cur_activated_abilities[int(row[1])]
+		var read := _activation_forecast(g, pilot, source, int(row[1]), [], true)
+		if not bool(read["made"]) or float(read["worth"]) <= LOST_GAME:
+			continue
+		var gain := float(read["worth"]) - base - float(read["costs"]) \
+			- maxf(ability.cost.mana_value() - 1, 0.0) * 0.5
+		if gain < BLOCK_BAR or gain <= best_gain:
+			continue
+		best_maker = row
+		best_gain = gain
+	if not best_maker.is_empty():
+		return _activate(g, pilot, best_maker[0], int(best_maker[1]))
 	if best == null:
 		return ""
 	return pilot._cast_response(g, best, [], 0, "cast %s for its blockers" % best.data.card_name)
@@ -696,3 +767,227 @@ static func _gang_search(stopped: Array, powers: PackedInt32Array, gangs: Packed
 		soaked[i] -= held
 		taken[i] -= 1
 	_gang_search(stopped, powers, gangs, soaked, taken, column + 1, columns, state)
+
+
+# ------------------------------------- the ability that makes such a body --
+
+## A card taken out of our library for one turn's body, and a card of our
+## graveyard paid for one (the house price of graveyard fuel).
+const LIBRARY_CARD_PRICE := 0.25
+const GRAVE_CARD_PRICE := 0.25
+## A library this small is the clock: no card leaves it for one attack.
+const THIN_LIBRARY := 7
+## What the block an activation buys must be worth over its costs (the
+## response moment's own bar, [constant AiPlayer.ABILITY_BAR_UPKEEP]).
+const BLOCK_BAR := 2.0
+
+static var _lines: Dictionary = {}
+static var _line_makes_rx: RegEx = null
+static var _line_loses_rx: RegEx = null
+
+
+## Does an ability's own line ([param text]) make a creature that leaves at
+## the end of the turn — "Create …" or "… (on)to the battlefield", then
+## "Exile / Sacrifice / Destroy it (the token, the creature) at the
+## beginning of the next end step"? The cheap question; the engine answers
+## the real one ([method _activation_forecast]). An ability that dooms its
+## own source ("this creature may attack …; exile it at the next end
+## step") makes nothing and is not one.
+static func one_turn_line(text: String) -> bool:
+	_makers_lock.lock()
+	var known: Variant = _lines.get(text)
+	if known == null:
+		if _line_makes_rx == null:
+			_line_makes_rx = RegEx.create_from_string("\\bcreate |onto the battlefield|to the battlefield")
+			_line_loses_rx = RegEx.create_from_string(
+				"(exile|sacrifice|destroy) (it|them|the tokens?|that token|the creature|that creature)[^.;]* at the (beginning of the )?next end step|at the beginning of the next end step, (exile|sacrifice|destroy) (it|them)")
+		var line := text.to_lower()
+		known = _line_makes_rx.search(line) != null and _line_loses_rx.search(line) != null
+		_lines[text] = known
+	_makers_lock.unlock()
+	return known
+
+
+## WHEN SUCH AN ABILITY IS ACTIVATED — a line of [method
+## AiPlayer._ability_option], asked after the older readings: [param old]
+## is their answer (null: none of them knows the ability; {}: one refused
+## it) and comes back unchanged for any other ability. The moment is our
+## first main phase with the stack empty and an attack ahead; at every
+## other one the body would vanish unused (their declared attack is
+## [method ambush]'s). There the activation is forecast: no body that
+## leaves tonight, and the older answer stands; a body that can neither
+## attack to any effect nor has an arrival or a departure of its own to
+## be made for, and the mana (the graveyard card, the library card) stays.
+## An ability no older reading prices (Zirilan of the Claw) is worth the
+## attack it buys, less the attack its own tap gives up and the cards it
+## costs, at the bar of an ability with no other moment.
+static func one_turn_option(g: MtgGame, pilot, inst: CardInstance, index: int, moment: String,
+		old: Variant) -> Variant:
+	if not pilot.profile.forecasts_tactics:
+		return old
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	if not one_turn_line(ability.text):
+		return old
+	if old is Dictionary and (old as Dictionary).is_empty():
+		return old
+	var pid: int = pilot.pid
+	if moment != "MAIN" or g.active_player != pid or g.current_step() != Mtg.Step.MAIN1 \
+			or g.no_attacks_this_turn or not g.stack.is_empty():
+		return {}
+	var targets: Array = (old as Dictionary).get("targets", []) if old is Dictionary else []
+	if old == null:
+		for e in ability.effects:
+			if e.target_spec != null:
+				return old   # nothing here aims it
+	var read := _activation_forecast(g, pilot, inst, index, targets, false)
+	if not bool(read["made"]):
+		return old
+	var attack := float(read["attack"])
+	if attack <= 0.0 and not bool(read["point"]):
+		return {}
+	if old != null:
+		return old
+	if attack <= 0.0:
+		return {}
+	if int(read["library"]) > 0 and attack < -LOST_GAME \
+			and g.players[pid].library.size() <= THIN_LIBRARY:
+		return {}
+	return {"value": attack - float(read["forgone"]) - float(read["costs"]), "targets": [],
+		"bar": pilot.ABILITY_BAR_SINK}
+
+
+## One activation of [param inst]'s ability [param index], forecast under
+## the search journal (mana lent, the pilot answering its own choices, a
+## plain agent the other seat's, everything put back): [code]made[/code]
+## — did a creature arrive on our side that is lost at the end of the
+## turn; [code]attack[/code] — what such bodies' attack is worth now (the
+## power of each that may attack and is not stopped cold; the game when
+## that is their life and nothing of theirs can block it);
+## [code]point[/code] — a body with an arrival or a departure of its own;
+## [code]forgone[/code] — the attack the source's own {T} gives up;
+## [code]costs[/code] — the cards the activation took from our hand (at
+## their value), our graveyard and our library ([code]library[/code], how
+## many); and, [param defending], [code]worth[/code] — [method
+## defence_worth] of the board it leaves.
+static func _activation_forecast(g: MtgGame, pilot, inst: CardInstance, index: int,
+		targets: Array, defending: bool) -> Dictionary:
+	var pid: int = pilot.pid
+	var foe := g.opponent_of(pid)
+	var me := g.players[pid]
+	var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+	var out := {"made": false, "attack": 0.0, "point": false, "forgone": 0.0, "costs": 0.0,
+		"library": 0, "worth": LOST_GAME}
+	if not defending and ability.tap_cost and inst.is_creature() and inst.cur_power > 0 \
+			and CombatState.attack_illegality(g, inst, foe) == "" and not stopped_cold(g, pilot, inst):
+		out["forgone"] = float(inst.cur_power)
+	var before := {}
+	for body in me.battlefield:
+		before[body.id] = true
+	var hand: Array = me.hand.duplicate()
+	var library := me.library.size()
+	var grave := me.graveyard.size()
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec_turn()
+	g._rec(g, &"agents")
+	var seats: Array[DecisionAgent] = [DecisionAgent.new(), DecisionAgent.new()]
+	seats[pid] = pilot
+	g.agents = seats
+	for color in [1, 2, 4, 8, 16, 32]:
+		me.mana_pool.add(color, 60)
+	var depth := g.stack.size()
+	var step := g.current_step()
+	if g.activate_ability(pid, inst, index, targets, 0) == "":
+		var guard := 0
+		var stuck := false
+		while g.stack.size() > depth and not g.game_over and guard < 60:
+			if g.pass_priority(g.priority_player) != "":
+				stuck = true
+				break
+			guard += 1
+		if not stuck and not g.game_over and g.stack.size() <= depth and g.current_step() == step:
+			for body in me.battlefield:
+				if before.has(body.id) or not body.is_creature() or fleeting(g, body) != LOST:
+					continue
+				out["made"] = true
+				for trigger in body.cur_triggered_abilities:
+					if trigger.event_type in [Mtg.EventType.ENTERS_BATTLEFIELD,
+							Mtg.EventType.LEAVES_BATTLEFIELD, Mtg.EventType.DIES]:
+						out["point"] = true
+				if defending or body.cur_power <= 0 \
+						or CombatState.attack_illegality(g, body, foe) != "" \
+						or stopped_cold(g, pilot, body):
+					continue
+				var blocked := false
+				for blocker in g.players[foe].battlefield:
+					if blocker.is_creature() and not blocker.tapped and not blocker.phased_out \
+							and CombatState.block_illegality(g, blocker, body, foe, true, pid) == "":
+						blocked = true
+						break
+				out["attack"] = float(out["attack"]) + (-LOST_GAME if not blocked \
+					and body.cur_power >= g.players[foe].life else float(body.cur_power))
+			if bool(out["made"]):
+				var costs := 0.0
+				for card in hand:
+					if not me.hand.has(card):
+						costs += Evaluator.card_value(card.data)
+				out["library"] = maxi(library - me.library.size(), 0)
+				costs += float(out["library"]) * LIBRARY_CARD_PRICE
+				costs += float(maxi(grave - me.graveyard.size(), 0)) * GRAVE_CARD_PRICE
+				out["costs"] = costs
+				if defending:
+					out["worth"] = defence_worth(g, pilot)
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	return out
+
+
+## Our permanents' abilities that may make a blocker now: the line, no aim
+## and no X, the pilot's own availability check, the engine's activation
+## rules (a sorcery-speed one answers no) and the mana on the table.
+static func _block_makers(g: MtgGame, pilot) -> Array:
+	var out: Array = []
+	var pid: int = pilot.pid
+	var sources: Variant = null
+	for inst in g.players[pid].battlefield:
+		for index in inst.cur_activated_abilities.size():
+			var ability: ActivatedAbility = inst.cur_activated_abilities[index]
+			if not one_turn_line(ability.text) or ability.cost.has_x:
+				continue
+			var aimed := false
+			for e in ability.effects:
+				if e.target_spec != null:
+					aimed = true
+			if aimed or not pilot._ability_available(g, inst, index, true) \
+					or g.activation_refusal(pid, inst, index) != "":
+				continue
+			if sources == null:
+				sources = pilot._mana_sources(g)
+			var own: Array = sources
+			if ability.tap_cost:
+				own = own.filter(func(row: Array) -> bool: return row[0] != inst)
+			var payment := g.ability_payment(pid, inst, index, 0)
+			if not (pilot._cost_is_free(payment.cost) and int(payment.extra) == 0) \
+					and pilot._plan_taps_from(own, payment.cost, int(payment.extra), payment.usage).is_empty() \
+					and not g.players[pid].mana_pool.can_pay(payment.cost, int(payment.extra), payment.usage):
+				continue
+			out.append([inst, index])
+	return out
+
+
+## Pay for and activate [param source]'s untargeted ability [param index],
+## as the tail of [method AiPlayer._try_activate] does.
+static func _activate(g: MtgGame, pilot, source: CardInstance, index: int) -> String:
+	var pid: int = pilot.pid
+	var ability: ActivatedAbility = source.cur_activated_abilities[index]
+	var payment := g.ability_payment(pid, source, index, 0)
+	if not pilot._plan_and_pay(g, payment.cost, int(payment.extra), payment.usage,
+			pilot._spared_for(g, source, ability, [])):
+		return ""
+	var err := g.activate_ability(pid, source, index, [], 0)
+	if err != "":
+		g.log_line("(AI activation of %s refused: %s)" % [source.data.card_name, err])
+		pilot._refused["%d:%d" % [source.id, index]] = true
+		return ""
+	return "activated %s for its blocker" % source.data.card_name

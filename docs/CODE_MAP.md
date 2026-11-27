@@ -480,6 +480,31 @@ Version 0.70.11, Android version code 70011; `docs/releases/0.70.11.md`,
   `answer_discard`, `_end_of_their_turn`, `_cast_value`.
 - Tests: `tests/unit/test_c1127b_*.gd`.
 
+## 0.70.15 (2026-11-27) — three ledger lifts, more of the computer's play
+
+- `engine/core/card_data.gd`: `opponent_modes`, `opponent_mode_hint` (an
+  opponent's mode chosen as the spell is cast; asked in
+  `MtgGame.cast_spell`, kept in `StackItem.cost_paid["_opponent_mode"]`);
+  `cards/sets/all/_choices.gd`.
+- `engine/core/card_instance.gd`: `last_stack_colors`, `last_stack_item`;
+  `engine/mtg_game.gd` `_spell_leaves_stack` (from `counter_spell`,
+  `card_to_graveyard_from_anywhere`, `exile_spell_from_stack`);
+  `cards/sets/usg/_opal.gd`.
+- `engine/mtg_game.gd` `destroy`: the shield a destruction uses is its
+  controller's choice (`_regeneration_shields_alike`; the `REGENERATED`
+  event's `"shield"`); `ThisWayRegeneration` (`cards/sets/vis/_creatures.gd`),
+  `ScavengerRegeneration` (`cards/sets/sth/_creatures.gd`).
+- `engine/ai/spell_timing.gd`: `guard_of`, `aims_home`, `forecast_stack`,
+  `_respond_stack` (shields, insurances, switches).
+- `engine/ai/combat_reads.gd`: `made_for_a_turn`, `one_turn_line`,
+  `one_turn_option` (hook in `ai_player.gd` `_ability_option`).
+- `engine/ai/own_goal.gd`: `lock_shape_of`, `untap_kind`,
+  `cast_toll_refusal`, `main_sink_refused`, `x_refusal`, `fumble_spared`,
+  `stretch_charge`; hooks in `_main_phase_action`, `_try_cast_best`,
+  `_try_activate`, `answer_option`, and one line in
+  `SpellTiming.sized_refusal`.
+- Tests: `tests/**/test_c1127d_*.gd`.
+
 ## 0.70.14 (2026-11-27) — the computer's play, the leftovers
 
 - `engine/ai/spell_timing.gd`: `trick_of`, `tally_of` (a pump of unread

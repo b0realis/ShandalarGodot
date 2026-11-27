@@ -167,7 +167,7 @@ func test_every_pack_9_ledger_adaptation_has_a_plain_words_entry() -> void:
 	# now says the creatures return together.
 	for phrase in ["at the same moment, both players' together", "Soul Warden",
 			"sees all the others arrive",
-			"uses its own shield first without asking", "always gets its +1/+1 counter",
+			"uses its own shield first without asking", "so it gets its +1/+1 counter", "its controller chooses which shield",
 			"Debt of Loyalty and Matopi Golem work the other way round",
 			"keeps its place in the order of effects from when it entered the battlefield",
 			"Radjan Spirit", "Gliding Licid", "does not give flying back",

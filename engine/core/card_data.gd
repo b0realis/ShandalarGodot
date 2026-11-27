@@ -140,6 +140,18 @@ var object_costs: Array = []
 var repeated_additional_cost := ""
 ## A colored pip in addition to extra_cost_per_target (Primitive Justice).
 var extra_target_color_mask := 0
+## "An opponent chooses one —" (Fatal Lore, Library of Lat-Nam,
+## Misfortune): the labels of the modes the caster's OPPONENT chooses
+## between as the spell is cast (CR 601.2b, 700.2) — asked by
+## [method MtgGame.cast_spell] once the cost is known to be payable, held
+## for a human seat like an opponent-chosen target. The answer rides the
+## stack item's cost record as "_opponent_mode" (a copy copies it,
+## CR 707.10); the spell's effect reads it with
+## `game.cost_paid("_opponent_mode", -1)`. Empty for every other card.
+var opponent_modes: Array[String] = []
+## The default answer to that question: `(game, spell, caster) -> int`,
+## from the CHOOSER's point of view, reading public state only.
+var opponent_mode_hint: Callable = Callable()
 
 ## Alternative payment choices share the ordinary mode/target UI, but do
 ## not change the printed mana cost or mana value (CR 118.9, 601.2b/f/h).

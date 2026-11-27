@@ -46,6 +46,20 @@ extends RefCounted
 ##    combat, by the same forecast ([method respond], asked by
 ##    [method AiPlayer.act]) — and nothing else at instant speed.
 ##
+##  * THE GUARD AND THE SWITCH (0.70.15: "If a spell or ability that
+##    targets that creature would cause a source to deal damage to it …,
+##    prevent that damage", "When that creature dies this turn, return a
+##    creature card …", "Switch target creature's power and toughness
+##    until end of turn"; [method guard_of]): a shield and an insurance
+##    belong on our own creature ([method aims_home]) and none of the three
+##    is a main-phase card. Each is cast by this module alone: in answer to
+##    a spell or ability of theirs that names a creature of ours, when the
+##    stack resolved with it leaves us about a card better
+##    ([method _respond_stack]); in a declared combat, blocks known, on the
+##    creature where the fight ends about a card better (a switch on either
+##    side's); and a switch in our own main phase only at a creature across
+##    the table it kills (power 0 becomes toughness 0).
+##
 ## All of it behind [member AiProfile.forecasts_tactics], which every
 ## standard rung ships on: the gate off is the pilot as it was. A hand with
 ## no instant or sorcery in it asks nothing here.
@@ -61,6 +75,13 @@ const X_FLOOR := 4
 const HAND_FULL := 7
 ## The most creatures in a combat one aimed spell is forecast on.
 const AIM_CAP := 8
+## [method guard_of]'s kinds.
+const GUARD_SHIELD := 1
+const GUARD_INSURANCE := 2
+const GUARD_SWITCH := 3
+## Set on the pilot while this module asks its gate about a card it casts
+## itself ([method cast_refusal] lets the guard shapes through for it alone).
+const _OPEN := &"spell_timing_open"
 
 const _COLORS := [1, 2, 4, 8, 16, 32]
 
@@ -116,7 +137,9 @@ static func _regex(key: String, pattern: String) -> RegEx:
 ## set of permanents ("all", "each"); [code]choice[/code] — it offers
 ## modes ("Choose one —"); [code]trick[/code] — [method trick_of];
 ## [code]tally[/code] — it counts the damage dealt to its caster this turn
-## (1), by artifacts only (2).
+## (1), by artifacts only (2); [code]guard[/code] — [method guard_of], and
+## [code]sole[/code] — nobody else reads that guard, so this module alone
+## casts it.
 static func shape_of(data: CardData) -> Dictionary:
 	_lock.lock()
 	var shape: Variant = _shapes.get(data.card_name)
@@ -124,6 +147,13 @@ static func shape_of(data: CardData) -> Dictionary:
 		shape = _read_shape(plain(data.oracle_text))
 		if int(shape["trick"]) != 0 and not _unread_aimed(data):
 			shape["trick"] = 0
+		if not _one_aimed(data):
+			shape["guard"] = 0
+		elif data.spell_effects[0] is SwitchPowerToughnessEffect:
+			shape["guard"] = GUARD_SWITCH
+		if int(shape["guard"]) != 0:
+			var read: EffectIntent = EffectIntent.read(data.spell_effects, data.card_name)
+			shape["sole"] = read.unknown and read.window == EffectIntent.Shape.NONE
 		_shapes[data.card_name] = shape
 	_lock.unlock()
 	return shape
@@ -138,6 +168,59 @@ static func trick_of(data: CardData) -> int:
 	if data.is_permanent_type() or data.oracle_text.is_empty():
 		return 0
 	return int(shape_of(data)["trick"])
+
+
+## A guard for one creature, for this turn, by the printed line of a spell
+## with one effect aimed at one creature: [constant GUARD_SHIELD] — damage
+## to it is prevented ("Prevent all damage that would be dealt to target
+## creature this turn", "If a spell or ability that targets that creature
+## would cause a source to deal damage to that creature this turn, prevent
+## that damage"); [constant GUARD_INSURANCE] — its death this turn brings a
+## creature back ("When that creature dies this turn, return a creature
+## card from its owner's graveyard to the battlefield …");
+## [constant GUARD_SWITCH] — its power and toughness are switched until end
+## of turn; 0 — none of them.
+static func guard_of(data: CardData) -> int:
+	if data.is_permanent_type() or data.oracle_text.is_empty():
+		return 0
+	return int(shape_of(data)["guard"])
+
+
+## Does the printed line put this spell on our own side of the table — the
+## gift nobody read ([method trick_of]), the shield, the insurance? Asked by
+## [method AiPlayer._is_harmful].
+static func aims_home(data: CardData) -> bool:
+	if data.is_permanent_type() or data.oracle_text.is_empty():
+		return false
+	var shape := shape_of(data)
+	var guard := int(shape["guard"])
+	return int(shape["trick"]) != 0 or guard == GUARD_SHIELD or guard == GUARD_INSURANCE
+
+
+## A plain spell of one effect aimed at one creature: no modes, no X, no
+## condition on its cast.
+static func _one_aimed(data: CardData) -> bool:
+	if data.is_permanent_type() or data.is_modal() or data.cost.has_x \
+			or data.cast_condition.is_valid() or data.spell_effects.size() != 1:
+		return false
+	var e: EffectBase = data.spell_effects[0]
+	return e.target_spec != null and e.target_spec.kind == TargetSpec.Kind.CREATURE \
+		and not e.target_count_is_x
+
+
+## [method guard_of]'s reading of a printed text (already [method plain]).
+static func _read_guard(text: String) -> int:
+	if _regex("switch", "switch target( [a-z-]+){0,3} creature's power and toughness until end of turn").search(text) != null:
+		return GUARD_SWITCH
+	if _regex("insure", "(when|if) (that|target|the) creature (dies|would die|is put into (a|the|its owner's) graveyard)( from the battlefield)? this turn, (you may )?(return|put)").search(text) != null:
+		return GUARD_INSURANCE
+	for sentence in text.replace("\n", ". ").split(". "):
+		if sentence.contains("prevent") and sentence.contains("damage") \
+				and sentence.contains("this turn") \
+				and not sentence.contains("combat damage") and not sentence.contains("dealt by") \
+				and _regex("shield", "to (that|target)( [a-z-]+){0,3} creature").search(sentence) != null:
+			return GUARD_SHIELD
+	return 0
 
 
 ## One card-local effect, aimed at a creature, that the reader calls
@@ -202,7 +285,7 @@ static func _read_shape(text: String) -> Dictionary:
 		tally = 2 if _regex("tally", "this turn by (an )?artifacts?\\b").search(text) != null else 1
 	return {"attack": attack, "block": block, "combat": combat, "hidden": hidden,
 		"set": over_set, "choice": text.contains("choose one") or text.contains("choose two"),
-		"trick": _read_trick(text), "tally": tally}
+		"trick": _read_trick(text), "tally": tally, "guard": _read_guard(text), "sole": false}
 
 
 ## Is a creature attacking right now?
@@ -239,6 +322,15 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 	var shape := shape_of(data)
 	if int(shape["tally"]) != 0 and tally_of(g, pilot.pid, int(shape["tally"])) <= 0:
 		return "no damage was dealt to it this turn"
+	# A guard or a switch nobody else reads is this module's to cast, at its
+	# moment ([method respond]); a switch may be the main phase's when it
+	# kills ([method sized_refusal] answers). The 1997 damage windows keep
+	# their own rule.
+	if int(shape["guard"]) != 0 and shape["sole"] and not pilot.has_meta(_OPEN) \
+			and not g.awaiting_damage_prevention and not g.awaiting_regeneration \
+			and not (int(shape["guard"]) == GUARD_SWITCH and g.active_player == pilot.pid
+				and Mtg.is_main_step(g.current_step()) and g.stack.is_empty()):
+		return "it is kept for its moment"
 	# A trick nobody else reads is a held instant's: no combat, no cast. A
 	# pilot that holds none casts it in its own main phase, like its pumps.
 	if int(shape["trick"]) != 0 and pilot.profile.holds_instants \
@@ -293,11 +385,14 @@ static func sized_refusal(g: MtgGame, pilot, inst: CardInstance, sized: Dictiona
 	var mode := int(sized.get("mode", 0))
 	var x := int(sized.get("x", 0))
 	var targets: Array = sized.get("targets", [])
+	if int(shape_of(data)["guard"]) == GUARD_SWITCH and shape_of(data)["sole"]:
+		return _switch_in_main(g, pilot, inst, sized)
 	var intent: EffectIntent = pilot._mode_intent(data, mode)
 	if data.cost.has_x and x < x_floor(g, pilot, inst, intent, mode, targets, x):
 		return "its X is too small yet"
 	if data.cost.has_x and life_not_needed(g, pilot, data, mode, targets, x):
 		return "its life is not needed yet"
+	if data.cost.has_x and not g.untap_caps.is_empty() and pilot.OWN_GOAL.x_refusal(g, pilot, inst, sized): return "the mana is kept for a better card"   # tolls: the stock under a land cap (own_goal.gd)
 	if intent.adds_mana or intent.counters or intent.extra_turns > 0:
 		return ""
 	# A shield for this turn, with no spell on the stack and no attacker
@@ -345,6 +440,35 @@ static func sized_refusal(g: MtgGame, pilot, inst: CardInstance, sized: Dictiona
 	return ""
 
 
+## A switch in our own main phase: worth its card only at a creature across
+## the table that dies of it (power 0 or less becomes its toughness) — the
+## forecast says which, and [param sized] is aimed there; "kept" otherwise.
+static func _switch_in_main(g: MtgGame, pilot, inst: CardInstance, sized: Dictionary) -> String:
+	var pid: int = pilot.pid
+	var spec: TargetSpec = inst.data.spell_effects[0].target_spec
+	var best: TargetRef = null
+	var best_gain := CARD_BAR
+	var tried := 0
+	for body in g.players[g.opponent_of(pid)].battlefield:
+		if not body.is_creature() or body.cur_power > 0 or tried >= AIM_CAP:
+			continue
+		var ref := TargetRef.card(body)
+		if not g.target_legal_at(spec, ref, inst, 0, []):
+			continue
+		tried += 1
+		var seen := forecast(g, pilot, inst, [ref], 0, 0)
+		if seen.is_empty() or int(seen["end"]) < 0:
+			continue
+		var gain: float = GAME if int(seen["end"]) > 0 else float(seen["swing"])
+		if gain >= best_gain:
+			best = ref
+			best_gain = gain
+	if best == null:
+		return "it is kept for a combat"
+	sized["targets"] = [best]
+	return ""
+
+
 ## The printed line of the mode a cast was sized with: the mode's own
 ## label for a card with a real choice of modes, the card's text otherwise.
 static func _mode_text(pilot, data: CardData, mode: int) -> String:
@@ -359,7 +483,7 @@ static func _mode_text(pilot, data: CardData, mode: int) -> String:
 ## damage to you this turn, …", "Prevent all damage that would be dealt to
 ## target creature this turn.", "Regenerate target creature."?
 static func is_shield(text: String) -> bool:
-	for sentence in plain(text).split(". "):
+	for sentence in plain(text).replace("\n", ". ").split(". "):
 		var line := sentence.strip_edges()
 		if line.is_empty() or line.begins_with("buyback") or line.contains("rather than pay"):
 			continue   # how it is paid for, not what it does
@@ -426,9 +550,10 @@ static func life_not_needed(g: MtgGame, pilot, data: CardData, mode: int, target
 ## the combat arms only, and for every spell whose printed effect needs
 ## the combat — it has no other responder to leave a pump or an aimed one to.
 static func respond(g: MtgGame, pilot) -> String:
-	if not pilot.profile.forecasts_tactics or not g.stack.is_empty() \
-			or g.awaiting_attackers or g.awaiting_blockers:
+	if not pilot.profile.forecasts_tactics or g.awaiting_attackers or g.awaiting_blockers:
 		return ""
+	if not g.stack.is_empty():
+		return _respond_stack(g, pilot) if pilot.profile.holds_instants else ""
 	var step := g.current_step()
 	if step == Mtg.Step.END:
 		return _respond_tally(g, pilot) if pilot.profile.holds_instants else ""
@@ -515,7 +640,9 @@ static func _respond_aimed(g: MtgGame, pilot) -> String:
 		var shape := shape_of(data)
 		if shape["hidden"]:
 			continue
-		if int(shape["trick"]) == 0 or solo:
+		if int(shape["guard"]) != 0:
+			pass   # a guard or a switch: the declared combat is its moment
+		elif int(shape["trick"]) == 0 or solo:
 			# The pilot that holds no instant: a spell of the combat's, aimed
 			# at one creature, and not the reactive game's.
 			if not solo or not (shape["attack"] or shape["block"]):
@@ -524,7 +651,7 @@ static func _respond_aimed(g: MtgGame, pilot) -> String:
 			if e.target_spec == null or e.target_spec.kind != TargetSpec.Kind.CREATURE \
 					or e.target_count_is_x or e.is_damage_prevention or pilot._is_reactive(data):
 				continue
-		if pilot._refused.has(str(inst.id)) or pilot._cast_gate(g, inst) != "":
+		if pilot._refused.has(str(inst.id)) or not _gate_open(g, pilot, inst):
 			continue
 		candidates.append(inst)
 	if candidates.is_empty() or not attackers_declared(g):
@@ -552,7 +679,9 @@ static func _respond_aimed(g: MtgGame, pilot) -> String:
 				and not pilot._free_at(inst.data.cost, extra):
 			continue
 		var spec: TargetSpec = inst.data.spell_effects[0].target_spec
-		var gift: bool = int(shape_of(inst.data)["trick"]) == 1
+		var guard := int(shape_of(inst.data)["guard"])
+		var gift: bool = int(shape_of(inst.data)["trick"]) == 1 \
+			or guard == GUARD_SHIELD or guard == GUARD_INSURANCE
 		for body in bodies:
 			if gift and body.controller_id != pid:
 				continue
@@ -567,6 +696,87 @@ static func _respond_aimed(g: MtgGame, pilot) -> String:
 			var gain: float = float(seen["swing"]) - float(base["swing"])
 			if int(seen["end"]) > int(base["end"]):
 				gain = GAME
+			# A switch is for the fight it turns: a creature of theirs
+			# more, or one of ours fewer, dies of it — never a point of life.
+			elif guard == GUARD_SWITCH \
+					and int(seen["theirs_lost"]) <= int(base["theirs_lost"]) \
+					and int(seen["ours_lost"]) >= int(base["ours_lost"]):
+				continue
+			if gain >= best_gain:
+				best = inst
+				best_ref = ref
+				best_gain = gain
+	if best == null:
+		return ""
+	return pilot._cast_response(g, best, [best_ref])
+
+
+## The pilot's own gate, asked for a card this module casts itself.
+static func _gate_open(g: MtgGame, pilot, inst: CardInstance) -> bool:
+	pilot.set_meta(_OPEN, true)
+	var why: String = pilot._cast_gate(g, inst)
+	pilot.remove_meta(_OPEN)
+	return why == ""
+
+
+## The guard in answer: a spell or ability of theirs on top of the stack
+## names a creature of ours, and a shield, an insurance or a switch in hand
+## is forecast on that creature — the stack resolved with it against the
+## stack resolved without — and cast when we end about a card better.
+static func _respond_stack(g: MtgGame, pilot) -> String:
+	var pid: int = pilot.pid
+	var candidates: Array[CardInstance] = []
+	for inst in g.players[pid].hand:
+		if inst.is_type(Mtg.CardType.INSTANT) and guard_of(inst.data) != 0:
+			candidates.append(inst)
+	if candidates.is_empty():
+		return ""
+	var top: StackItem = g.stack.back()
+	if top.controller == pid:
+		return ""
+	# What their spell does must be the table's to know: no forecast of a
+	# draw, a reveal, a coin.
+	if top.card != null and not top.card.data.oracle_text.is_empty() \
+			and shape_of(top.card.data)["hidden"]:
+		return ""
+	var victims: Array[CardInstance] = []
+	for t in top.targets:
+		if t == null or t.is_player or t.is_damage or t.is_ability:
+			continue
+		var victim := g.find_instance(t.instance_id)
+		if victim != null and victim.controller_id == pid and victim.is_creature() \
+				and victim.zone == Mtg.Zone.BATTLEFIELD and not victims.has(victim) \
+				and victims.size() < AIM_CAP:
+			victims.append(victim)
+	if victims.is_empty():
+		return ""
+	var sources: Array = pilot._mana_sources(g)
+	var base := {}
+	var best: CardInstance = null
+	var best_ref: TargetRef = null
+	var best_gain := CARD_BAR
+	for inst in candidates:
+		if pilot._refused.has(str(inst.id)) or not _gate_open(g, pilot, inst):
+			continue
+		var extra: int = g.spell_surcharge(pid, inst.data)
+		if pilot._plan_taps_from(sources, inst.data.cost, extra,
+				g.mana_usage_keys(inst.data, inst)).is_empty() \
+				and not pilot._free_at(inst.data.cost, extra):
+			continue
+		if base.is_empty():
+			base = forecast_stack(g, pilot, null, [])
+			if base.is_empty() or int(base["end"]) != 0:
+				return ""
+		var spec: TargetSpec = inst.data.spell_effects[0].target_spec
+		for victim in victims:
+			var ref := TargetRef.card(victim)
+			if not g.target_legal_at(spec, ref, inst, 0, []) \
+					or pilot._aims_at_own_fragile(g, [ref]):
+				continue
+			var seen := forecast_stack(g, pilot, inst, [ref])
+			if seen.is_empty() or int(seen["end"]) < 0:
+				continue
+			var gain: float = float(seen["swing"]) - float(base["swing"])
 			if gain >= best_gain:
 				best = inst
 				best_ref = ref
@@ -685,6 +895,42 @@ static func forecast(g: MtgGame, pilot, inst: CardInstance, targets: Array, x: i
 	return result
 
 
+## What the stack as it stands leaves once it has resolved — after casting
+## [param inst] with [param targets] on top of it, or with no cast at all
+## ([param inst] null): [method forecast]'s count, [code]{}[/code] when the
+## cast is refused or the stack does not empty (a question nobody answers,
+## a 1997 damage window).
+static func forecast_stack(g: MtgGame, pilot, inst: CardInstance, targets: Array) -> Dictionary:
+	var pid: int = pilot.pid
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec_turn()
+	g._rec(g, &"agents")
+	g.agents = [DecisionAgent.new(), DecisionAgent.new()]   # nobody is asked
+	var before := _census(g, pilot)
+	var result := {}
+	var cast := true
+	if inst != null:
+		before["hand"][inst.owner_id] -= 1
+		for color in _COLORS:
+			g.players[pid].mana_pool.add(color, 60)
+		cast = g.cast_spell(pid, inst, targets, 0, 0) == ""
+	if cast:
+		var guard := 0
+		var stuck := false
+		while not g.stack.is_empty() and not g.game_over and guard < 60:
+			if g.pass_priority(g.priority_player) != "":
+				stuck = true
+				break
+			guard += 1
+		if not stuck and (g.game_over or g.stack.is_empty()):
+			result = _measure(g, pilot, before, {})
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	return result
+
+
 ## The declared combat as it stands, with no cast: the same count the
 ## forecast makes, for the difference a combat spell makes.
 static func combat_baseline(g: MtgGame, pilot) -> Dictionary:
@@ -733,6 +979,22 @@ static func _measure(g: MtgGame, pilot, before: Dictionary, combat: Dictionary) 
 		elif int(side[body.id]) != body.controller_id:
 			# It changed sides: lost by one, gained by the other.
 			swing += 2.0 * float(worth[body.id]) * (1.0 if body.controller_id == pid else -1.0)
+	# A creature the combat brought back from a graveyard ("When that
+	# creature dies this turn, return a creature card …"): made, for its
+	# owner, at the size the combat's forecast saw.
+	if not combat.is_empty():
+		for id in combat["alive"]:
+			if here.has(id):
+				continue
+			var back := g.find_instance(id)
+			if back == null or back.zone != Mtg.Zone.GRAVEYARD:
+				continue
+			here[id] = true
+			if worth.has(id):
+				continue
+			var size: Vector2i = combat["stats"].get(id, Vector2i.ZERO)
+			var made := maxf(float(size.x + size.y), 0.5)
+			swing += made if back.owner_id == pid else -made
 	for id in worth:
 		if here.has(id):
 			continue

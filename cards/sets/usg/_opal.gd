@@ -270,6 +270,7 @@ static func _spell_context(g: MtgGame, s: CardInstance, e: GameEvent) -> Diction
 	if spell != null:
 		var item := g.find_stack_item(spell)
 		context["spell_item"] = item.id if item != null else -1
+		context["spell_id"] = spell.id
 		context["colors"] = spell.cur_colors
 		context["mana_value"] = _mana_value(g, spell)
 	return context
@@ -282,18 +283,22 @@ static func _mana_value(g: MtgGame, spell: CardInstance) -> int:
 ## "That spell"'s colours ([param key] "colors") or mana value ("mana_value")
 ## as the ability resolves (CR 608.2h): read LIVE while the spell is still
 ## the same object on the stack — a Purelace in response makes it white, so
-## the Titan gets protection from white, not green.
-## SIMPLIFIED (docs/simplified-cards.md, "Opal Titan"): a spell that has
-## left the stack is described as it was cast, not as it last existed on
-## the stack — a colour changed on the stack and then countered before the
-## trigger resolves is not remembered (the stack keeps no last known
-## information).
+## the Titan gets protection from white, not green. A spell that has left
+## the stack unresolved (countered) is read as it LAST EXISTED there
+## ([member CardInstance.last_stack_colors]): a colour changed on the stack
+## is remembered. Its mana value cannot change on the stack, so that is
+## the one read as the trigger was put there; so are the colours of a
+## spell the engine can no longer find (a countered copy ceases to exist).
 static func _that_spell(g: MtgGame, s: CardInstance, key: String) -> int:
 	var ctx := g.trigger_context(s)
 	var item_id := int(ctx.get("spell_item", -1))
 	for item: StackItem in g.stack:
 		if item.id == item_id and item.kind == Mtg.StackKind.SPELL and item.card != null:
 			return item.card.cur_colors if key == "colors" else _mana_value(g, item.card)
+	if key == "colors" and item_id >= 0:
+		var gone := g.find_instance(int(ctx.get("spell_id", -1)))
+		if gone != null and gone.last_stack_item == item_id:
+			return gone.last_stack_colors
 	return int(ctx.get(key, 0))
 
 
