@@ -534,7 +534,28 @@ func _fit() -> void:
 				# A pane keeps the height it once had: back to what it needs.
 				_fit_height.call_deferred()
 	if absf(grow - _grow) * PICTURE.y >= 1.0:
+		var gave_way := grow < _grow
 		_set_grow(grow)
+		if gave_way:
+			# The picture smaller, the pane still as tall as it was (seen on
+			# the wise man's "whose deck" with big buttons: 816 px held where
+			# 768 were needed, the first such pane of a run): its height
+			# back to what it needs.
+			_drop_height.call_deferred()
+	elif size.y > room + 0.5:
+		_drop_height.call_deferred()
+
+
+## The pane no taller than it needs AT THE WIDTH IT HAS (a narrower pane
+## would wrap its choices into more rows, and be taller for it).
+func _drop_height() -> void:
+	var need := get_combined_minimum_size().y
+	if size.y <= need + 0.5:
+		return
+	var before := size.y
+	size.y = need
+	if grow_vertical == Control.GROW_DIRECTION_BOTH:
+		position.y += (before - need) / 2.0
 
 
 ## The pane back at the height it needs, about its own middle when it grows
