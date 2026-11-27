@@ -16,13 +16,18 @@ const COMBAT_READS := preload("res://engine/ai/combat_reads.gd")
 
 
 func before_each() -> void:
-	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, true)
+	# One rebuild of the registry for the file, not ten for each board
+	# (a no-op once the packs are on); switched off again in after_all.
+	CardPacks.set_enabled_many(CardPacks.available_ids(), true)
 	super()
 
 
 func after_each() -> void:
 	g = null
-	for id in CardPacks.available_ids(): CardPacks.set_enabled(id, false)
+
+
+func after_all() -> void:
+	CardPacks.set_enabled_many(CardPacks.available_ids(), false)
 
 
 func _rungs() -> Array:
