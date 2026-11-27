@@ -480,6 +480,23 @@ Version 0.70.11, Android version code 70011; `docs/releases/0.70.11.md`,
   `answer_discard`, `_end_of_their_turn`, `_cast_value`.
 - Tests: `tests/unit/test_c1127b_*.gd`.
 
+## 0.70.14 (2026-11-27) — the computer's play, the leftovers
+
+- `engine/ai/spell_timing.gd`: `trick_of`, `tally_of` (a pump of unread
+  aim: our own side, in a combat), `life_not_needed`, the damage-counting
+  hold in `cast_refusal`; `respond` also asked for a pilot that holds no
+  instants (`ai_player.gd` `act`), and three lines in `_is_harmful`.
+- `engine/ai/combat_reads.gd`: `scheduled_fleeting`, `made_fleeting`,
+  `made_body`, `ambush`, `defence_worth`, `throwaway_block`,
+  `through_gangs`; hooks in `_best_block_for`, `_damage_through_blocks`,
+  and after both `SpellTiming.respond` calls.
+- `engine/ai/own_goal.gd`: `untap_cap_of`, `lock_refusal`, `land_refill`,
+  `sink_refused`, `stock_refusal`, `hand_reward_of_line`, `hand_beat`,
+  `hand_is_held`, `land_kept_in_hand`, `cast_relief`; hooks in
+  `_cast_value`, `_land_toll_refuses`, `_try_activate`.
+- `game/adventure/world/visit_pane.gd`: `_drop_height`.
+- Tests: `tests/unit/test_c1127c_*.gd`.
+
 ## 0.70.10 (2026-11-24): the builders in an exported game
 
 Version 0.70.10, Android version code 70010; `docs/releases/0.70.10.md`.

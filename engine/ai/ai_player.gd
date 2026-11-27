@@ -259,6 +259,14 @@ func act(game: MtgGame) -> String:
 		if response != "":
 			_guard_seen[position] = true
 			return response
+	# ...and the pilot that holds none still has the spell whose only moment
+	# is a combat (spell_timing.gd `respond`; "" off forecasts_tactics).
+	else:
+		var timed: String = SPELL_TIMING.respond(game, self)
+		if timed == "": timed = COMBAT_READS.ambush(game, self)   # bodies made for one block (combat_reads.gd)
+		if timed != "":
+			_guard_seen[position] = true
+			return timed
 	game.pass_priority(pid)
 	return "pass"
 
@@ -922,6 +930,8 @@ func _try_play_land(game: MtgGame) -> bool:
 ## hand, the drop made rather than a discard at the cleanup, and the land
 ## nothing will use ([method OWN_GOAL.drop_refused], the rule in full).
 func _land_toll_refuses(game: MtgGame, land: CardInstance) -> bool:
+	if OWN_GOAL.land_kept_in_hand(game, self, land):
+		return true   # a hand paid for its size keeps the land nothing will use (2026-11-27)
 	var cost: int = OWN_GOAL.land_drop_cost(game, self, land)
 	if cost <= 0:
 		return false
@@ -2951,6 +2961,8 @@ func _try_activate(game: MtgGame, moment: int = Moment.MAIN,
 				continue
 			if _pain_kills(game, own_sources, plan):
 				continue   # the taps together are the last life (2026-10-03)
+			if moment == Moment.SINK and OWN_GOAL.sink_refused(game, self, plan):
+				continue   # under a land cap the sink is no sink (own_goal.gd, 2026-11-27)
 			var option := _ability_option(game, inst, index, moment)
 			if not option.is_empty() and ability.cost.has_x:
 				var x := int(option.get("x", 0))
@@ -5446,7 +5458,7 @@ func _cast_value(game: MtgGame, inst: CardInstance, targets: Array, x_value: int
 	value += _vise_relief(game, inst)
 	# ...and the lands it taps are lands a Power Surge does not count
 	# (player report 2, 2026-11-26; own_goal.gd, "the idle lands").
-	value += OWN_GOAL.idle_relief(game, self, inst)
+	value += OWN_GOAL.cast_relief(game, self, inst)   # ...and a hand reward of ours (2026-11-27)
 	var intent: EffectIntent = null
 	for t in targets:
 		if t is TargetRef and not t.is_player:
@@ -7119,6 +7131,7 @@ func _respond_action(game: MtgGame) -> String:
 	# THE COMBAT SPELL IN ITS COMBAT (player report 2026-11-26,
 	# spell_timing.gd `respond`): "each attacking creature" once they attack.
 	var timed: String = SPELL_TIMING.respond(game, self)
+	if timed == "": timed = COMBAT_READS.ambush(game, self)   # bodies made for one block (combat_reads.gd)
 	if timed != "":
 		return timed
 	var expansion := _try_activate(game, Moment.RESPONSE)
@@ -12014,7 +12027,10 @@ func _damage_through_blocks(game: MtgGame, candidates: Array[CardInstance],
 					held = mini(held, maxi(blocker.cur_toughness - blocker.damage, 0))
 			row.append(held)
 		stopped.append(row)
-	return total - _max_weight_matching(stopped)
+	var through := total - _max_weight_matching(stopped)
+	if profile.forecasts_tactics:   # a "lethal" count, re-asked of a gang on a trampler (combat_reads.gd)
+		through = COMBAT_READS.through_gangs(game, self, hitters, stopped, total, through, defender)
+	return through
 
 
 ## The largest total weight of a matching in the bipartite [param weights]
@@ -13517,6 +13533,12 @@ func _best_block_for(game: MtgGame, attacker: CardInstance,
 		for blocker in legal:
 			if not tramples and not _dies_to(game, blocker, attacker, Vector2i.ZERO, grown):
 				return [blocker.id]
+	# 1.9) A blocker of ours gone at end of turn anyway blocks for nothing
+	#      (combat_reads.gd `throwaway_block`; Waylay's Knights).
+	if profile.forecasts_tactics:
+		var thrown: Array[int] = COMBAT_READS.throwaway_block(game, self, attacker, legal)
+		if not thrown.is_empty():
+			return thrown
 	# 2) Value trade: we both die, their creature was worth at least ours.
 	var trade_margin := _trade_margin(game)
 	for blocker in legal:
@@ -14737,6 +14759,10 @@ func _is_harmful(source: CardInstance, effect: EffectBase) -> bool:
 	# Part Water gave THEIR two Grizzly Bears islandwalk while we
 	# controlled the Islands they walked past.
 	if effect is GrantLandwalkEffect:
+		return false
+	# A PRINTED GIFT the reader has no model for ("Target creature gets
+	# +0/+X …"; spell_timing.gd `trick_of`, forecasts_tactics).
+	if profile.forecasts_tactics and effect != null and SPELL_TIMING.trick_of(source.data) != 0:
 		return false
 	# Card-local custom effects: ask the READER, which knows the ones the
 	# CARD_LOCAL table names (a Twiddle taps, so it points across the

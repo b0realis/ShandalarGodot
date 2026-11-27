@@ -99,6 +99,9 @@ func test_simulacrum_is_aimed_at_our_own_creature() -> void:
 	put_battlefield(1, "Hill Giant")
 	var sim := give_hand(0, "Simulacrum")
 	advance_to_step(Mtg.Step.MAIN1)
+	# A point of damage this turn (2026-11-27): with none the card does
+	# nothing and is held (spell_timing.gd); the aim is what is pinned here.
+	g.players[0].damage_taken_this_turn = 1
 	assert_string_contains(ai.act(g), "Simulacrum")
 	var item: StackItem = g.stack.back()
 	assert_eq(item.targets[0].instance_id, mine.id, "at our own creature")

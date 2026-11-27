@@ -22237,6 +22237,56 @@ the card's lines or a forecast under the search journal, behind
   Corpse Dance); the ladder's lethal push against a gang block on a
   trampler.
 
+## 2026-11-27 — Version 0.70.14
+
+Version 0.70.14 (Android version code 70014). Its notes are
+`docs/releases/0.70.14.md`. LAN stays protocol 32; saves stay v9. The
+"Left" list of 0.70.13, on the owner's word ("Fix this"); every reading
+again of the card's lines, the engine's own delayed triggers or a
+forecast, behind `AiProfile.forecasts_tactics`.
+
+- **Spell timing (`SpellTiming`):** a one-target spell the reader could
+  not classify whose line gives power or toughness until end of turn is a
+  gift, aimed at the pilot's own side and kept for a combat once blocks
+  are known; a mixed sign (+4/-X) is tried on both sides' creatures. A
+  spell that counts the damage dealt to its caster this turn is held
+  while that is none (two old tests that pinned the aim of Simulacrum
+  now give the pilot a point of damage first). An X spell of life alone
+  is held at 20 life or more, out of danger, seven cards or fewer. The
+  Apprentice, which holds no instants, asks the combat responder alone:
+  a combat-only instant is cast in a declared combat. "mana value" in a
+  card's text no longer reads as making mana.
+- **Combat (`CombatReads`):** `fleeting` also reads the engine's delayed
+  end-step triggers and cleanup actions that name the creature (Shallow
+  Grave, Corpse Dance, Waylay; by the same trace Zirilan's Dragon, Echo
+  Chamber, Broken Visage, Balduvian Dead, Dark Maze, Varchild's Crusader,
+  Barbarian Guides): such a body attacks, and blocks for free; the spell
+  that makes it is cast before combat only for a body that can attack,
+  or after attackers are declared when its blocks are worth the card. A
+  ladder push counted as lethal with a trampler in it is counted again
+  against a gang block on the trampler. The block side of that did not
+  reproduce (`hold_the_line` already stacked blockers).
+- **Locks and hands (`OwnGoal`):** a cap on the untap step (Winter Orb,
+  Smoke, Damping Field, Static Orb) is priced by what it holds of each
+  side over three turns and not cast when it holds more of the pilot's;
+  under a land cap an end-step activation that taps more than will untap
+  is not made with a spell in hand, and a permanent is not cast when a
+  much better card is within two turns of the mana. Storm World is a
+  symmetric punisher priced by the hands; a land nothing will use stays
+  in hand while a card fewer costs life or the pilot's own Ivory Tower
+  pays. Stasis, Iron Maiden and the Vise and Rack adaptations were read
+  already; Viseling is in no pack.
+- **A place's pane (`VisitPane._drop_height`):** the pane kept the height
+  it had before its picture gave way (816 px of the 800 on the wise
+  man's "whose deck" with big buttons, the first such pane of a run
+  without the skin; one CI run red on 0.70.13).
+- **Left:** Silhouette, Reincarnation and Transmutation still cast in
+  the main phase at the other side's creature; Marble Titan, Storage
+  Matrix, Sands of Time, Mana Breach, Mana Vortex unread; the Apprentice
+  and the Magician do not adapt their casts under a Vise; under a land
+  cap main-phase activations and X spells are as before; activation
+  timing of Zirilan, Echo Chamber and Balduvian Dead.
+
 ## Standing quality gates
 
 - `./run_tests.sh` green on every commit; new code ships with tests.

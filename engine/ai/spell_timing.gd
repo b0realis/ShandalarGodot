@@ -29,6 +29,23 @@ extends RefCounted
 ##    spell that only scales with its X is held under [method x_floor]
 ##    unless it wins, saves the game, or the card would be discarded.
 ##
+##  * THE TRICK NOBODY READ ("Target creature gets +0/+X …", "… it gets
+##    +4/-4 …" from a card-local effect): the printed line says it is a
+##    gift, so it is aimed at our own side ([method trick_of], asked by
+##    [method AiPlayer._is_harmful]); a pilot that holds instants keeps it
+##    for a combat and casts it on the creature in that combat where the
+##    declared fight ends about a card better ([method respond]).
+##  * THE DAMAGE OF THIS TURN ("… equal to the damage dealt to you this
+##    turn", "… twice the damage dealt to you so far this turn by
+##    artifacts"): held while that damage is none ([method cast_refusal]),
+##    cast at an end step once it is worth the card ([method respond]).
+##  * THE LIFE NOT NEEDED: an X of nothing but our own life waits while
+##    the pilot stands at its starting life or above, out of danger.
+##  * THE PILOT THAT HOLDS NO INSTANT ([member AiProfile.holds_instants]
+##    off) still casts a spell whose only moment is a combat in that
+##    combat, by the same forecast ([method respond], asked by
+##    [method AiPlayer.act]) — and nothing else at instant speed.
+##
 ## All of it behind [member AiProfile.forecasts_tactics], which every
 ## standard rung ships on: the gate off is the pilot as it was. A hand with
 ## no instant or sorcery in it asks nothing here.
@@ -42,6 +59,8 @@ const GAME := 1000.0
 const X_FLOOR := 4
 ## A hand this full discards at cleanup: the card goes now.
 const HAND_FULL := 7
+## The most creatures in a combat one aimed spell is forecast on.
+const AIM_CAP := 8
 
 const _COLORS := [1, 2, 4, 8, 16, 32]
 
@@ -95,15 +114,58 @@ static func _regex(key: String, pattern: String) -> RegEx:
 ## or it makes mana (the forecast lends mana and cannot see it), so no
 ## forecast is made of it; [code]set[/code] — its effect is over a
 ## set of permanents ("all", "each"); [code]choice[/code] — it offers
-## modes ("Choose one —").
+## modes ("Choose one —"); [code]trick[/code] — [method trick_of];
+## [code]tally[/code] — it counts the damage dealt to its caster this turn
+## (1), by artifacts only (2).
 static func shape_of(data: CardData) -> Dictionary:
 	_lock.lock()
 	var shape: Variant = _shapes.get(data.card_name)
 	if shape == null:
 		shape = _read_shape(plain(data.oracle_text))
+		if int(shape["trick"]) != 0 and not _unread_aimed(data):
+			shape["trick"] = 0
 		_shapes[data.card_name] = shape
 	_lock.unlock()
 	return shape
+
+
+## The trick the effect reader has no model for, by its printed line: 1 — a
+## gift ("Target creature gets +0/+X until end of turn"), nothing taken; 2 —
+## power given and toughness taken ("… it gets +4/-4 until end of turn"),
+## which the fight it is cast into has to answer for; 0 — anything else,
+## and every spell the reader does read (a Giant Growth is its own).
+static func trick_of(data: CardData) -> int:
+	if data.is_permanent_type() or data.oracle_text.is_empty():
+		return 0
+	return int(shape_of(data)["trick"])
+
+
+## One card-local effect, aimed at a creature, that the reader calls
+## unknown and no window, rider or helper already speaks for.
+static func _unread_aimed(data: CardData) -> bool:
+	if data.is_permanent_type() or data.is_modal() or data.cost.has_x \
+			or data.cast_condition.is_valid() or data.spell_effects.size() != 1:
+		return false
+	var e: EffectBase = data.spell_effects[0]
+	if e.target_spec == null or e.target_spec.kind != TargetSpec.Kind.CREATURE \
+			or e.ai_helpful or e.is_damage_prevention or e.target_count_is_x:
+		return false
+	var intent: EffectIntent = EffectIntent.read(data.spell_effects, data.card_name)
+	return intent.unknown and intent.window == EffectIntent.Shape.NONE
+
+
+## [method trick_of]'s reading of a printed text (already [method plain]).
+static func _read_trick(text: String) -> int:
+	var found := _regex("trick", "target( [a-z-]+){0,3} creature[^.]*?\\bgets? ([+-])(\\d+|x)/([+-])(\\d+|x) until end of (turn|combat)").search(text)
+	if found == null:
+		return 0
+	var power_given := found.get_string(3) != "0"
+	var toughness_given := found.get_string(5) != "0"
+	if power_given and found.get_string(2) == "-":
+		return 0   # it takes power: the reader's harm, as before
+	if toughness_given and found.get_string(4) == "-":
+		return 2 if power_given else 0
+	return 1 if power_given or toughness_given else 0
 
 
 static func _read_shape(text: String) -> Dictionary:
@@ -128,11 +190,19 @@ static func _read_shape(text: String) -> Dictionary:
 		or _regex("ante", "\\bante\\b").search(text) != null \
 		or text.contains("card name") or text.contains("draw") or text.contains("discard") \
 		or text.contains("copy") or text.contains("fast effect") \
-		or text.contains("mana") or _regex("add", "\\badd\\b").search(text) != null \
+		or text.replace("mana value", "").contains("mana") \
+		or _regex("add", "\\badd\\b").search(text) != null \
 		or _regex("hand", "(?<!to its owner's )(?<!to their owner's )(?<!to their owners' )(?<!to their )(?<!to your )(?<!to owner's )hand").search(text) != null
 	var over_set := _regex("set", "\\b(all|each|every)\\b").search(text) != null
+	# "… equal to the damage dealt to you this turn", "… dealt to you so far
+	# this turn by artifacts": a count that is nothing until damage lands.
+	var tally := 0
+	if text.contains("the damage dealt to you this turn") \
+			or text.contains("the damage dealt to you so far this turn"):
+		tally = 2 if _regex("tally", "this turn by (an )?artifacts?\\b").search(text) != null else 1
 	return {"attack": attack, "block": block, "combat": combat, "hidden": hidden,
-		"set": over_set, "choice": text.contains("choose one") or text.contains("choose two")}
+		"set": over_set, "choice": text.contains("choose one") or text.contains("choose two"),
+		"trick": _read_trick(text), "tally": tally}
 
 
 ## Is a creature attacking right now?
@@ -167,6 +237,14 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 	if data.is_permanent_type() or data.oracle_text.is_empty():
 		return ""
 	var shape := shape_of(data)
+	if int(shape["tally"]) != 0 and tally_of(g, pilot.pid, int(shape["tally"])) <= 0:
+		return "no damage was dealt to it this turn"
+	# A trick nobody else reads is a held instant's: no combat, no cast. A
+	# pilot that holds none casts it in its own main phase, like its pumps.
+	if int(shape["trick"]) != 0 and pilot.profile.holds_instants \
+			and inst.is_type(Mtg.CardType.INSTANT) \
+			and not (g.awaiting_attackers or g.awaiting_blockers or attackers_declared(g)):
+		return "no creature is attacking"
 	if not (shape["attack"] or shape["block"] or shape["combat"]):
 		return ""
 	# A card with a real choice of modes may have one that needs no combat:
@@ -180,6 +258,24 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 	if shape["attack"] or shape["combat"]:
 		return "" if attackers_declared(g) else "no creature is attacking"
 	return "" if blockers_declared(g) else "no creature is blocking"
+
+
+## The damage a spell of [code]tally[/code] shape [param kind] would count
+## for [param pid] now: what the turn has dealt (by artifacts for kind 2),
+## and what waits on that player in a 1997 damage prevention window.
+static func tally_of(g: MtgGame, pid: int, kind: int) -> int:
+	var me: MtgPlayer = g.players[pid]
+	var total: int = me.artifact_damage_this_turn if kind == 2 else me.damage_taken_this_turn
+	if g.rules.damage_prevention_window and g.awaiting_damage_prevention:
+		for packet in g.damage_pending:
+			if packet.target == null or not packet.target.is_player \
+					or packet.target.player_id != pid:
+				continue
+			if kind == 2 and (packet.source == null
+					or not packet.source.is_type(Mtg.CardType.ARTIFACT)):
+				continue
+			total += packet.remaining()
+	return total
 
 
 ## Why the cast the main-phase ranking has just sized — [param sized] is
@@ -200,6 +296,8 @@ static func sized_refusal(g: MtgGame, pilot, inst: CardInstance, sized: Dictiona
 	var intent: EffectIntent = pilot._mode_intent(data, mode)
 	if data.cost.has_x and x < x_floor(g, pilot, inst, intent, mode, targets, x):
 		return "its X is too small yet"
+	if data.cost.has_x and life_not_needed(g, pilot, data, mode, targets, x):
+		return "its life is not needed yet"
 	if intent.adds_mana or intent.counters or intent.extra_turns > 0:
 		return ""
 	# A shield for this turn, with no spell on the stack and no attacker
@@ -217,6 +315,13 @@ static func sized_refusal(g: MtgGame, pilot, inst: CardInstance, sized: Dictiona
 	if (intent.blasts and not pilot.profile.prices_fallout) \
 			or (not pilot.profile.uses_tactical_effects
 				and EffectIntent.tactical_effect(effects) != null):
+		return ""
+	# The damage of this turn, counted: cast only when what it gives back
+	# is more than what it takes (the creature of ours it lands on).
+	if int(shape["tally"]) != 0:
+		var back := forecast(g, pilot, inst, targets, x, mode)
+		if not back.is_empty() and int(back["end"]) == 0 and float(back["swing"]) <= 0.0:
+			return "it would take more than it gives"
 		return ""
 	# The damage window's own cards ("… equal to the damage dealt to you
 	# this turn") keep the moment the pilot already gives them.
@@ -291,6 +396,20 @@ static func x_floor(g: MtgGame, pilot, inst: CardInstance, intent: EffectIntent,
 	return 2
 
 
+## Is this an X of nothing but the pilot's own life, at a life total that
+## has no use for it — the starting life or above, the board across no
+## danger, and the hand not so full the card would be discarded?
+static func life_not_needed(g: MtgGame, pilot, data: CardData, mode: int, targets: Array,
+		x: int) -> bool:
+	var me: MtgPlayer = g.players[pilot.pid]
+	if me.life < int(pilot.FULL_LIFE) or me.hand.size() > HAND_FULL:
+		return false
+	var effects: Array = data.spell_effects
+	if data.is_modal():
+		effects = data.modes[clampi(mode, 0, data.modes.size() - 1)]["effects"]
+	return int(pilot._own_life_gain(effects, targets, x)) >= 0 and not pilot._in_danger(g)
+
+
 ## A combat spell cast in the combat it was held for, or "" — an arm of
 ## [method AiPlayer._respond_action]. Only an untargeted instant whose
 ## printed effect is over the attackers, the blockers or the combat damage,
@@ -298,15 +417,33 @@ static func x_floor(g: MtgGame, pilot, inst: CardInstance, intent: EffectIntent,
 ## pump): forecast at once, and through the declared combat when the blocks
 ## are known, and cast when the board it leaves is better by
 ## [constant CARD_BAR] or the game is saved.
+##
+## Two more arms for a pilot that holds instants: the trick nobody else
+## reads ([method trick_of]), on the creature in the declared combat where
+## it pays; and the damage of this turn, counted at an end step.
+##
+## A pilot that holds no instant ([method AiPlayer.act] asks for it) has
+## the combat arms only, and for every spell whose printed effect needs
+## the combat — it has no other responder to leave a pump or an aimed one to.
 static func respond(g: MtgGame, pilot) -> String:
 	if not pilot.profile.forecasts_tactics or not g.stack.is_empty() \
 			or g.awaiting_attackers or g.awaiting_blockers:
 		return ""
 	var step := g.current_step()
+	if step == Mtg.Step.END:
+		return _respond_tally(g, pilot) if pilot.profile.holds_instants else ""
 	if step != Mtg.Step.DECLARE_ATTACKERS and step != Mtg.Step.DECLARE_BLOCKERS:
 		return ""
+	var cast := _respond_unaimed(g, pilot, step)
+	if cast == "" and step == Mtg.Step.DECLARE_BLOCKERS:
+		cast = _respond_aimed(g, pilot)
+	return cast
+
+
+static func _respond_unaimed(g: MtgGame, pilot, step: int) -> String:
 	var pid: int = pilot.pid
 	var hand: Array = g.players[pid].hand
+	var solo: bool = not pilot.profile.holds_instants
 	var candidates: Array[CardInstance] = []
 	for inst in hand:
 		var data: CardData = inst.data
@@ -323,9 +460,11 @@ static func respond(g: MtgGame, pilot) -> String:
 		if aimed or pilot._is_reactive(data):
 			continue
 		var intent: EffectIntent = EffectIntent.read(data.spell_effects, data.card_name)
-		if intent.fogs or intent.pumps or intent.counters \
+		if intent.fogs or intent.counters:
+			continue   # the reactive game's card
+		if not solo and (intent.pumps
 				or (pilot.profile.uses_tactical_effects
-					and EffectIntent.tactical_effect(data.spell_effects) != null):
+					and EffectIntent.tactical_effect(data.spell_effects) != null)):
 			continue   # another responder's card
 		if pilot._refused.has(str(inst.id)) or pilot._cast_gate(g, inst) != "":
 			continue
@@ -357,6 +496,135 @@ static func respond(g: MtgGame, pilot) -> String:
 	if best == null:
 		return ""
 	return pilot._cast_response(g, best, [])
+
+
+## The aimed spell in the declared combat, blocks known: the trick nobody
+## else reads (a pilot that holds instants), or any one-target instant
+## whose printed effect needs the combat (a pilot that holds none). Tried
+## on each creature in the combat it may name — a gift on ours only — and
+## cast on the one where the fight ends better by [constant CARD_BAR].
+static func _respond_aimed(g: MtgGame, pilot) -> String:
+	var pid: int = pilot.pid
+	var solo: bool = not pilot.profile.holds_instants
+	var candidates: Array[CardInstance] = []
+	for inst in g.players[pid].hand:
+		var data: CardData = inst.data
+		if data.is_permanent_type() or not inst.is_type(Mtg.CardType.INSTANT) \
+				or data.is_modal() or data.cost.has_x or data.spell_effects.size() != 1:
+			continue
+		var shape := shape_of(data)
+		if shape["hidden"]:
+			continue
+		if int(shape["trick"]) == 0 or solo:
+			# The pilot that holds no instant: a spell of the combat's, aimed
+			# at one creature, and not the reactive game's.
+			if not solo or not (shape["attack"] or shape["block"]):
+				continue
+			var e: EffectBase = data.spell_effects[0]
+			if e.target_spec == null or e.target_spec.kind != TargetSpec.Kind.CREATURE \
+					or e.target_count_is_x or e.is_damage_prevention or pilot._is_reactive(data):
+				continue
+		if pilot._refused.has(str(inst.id)) or pilot._cast_gate(g, inst) != "":
+			continue
+		candidates.append(inst)
+	if candidates.is_empty() or not attackers_declared(g):
+		return ""
+	var bodies: Array[CardInstance] = []
+	for id in g.combat.attackers:
+		var attacker := g.find_instance(id)
+		if attacker != null and attacker.zone == Mtg.Zone.BATTLEFIELD:
+			bodies.append(attacker)
+		for blocker_id in g.combat.blockers_of(id):
+			var blocker := g.find_instance(blocker_id)
+			if blocker != null and blocker.zone == Mtg.Zone.BATTLEFIELD \
+					and not bodies.has(blocker):
+				bodies.append(blocker)
+	var sources: Array = pilot._mana_sources(g)
+	var base := combat_baseline(g, pilot)
+	var best: CardInstance = null
+	var best_ref: TargetRef = null
+	var best_gain := CARD_BAR
+	var tried := 0
+	for inst in candidates:
+		var extra: int = g.spell_surcharge(pid, inst.data)
+		if pilot._plan_taps_from(sources, inst.data.cost, extra,
+				g.mana_usage_keys(inst.data, inst)).is_empty() \
+				and not pilot._free_at(inst.data.cost, extra):
+			continue
+		var spec: TargetSpec = inst.data.spell_effects[0].target_spec
+		var gift: bool = int(shape_of(inst.data)["trick"]) == 1
+		for body in bodies:
+			if gift and body.controller_id != pid:
+				continue
+			var ref := TargetRef.card(body)
+			if tried >= AIM_CAP or not g.target_legal_at(spec, ref, inst, 0, []) \
+					or pilot._aims_at_own_fragile(g, [ref]):
+				continue
+			tried += 1
+			var seen := forecast(g, pilot, inst, [ref], 0, 0, true)
+			if seen.is_empty() or int(seen["end"]) < 0:
+				continue
+			var gain: float = float(seen["swing"]) - float(base["swing"])
+			if int(seen["end"]) > int(base["end"]):
+				gain = GAME
+			if gain >= best_gain:
+				best = inst
+				best_ref = ref
+				best_gain = gain
+	if best == null:
+		return ""
+	return pilot._cast_response(g, best, [best_ref])
+
+
+## The damage of this turn, counted at an end step — the last moment
+## before the cleanup forgets it: a spell of that shape is forecast, on
+## each creature of ours it may name when it names one, and cast when what
+## it gives back is worth the card, or anything at all while the pilot is
+## in danger or would discard it.
+static func _respond_tally(g: MtgGame, pilot) -> String:
+	var pid: int = pilot.pid
+	var me: MtgPlayer = g.players[pid]
+	var best: CardInstance = null
+	var best_targets: Array = []
+	var best_gain := 0.0
+	var sources: Array = []
+	for inst in me.hand:
+		var data: CardData = inst.data
+		if data.is_permanent_type() or not inst.is_type(Mtg.CardType.INSTANT) \
+				or data.oracle_text.is_empty() or data.is_modal() or data.cost.has_x \
+				or data.spell_effects.size() != 1 or int(shape_of(data)["tally"]) == 0:
+			continue
+		if pilot._refused.has(str(inst.id)) or pilot._cast_gate(g, inst) != "":
+			continue   # no damage this turn, among the rest
+		if sources.is_empty():
+			sources = pilot._mana_sources(g)
+		var extra: int = g.spell_surcharge(pid, data)
+		if pilot._plan_taps_from(sources, data.cost, extra,
+				g.mana_usage_keys(data, inst)).is_empty() \
+				and not pilot._free_at(data.cost, extra):
+			continue
+		var rows: Array = [[]]
+		var spec: TargetSpec = data.spell_effects[0].target_spec
+		if spec != null:
+			rows = []
+			for ref in g.legal_targets_at(spec, inst, 0):
+				if rows.size() < AIM_CAP and not pilot._aims_at_own_fragile(g, [ref]):
+					rows.append([ref])
+		for row in rows:
+			var seen := forecast(g, pilot, inst, row, 0, 0)
+			if seen.is_empty() or int(seen["end"]) < 0:
+				continue
+			var gain: float = GAME if int(seen["end"]) > 0 else float(seen["swing"])
+			if gain > best_gain:
+				best = inst
+				best_targets = row
+				best_gain = gain
+	if best == null:
+		return ""
+	if best_gain < CARD_BAR and not pilot._in_danger(g) \
+			and not (g.active_player == pid and me.hand.size() > HAND_FULL):
+		return ""
+	return pilot._cast_response(g, best, best_targets)
 
 
 

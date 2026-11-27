@@ -30,6 +30,20 @@ extends RefCounted
 ##    most, the plan is kept only if the pilot then lives, and a body whose
 ##    block then soaks nothing more is taken back out.
 ##
+##  * THE LOSS ANOTHER CARD SCHEDULED ("Exile it at the beginning of the
+##    next end step." — Shallow Grave's creature; "Exile them at the
+##    beginning of the next cleanup step." — Waylay's Knights): read off
+##    the engine's delayed end-step triggers and cleanup actions, by the
+##    line each carries and the object it names ([method
+##    scheduled_fleeting]). Such a body attacks as above and blocks for
+##    nothing ([method throwaway_block]); the instant or sorcery that makes
+##    it ([method made_fleeting]) is cast before our combat for a body that
+##    can attack, or into their declared attack when the blocks it buys are
+##    worth the card ([method ambush]), and at no other moment.
+##  * THE GANG A TRAMPLER INVITES ([method through_gangs]): a lethal push
+##    counted with one blocker per attacker is counted again with as many
+##    as the defender can put before a trampler.
+##
 ## All of it behind [member AiProfile.forecasts_tactics], which every
 ## standard rung ships on: the gate off is the pilot as it was. A table
 ## with no such body and no trampler asks nothing here beyond one pass
@@ -67,9 +81,12 @@ static func fleeting(g: MtgGame, inst: CardInstance) -> int:
 			and not g._end_step_doom_unless_attacked.has(inst.id) \
 			and (g._end_step_doom_sacrifice.has(inst.id) or not inst.cur_indestructible):
 		return LOST
-	if inst.cur_triggered_abilities.is_empty():
-		return STAYS
-	return _read_triggers(inst.cur_triggered_abilities, inst.data.card_name)
+	var kind := STAYS
+	if not inst.cur_triggered_abilities.is_empty():
+		kind = _read_triggers(inst.cur_triggered_abilities, inst.data.card_name)
+	if kind == STAYS:
+		kind = scheduled_fleeting(g, inst)   # the loss another card's effect scheduled
+	return kind
 
 
 static func _read_triggers(triggers: Array, card_name: String) -> int:
@@ -131,6 +148,8 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 	if not pilot.profile.forecasts_tactics:
 		return ""
 	var data: CardData = inst.data
+	if not data.is_permanent_type():
+		return _maker_refusal(g, pilot, inst)   # the spell that makes such a body
 	if not data.is_creature() or printed_fleeting(data) == STAYS:
 		return ""
 	if g.active_player != pilot.pid or not data.activated_abilities.is_empty():
@@ -142,9 +161,16 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 		return "it would be gone before it could attack"
 	if not data.keywords.has(Mtg.Keyword.HASTE):
 		return "it has no haste to attack with"
-	var defender := g.opponent_of(pilot.pid)
-	var flies := data.keywords.has(Mtg.Keyword.FLYING)
-	var first := data.keywords.has(Mtg.Keyword.FIRST_STRIKE)
+	return _met_cold(g, g.opponent_of(pilot.pid), data, data.power, data.toughness)
+
+
+## Why [param body], a card not yet on the battlefield attacking as a
+## [param power]/[param toughness], lands nothing and kills nothing against
+## [param defender]'s untapped creatures ("" when none stops it cold).
+static func _met_cold(g: MtgGame, defender: int, body: CardData, power: int,
+		toughness: int) -> String:
+	var flies := body.keywords.has(Mtg.Keyword.FLYING)
+	var first := body.keywords.has(Mtg.Keyword.FIRST_STRIKE)
 	for blocker in g.players[defender].battlefield:
 		if not blocker.is_creature() or blocker.tapped or blocker.phased_out:
 			continue
@@ -153,10 +179,10 @@ static func cast_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
 			continue
 		# It is struck down before it deals anything...
 		if not first and blocker.has_keyword(Mtg.Keyword.FIRST_STRIKE) \
-				and blocker.cur_power >= data.toughness:
+				and blocker.cur_power >= toughness:
 			return "a first striker would stop it cold"
 		# ...or the blocker lives through all of it (so nothing tramples over).
-		if blocker.cur_toughness - blocker.damage > data.power:
+		if blocker.cur_toughness - blocker.damage > power:
 			return "a blocker would stop it cold"
 	return ""
 
@@ -287,3 +313,386 @@ static func _band_size(plan: Dictionary, attacker: CardInstance) -> int:
 		if int(plan[blocker_id]) == attacker.id:
 			n += 1
 	return n
+
+
+# ------------------------------------------- the loss an effect scheduled --
+
+## The fate an EFFECT scheduled for [param inst] at this turn's end: a
+## delayed end-step trigger or a cleanup action the engine holds, whose own
+## line says what it does ("Exile the creature … returned.", "Sacrifice the
+## Spirit token.", "Return the guided creature to its owner's hand.") and
+## which names this object — in its memory, or in the id and battlefield
+## stamp bound to its callable. A line with a condition ("if …", "unless
+## …") or a flip is a decision, not a fate.
+static func scheduled_fleeting(g: MtgGame, inst: CardInstance) -> int:
+	if g.delayed_triggers.is_empty() and g._cleanup_actions.is_empty():
+		return STAYS
+	for entry in g.delayed_triggers:
+		var trigger: TriggeredAbility = entry["trigger"]
+		if trigger.event_type != Mtg.EventType.END_STEP_START or trigger.condition.is_valid():
+			continue
+		var kind := _fate_of_line(String(entry.get("desc", trigger.text)))
+		if kind == STAYS:
+			continue
+		var memory: Variant = entry.get("memory")
+		if memory is Dictionary and memory.has("stamp") and memory["stamp"] is int \
+				and int(memory["stamp"]) == inst.layer_timestamp:
+			for key in memory:   # the id beside the stamp, whatever it is called
+				if key != "stamp" and memory[key] is int and int(memory[key]) == inst.id:
+					return kind
+		if _binds(trigger.on_resolve.get_bound_arguments(), inst):
+			return kind
+	for row in g._cleanup_actions:
+		var kind := _fate_of_line(String(row.get("desc", "")))
+		if kind == STAYS:
+			continue
+		var action: Callable = row["action"]
+		if _binds(action.get_bound_arguments(), inst):
+			return kind
+	return STAYS
+
+
+## What a scheduled effect's own line does to the object it names.
+static func _fate_of_line(text: String) -> int:
+	var line := text.to_lower()
+	if line.contains(" if ") or line.contains("unless") or line.contains("flip"):
+		return STAYS
+	if line.begins_with("exile ") or line.begins_with("sacrifice ") or line.begins_with("destroy "):
+		return LOST
+	if line.begins_with("return ") and line.contains("owner's hand"):
+		return RETURNED
+	return STAYS
+
+
+## Do a callable's bound arguments name [param inst] as the object it is
+## now — its id followed by its battlefield stamp, or a row of the two?
+static func _binds(args: Array, inst: CardInstance) -> bool:
+	for i in args.size():
+		var arg: Variant = args[i]
+		if arg is Array:
+			if _binds(arg, inst):
+				return true
+		elif arg is int and int(arg) == inst.id and i + 1 < args.size() \
+				and args[i + 1] is int and int(args[i + 1]) == inst.layer_timestamp:
+			return true
+	return false
+
+
+# ------------------------------------------- the spell that makes such a body --
+
+static var _makers: Dictionary = {}
+static var _makers_lock := Mutex.new()
+static var _maker_rx: RegEx = null
+## The token line the Mirage reading already casts as an ambush
+## (mirage_tactics.gd `DOOMED_TOKEN`).
+const _WALL_LINE := "sacrifice it at the beginning of the next end step"
+
+## What an instant or a sorcery makes that is gone at the end of the turn
+## it is cast in, read off its printed text ("Create three 2/2 white Knight
+## creature tokens. Exile them at the beginning of the next cleanup step.",
+## "Return the top creature card of your graveyard to the battlefield. …
+## Exile it at the beginning of the next end step."): [code]{}[/code] for
+## any other card, else [code]token[/code] (the token's [CardData]) and
+## [code]count[/code], or [code]returns[/code]; and [code]haste[/code].
+## Not a spell that is aimed (its target is its point), nor one another
+## reading of the pilot's owns (an effect with a role, the doomed Wall
+## mirage_tactics.gd casts).
+static func made_fleeting(data: CardData) -> Dictionary:
+	_makers_lock.lock()
+	var made: Variant = _makers.get(data.card_name)
+	if made == null:
+		made = _read_maker(data)
+		_makers[data.card_name] = made
+	_makers_lock.unlock()
+	return made
+
+
+static func _read_maker(data: CardData) -> Dictionary:
+	if data.is_permanent_type() or data.is_modal() or data.oracle_text.is_empty():
+		return {}
+	var text := data.oracle_text.to_lower()
+	if _maker_rx == null:
+		_maker_rx = RegEx.create_from_string(
+			"(exile|sacrifice|destroy) (it|them|the tokens?|those tokens|that creature|those creatures) at the beginning of the next (end|cleanup) step")
+	if _maker_rx.search(text) == null:
+		return {}
+	var token: CardData = null
+	var count := 0
+	for e in data.spell_effects:
+		if e.target_spec != null or e.ai_role != &"":
+			return {}
+		if e is CreateTokenEffect and token == null:
+			token = e.token
+			count = e.count
+	if token != null:
+		if text.contains(_WALL_LINE) or not token.is_creature():
+			return {}   # the doomed Wall is cast by the Mirage reading
+		return {"token": token, "count": count,
+			"haste": token.keywords.has(Mtg.Keyword.HASTE) or text.contains("haste")}
+	if text.contains("return the top creature card of your graveyard to the battlefield"):
+		return {"returns": true, "haste": text.contains("haste")}
+	return {}
+
+
+## The body [param made] would put on [param pid]'s side now, as printed:
+## the token, or the top creature card of that graveyard (null when there
+## is none).
+static func made_body(g: MtgGame, pid: int, made: Dictionary) -> CardData:
+	if made.has("token"):
+		return made["token"]
+	var grave: Array = g.players[pid].graveyard
+	for i in range(grave.size() - 1, -1, -1):
+		if grave[i].data.is_creature():
+			return grave[i].data
+	return null
+
+
+## Why a spell that makes a body gone at end of turn is not cast now: on
+## our turn its moment is before our combat, with haste, for a body that
+## can attack; on theirs it is their declared attack, before our blocks
+## ([method ambush] asks what the blocks are worth).
+static func _maker_refusal(g: MtgGame, pilot, inst: CardInstance) -> String:
+	var made := made_fleeting(inst.data)
+	if made.is_empty():
+		return ""
+	var body := made_body(g, pilot.pid, made)
+	if body == null:
+		return "it would make nothing"
+	if g.active_player == pilot.pid:
+		if g.current_step() != Mtg.Step.MAIN1 or g.no_attacks_this_turn:
+			return "its creature would be gone before it could attack"
+		if not bool(made["haste"]) and not body.keywords.has(Mtg.Keyword.HASTE):
+			return "its creature has no haste to attack with"
+		var power := Evaluator.arrival_power(body)
+		var foe := g.opponent_of(pilot.pid)
+		var needs := body.attack_needs_defender_land
+		if body.keywords.has(Mtg.Keyword.DEFENDER) or power <= 0 \
+				or (needs != "" and not CombatState._controls_land_of_type(g, foe, needs)):
+			return "its creature could not attack"
+		return _met_cold(g, foe, body, power, Evaluator.arrival_toughness(body))
+	if g.current_step() == Mtg.Step.DECLARE_ATTACKERS and not g.awaiting_attackers \
+			and not g.combat.attackers.is_empty():
+		return ""
+	return "its creature would be gone before it could block"
+
+
+# --------------------------------------------------------------- the ambush --
+
+## What a cast must add to our defence before it is a card well spent.
+const AMBUSH_BAR := 3.0
+## A defence that does not survive the swing.
+const LOST_GAME := -1000.0
+
+## THE AMBUSH — an arm of [method AiPlayer._respond_action]: their
+## attackers are declared, our blocks are not, and an instant in hand makes
+## bodies that are gone at end of turn. The cast is forecast under the
+## search journal, the pilot's own block plan is asked of both boards, and
+## the spell is cast when the blocks it buys are worth the card (attackers
+## killed, damage kept off, our lasting bodies spared) or keep us alive.
+static func ambush(g: MtgGame, pilot) -> String:
+	if not pilot.profile.forecasts_tactics or g.active_player == pilot.pid \
+			or g.current_step() != Mtg.Step.DECLARE_ATTACKERS or g.awaiting_attackers \
+			or g.combat.attackers.is_empty() or not g.stack.is_empty():
+		return ""
+	var pid: int = pilot.pid
+	var candidates: Array[CardInstance] = []
+	for inst in g.players[pid].hand:
+		if inst.data.is_permanent_type() or made_fleeting(inst.data).is_empty():
+			continue
+		if not g.casts_at_instant_speed(pid, inst) or pilot._refused.has(str(inst.id)) \
+				or pilot._cast_gate(g, inst) != "":
+			continue
+		candidates.append(inst)
+	if candidates.is_empty():
+		return ""
+	var sources: Array = pilot._mana_sources(g)
+	var base := defence_worth(g, pilot)
+	var best: CardInstance = null
+	var best_gain := 0.0
+	for inst in candidates:
+		var extra: int = g.spell_surcharge(pid, inst.data)
+		if pilot._plan_taps_from(sources, inst.data.cost, extra,
+				g.mana_usage_keys(inst.data, inst)).is_empty() \
+				and not pilot._free_at(inst.data.cost, extra):
+			continue
+		var after := _defence_after(g, pilot, inst)
+		if after <= LOST_GAME:
+			continue
+		var gain := after - base
+		if gain < maxf(AMBUSH_BAR, Evaluator.card_value(inst.data)) or gain <= best_gain:
+			continue
+		best = inst
+		best_gain = gain
+	if best == null:
+		return ""
+	return pilot._cast_response(g, best, [], 0, "cast %s for its blockers" % best.data.card_name)
+
+
+## What the pilot's own block plan makes of the declared attack on the
+## board as it stands: attackers killed, less our bodies lost (one gone at
+## end of turn anyway costs nothing), less the damage that lands at the
+## pilot's price of life; [constant LOST_GAME] when the swing kills.
+static func defence_worth(g: MtgGame, pilot) -> float:
+	var pid: int = pilot.pid
+	var attackers: Array[CardInstance] = pilot._declared_attackers(g)
+	attackers.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+		return a.cur_power > b.cur_power)
+	var free: Array[CardInstance] = pilot._untapped_creatures(g, pid)
+	var used: Array[int] = []
+	var plan: Dictionary = pilot._block_choice(g, attackers, free, used)
+	var life: int = g.players[pid].life
+	var through := damage_through(g, pilot, attackers, plan)
+	if through >= life:
+		return LOST_GAME
+	var worth := -float(through) * float(pilot._life_price(life))
+	for attacker in attackers:
+		var band: Array[CardInstance] = []
+		for blocker_id in plan:
+			if int(plan[blocker_id]) == attacker.id:
+				var body := g.find_instance(int(blocker_id))
+				if body != null:
+					band.append(body)
+		if band.is_empty():
+			continue
+		if pilot._band_kills(g, attacker, band) and not worthless_tomorrow(g, attacker):
+			worth += float(pilot._victim_value(g, attacker))
+		for body in band:
+			if pilot._dies_to(g, body, attacker) and not worthless_tomorrow(g, body):
+				worth -= Evaluator.permanent_value(body, pilot.profile)
+	return worth
+
+
+## [method defence_worth] of the board [param inst]'s cast would leave:
+## the cast itself, paid from mana lent for the forecast and resolved under
+## the search journal with nobody asked, and everything put back.
+## [constant LOST_GAME] when the engine refuses the cast.
+static func _defence_after(g: MtgGame, pilot, inst: CardInstance) -> float:
+	var pid: int = pilot.pid
+	var nested := g.undo_log != null
+	var mark := g.make_mark()
+	g._rec_turn()
+	g._rec(g, &"agents")
+	g.agents = [DecisionAgent.new(), DecisionAgent.new()]
+	for color in [1, 2, 4, 8, 16, 32]:
+		g.players[pid].mana_pool.add(color, 60)
+	var depth := g.stack.size()
+	var worth := LOST_GAME
+	if g.cast_spell(pid, inst, [], 0, 0) == "":
+		var guard := 0
+		var stuck := false
+		while g.stack.size() > depth and not g.game_over and guard < 60:
+			if g.pass_priority(g.priority_player) != "":
+				stuck = true
+				break
+			guard += 1
+		if not stuck and not g.game_over and g.stack.size() <= depth \
+				and g.current_step() == Mtg.Step.DECLARE_ATTACKERS:
+			worth = defence_worth(g, pilot)
+	g.unmake_to(mark)
+	if not nested:
+		g.end_search()
+	return worth
+
+
+## THE BLOCK A BODY GONE TONIGHT MAKES FOR NOTHING — a rung of [method
+## AiPlayer._best_block_for], asked above the trade: among [param legal],
+## our blockers lost at end of turn whatever happens. The fewest of them
+## that kill [param attacker] block it; when none can, one stands in its
+## way (the damage it stops is free). Empty when no such body is here.
+static func throwaway_block(g: MtgGame, pilot, attacker: CardInstance,
+		legal: Array[CardInstance]) -> Array[int]:
+	var gone: Array[CardInstance] = []
+	for body in legal:
+		if fleeting(g, body) == LOST:
+			gone.append(body)
+	var out: Array[int] = []
+	if gone.is_empty() or attacker.cur_min_blockers > gone.size():
+		return out
+	gone.sort_custom(func(a: CardInstance, b: CardInstance) -> bool:
+		return a.cur_power > b.cur_power)
+	var cap: int = pilot._blocker_cap(g, attacker)
+	var band: Array[CardInstance] = []
+	for body in gone:
+		if cap > 0 and band.size() >= cap:
+			break
+		band.append(body)
+		if band.size() >= attacker.cur_min_blockers and pilot._band_kills(g, attacker, band):
+			for b in band:
+				out.append(b.id)
+			return out
+	if attacker.cur_power <= 0:
+		return out
+	for i in mini(maxi(attacker.cur_min_blockers, 1), gone.size()):
+		out.append(gone[i].id)
+	return out
+
+
+# ------------------------------------------- the gang a trampler invites --
+
+## The searches [method through_gangs] may spend on one board.
+const GANG_BUDGET := 4000
+
+## THE LETHAL PUSH, RE-ASKED OF A GANG BLOCK — the last line of [method
+## AiPlayer._damage_through_blocks]. That count gives each attacker one
+## blocker; a trampler is the attacker a second blocker still stops damage
+## of, so "eight trampling into a 3/3 is five through, and five is their
+## life" sent the whole board into a defence that puts two 3/3s in its way
+## and takes two. Only a count that reads as lethal is asked again, and
+## only with a trampler among [param hitters]: every blocker is tried on
+## every attacker it may block ([param stopped], the same table: what the
+## pair stops), a trampler taking as many as its cap allows and losing
+## their toughness up to its power, any other attacker one. The damage the
+## best such defence lets through — never more than [param through].
+static func through_gangs(g: MtgGame, pilot, hitters: Array[CardInstance], stopped: Array,
+		total: int, through: int, defender: int) -> int:
+	if through < g.players[defender].life or hitters.is_empty():
+		return through
+	var columns: int = (stopped[0] as Array).size()
+	if columns < 2:
+		return through
+	var gangs := PackedInt32Array()   # how many blockers each attacker may take
+	var any := false
+	for hitter in hitters:
+		if hitter.has_keyword(Mtg.Keyword.TRAMPLE):
+			var cap: int = pilot._blocker_cap(g, hitter)
+			gangs.append(cap if cap > 0 else columns)
+			any = true
+		else:
+			gangs.append(1)
+	if not any:
+		return through
+	var powers := PackedInt32Array()
+	for hitter in hitters:
+		powers.append(maxi(hitter.cur_power, 0))
+	var soaked := PackedInt32Array()
+	soaked.resize(hitters.size())
+	var taken := PackedInt32Array()
+	taken.resize(hitters.size())
+	var state := {"best": total - through, "nodes": 0}
+	_gang_search(stopped, powers, gangs, soaked, taken, 0, columns, state)
+	return mini(through, total - int(state["best"]))
+
+
+static func _gang_search(stopped: Array, powers: PackedInt32Array, gangs: PackedInt32Array,
+		soaked: PackedInt32Array, taken: PackedInt32Array, column: int, columns: int,
+		state: Dictionary) -> void:
+	if column == columns:
+		var sum := 0
+		for i in powers.size():
+			sum += mini(soaked[i], powers[i])
+		if sum > int(state["best"]):
+			state["best"] = sum
+		return
+	state["nodes"] = int(state["nodes"]) + 1
+	if int(state["nodes"]) > GANG_BUDGET:
+		return
+	for i in powers.size():
+		var held := int(stopped[i][column])
+		if held <= 0 or taken[i] >= gangs[i] or soaked[i] >= powers[i]:
+			continue
+		soaked[i] += held
+		taken[i] += 1
+		_gang_search(stopped, powers, gangs, soaked, taken, column + 1, columns, state)
+		soaked[i] -= held
+		taken[i] -= 1
+	_gang_search(stopped, powers, gangs, soaked, taken, column + 1, columns, state)
